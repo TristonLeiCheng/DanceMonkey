@@ -1,0 +1,1581 @@
+<UserControl x:Class="DesktopAssistant.Views.NotesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="clr-namespace:DesktopAssistant.Models"
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+             Background="Transparent">
+    <UserControl.Resources>
+
+        <!-- ══════════════════════════════════════
+             树节点展开/折叠三角（自绘小三角，旋转动画 + 选中变白）
+             ══════════════════════════════════════ -->
+        <Style x:Key="TreeExpanderBtn" TargetType="ToggleButton">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Width" Value="16"/>
+            <Setter Property="Height" Value="16"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="Transparent" Width="16" Height="16">
+                            <Path x:Name="Tri"
+                                  Width="6" Height="7"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Stretch="Uniform"
+                                  Fill="#A8B0C2"
+                                  Data="M 0,0 L 0,7 L 5,3.5 Z"
+                                  RenderTransformOrigin="0.5,0.5">
+                                <Path.RenderTransform>
+                                    <RotateTransform Angle="0"/>
+                                </Path.RenderTransform>
+                            </Path>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Tri"
+                                                             Storyboard.TargetProperty="(Path.RenderTransform).(RotateTransform.Angle)"
+                                                             To="90" Duration="0:0:0.12"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Tri"
+                                                             Storyboard.TargetProperty="(Path.RenderTransform).(RotateTransform.Angle)"
+                                                             To="0" Duration="0:0:0.12"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                                <Setter TargetName="Tri" Property="Fill" Value="#6B7084"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Tri" Property="Fill" Value="#4F6EF7"/>
+                            </Trigger>
+                            <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=TreeViewItem}, Path=IsSelected}" Value="True">
+                                <Setter TargetName="Tri" Property="Fill" Value="#FFFFFF"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════════════════════════════════
+             TreeViewItem：紧凑行 + Finder 蓝色实底选中
+             ══════════════════════════════════════ -->
+        <Style TargetType="TreeViewItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="ContextMenuService.IsEnabled" Value="False"/>
+            <Setter Property="IsExpanded" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TreeViewItem">
+                        <StackPanel>
+                            <!-- 节点行 -->
+                            <Border x:Name="NodeRow"
+                                    Background="Transparent"
+                                    CornerRadius="4"
+                                    Margin="0,0,2,1"
+                                    MinHeight="24">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="16"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- 展开/折叠按钮 -->
+                                    <ToggleButton x:Name="Expander" Grid.Column="0"
+                                                  IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                                  ClickMode="Press"
+                                                  Style="{StaticResource TreeExpanderBtn}"/>
+
+                                    <!-- 节点内容（来自 HierarchicalDataTemplate） -->
+                                    <ContentPresenter x:Name="PART_Header"
+                                                      Grid.Column="1"
+                                                      ContentSource="Header"
+                                                      HorizontalAlignment="Stretch"
+                                                      VerticalAlignment="Center"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- 子节点（与三角对齐的紧凑缩进） -->
+                            <ItemsPresenter x:Name="ItemsHost"
+                                            Margin="14,0,0,0"
+                                            Visibility="Collapsed"/>
+                        </StackPanel>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsExpanded" Value="True">
+                                <Setter TargetName="ItemsHost" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <!-- 无子节点时隐藏展开按钮（保持占位） -->
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="Expander" Property="Visibility" Value="Hidden"/>
+                            </Trigger>
+                            <!-- 悬停态：浅灰底 -->
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NodeRow" Property="Background" Value="#EEF1F8"/>
+                            </Trigger>
+                            <!-- 选中态：实蓝底（覆盖悬停） -->
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="NodeRow" Property="Background" Value="{StaticResource BrushAccent}"/>
+                            </Trigger>
+                            <!-- 选中 + 悬停 -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsSelected" Value="True"/>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <MultiTrigger.Setters>
+                                    <Setter TargetName="NodeRow" Property="Background" Value="{StaticResource BrushAccentHover}"/>
+                                </MultiTrigger.Setters>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════════════════════════════════
+             笔记树节点数据模板（彩色矢量图标 + 类型角标）
+              · 文件夹颜色按 Category：Inbox 蓝、Journal 绿、Projects 紫、AI 紫红…
+              · 笔记角标按 Kind：截图 📷、AI 对话 ✨、模板 ☐、日记 📅、便签 ◇、快录 ⚡
+              · 选中时整组图标转白色描边
+             ══════════════════════════════════════ -->
+        <HierarchicalDataTemplate DataType="{x:Type models:NoteTreeNode}"
+                                  ItemsSource="{Binding Children}">
+            <Grid Margin="2,0,4,0" MinHeight="22">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="22"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 图标插槽（统一 16×16 矢量画布，缩放到 15px 显示） -->
+                <Viewbox Grid.Column="0" Width="15" Height="15"
+                         HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Grid Width="16" Height="16">
+                        <!-- ── 关闭文件夹 ── -->
+                        <Path x:Name="FolderClosedBack"
+                              Visibility="Collapsed"
+                              Fill="#F2C261" Stroke="#B07820" StrokeThickness="0.6"
+                              StrokeLineJoin="Round"
+                              Data="M 0.8,4 L 5.4,4 L 6.9,5.5 L 15.2,5.5 L 15.2,12.8 L 0.8,12.8 Z"/>
+                        <Path x:Name="FolderClosedFront"
+                              Visibility="Collapsed"
+                              Fill="#FFD884" Stroke="#B07820" StrokeThickness="0.6"
+                              StrokeLineJoin="Round"
+                              Data="M 0.8,6.6 L 15.2,6.6 L 15.2,12.8 L 0.8,12.8 Z"/>
+
+                        <!-- ── 打开文件夹 ── -->
+                        <Path x:Name="FolderOpenBack"
+                              Visibility="Collapsed"
+                              Fill="#F2C261" Stroke="#B07820" StrokeThickness="0.6"
+                              StrokeLineJoin="Round"
+                              Data="M 0.8,4 L 5.4,4 L 6.9,5.5 L 15.2,5.5 L 15.2,12.8 L 0.8,12.8 Z"/>
+                        <Path x:Name="FolderOpenFront"
+                              Visibility="Collapsed"
+                              Fill="#FFE4A6" Stroke="#B07820" StrokeThickness="0.6"
+                              StrokeLineJoin="Round"
+                              Data="M 1.8,7.4 L 16,7.4 L 14.2,12.8 L 0.8,12.8 Z"/>
+
+                        <!-- ── 文档（默认） ── -->
+                        <Path x:Name="DocBody"
+                              Fill="#FFFFFF" Stroke="#8A95B0" StrokeThickness="0.9"
+                              StrokeLineJoin="Round"
+                              Data="M 3,1.2 L 9.6,1.2 L 12.8,4.4 L 12.8,14.8 L 3,14.8 Z"/>
+                        <Path x:Name="DocFold"
+                              Fill="#E8ECF4" Stroke="#8A95B0" StrokeThickness="0.9"
+                              StrokeLineJoin="Round"
+                              Data="M 9.6,1.2 L 9.6,4.4 L 12.8,4.4 Z"/>
+                        <Path x:Name="DocLines"
+                              Stroke="#A8B0C2" StrokeThickness="0.9"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              Data="M 4.8,7.6 L 11,7.6 M 4.8,9.6 L 11,9.6 M 4.8,11.6 L 9,11.6"/>
+
+                        <!-- ── Kind 角标层（右下角小圆 + 字符） ── -->
+                        <Ellipse x:Name="KindBadgeBg"
+                                 Visibility="Collapsed"
+                                 Width="8.5" Height="8.5"
+                                 HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                 Margin="0,0,0,-0.5"
+                                 Fill="#4F6EF7" Stroke="#FFFFFF" StrokeThickness="0.7"/>
+                        <TextBlock x:Name="KindBadgeText"
+                                   Visibility="Collapsed"
+                                   Text=""
+                                   HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                   Margin="0,0,1.4,0.5"
+                                   FontSize="6" FontWeight="Bold"
+                                   Foreground="#FFFFFF"
+                                   FontFamily="Segoe UI Symbol"/>
+                    </Grid>
+                </Viewbox>
+
+                <!-- 节点名称 -->
+                <TextBlock x:Name="NodeName"
+                           Grid.Column="1"
+                           Text="{Binding Name}"
+                           FontSize="12.5"
+                           Foreground="#1F2330"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Margin="2,0,0,0"
+                           ToolTip="{Binding Name}"/>
+            </Grid>
+
+            <HierarchicalDataTemplate.Triggers>
+                <!-- ════════════════════════════════════════════════════════════
+                     文件夹基础形态切换
+                     ════════════════════════════════════════════════════════════ -->
+                <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                    <Setter TargetName="FolderClosedBack" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="FolderClosedFront" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="DocBody" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="DocFold" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="DocLines" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="NodeName" Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFolder}" Value="True"/>
+                        <Condition Binding="{Binding RelativeSource={RelativeSource AncestorType=TreeViewItem}, Path=IsExpanded}"
+                                   Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.Setters>
+                        <Setter TargetName="FolderClosedBack" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="FolderClosedFront" Property="Visibility" Value="Collapsed"/>
+                        <Setter TargetName="FolderOpenBack" Property="Visibility" Value="Visible"/>
+                        <Setter TargetName="FolderOpenFront" Property="Visibility" Value="Visible"/>
+                    </MultiDataTrigger.Setters>
+                </MultiDataTrigger>
+
+                <!-- ════════════════════════════════════════════════════════════
+                     文件夹按 Category 上色（背 / 前 / 描边 三色一组）
+                     ════════════════════════════════════════════════════════════ -->
+                <!-- Inbox：蓝 -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFolder}" Value="True"/>
+                        <Condition Binding="{Binding Category}" Value="Inbox"/>
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.Setters>
+                        <Setter TargetName="FolderClosedBack" Property="Fill" Value="#7AA9F0"/>
+                        <Setter TargetName="FolderClosedFront" Property="Fill" Value="#A6C5F4"/>
+                        <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#3666B5"/>
+                        <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#3666B5"/>
+                        <Setter TargetName="FolderOpenBack" Property="Fill" Value="#7AA9F0"/>
+                        <Setter TargetName="FolderOpenFront" Property="Fill" Value="#BCD2F7"/>
+                        <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#3666B5"/>
+                        <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#3666B5"/>
+                    </MultiDataTrigger.Setters>
+                </MultiDataTrigger>
+                <!-- Journal：绿 -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFolder}" Value="True"/>
+                        <Condition Binding="{Binding Category}" Value="Journal"/>
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.Setters>
+                        <Setter TargetName="FolderClosedBack" Property="Fill" Value="#86C779"/>
+                        <Setter TargetName="FolderClosedFront" Property="Fill" Value="#B0DCA3"/>
+                        <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#3D7A36"/>
+                        <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#3D7A36"/>
+                        <Setter TargetName="FolderOpenBack" Property="Fill" Value="#86C779"/>
+                        <Setter TargetName="FolderOpenFront" Property="Fill" Value="#C2E3B5"/>
+                        <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#3D7A36"/>
+                        <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#3D7A36"/>
+                    </MultiDataTrigger.Setters>
+                </MultiDataTrigger>
+                <!-- Projects：紫 -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFolder}" Value="True"/>
+                        <Condition Binding="{Binding Category}" Value="Projects"/>
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.Setters>
+                        <Setter TargetName="FolderClosedBack" Property="Fill" Value="#A88AE0"/>
+                        <Setter TargetName="FolderClosedFront" Property="Fill" Value="#C5B0EC"/>
+                        <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#5A3D9E"/>
+                        <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#5A3D9E"/>
+                        <Setter TargetName="FolderOpenBack" Property="Fill" Value="#A88AE0"/>
+                        <Setter TargetName="FolderOpenFront" Property="Fill" Value="#D4C2F0"/>
+                        <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#5A3D9E"/>
+                        <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#5A3D9E"/>
+                    </MultiDataTrigger.Setters>
+                </MultiDataTrigger>
+                <!-- Areas：青绿 -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFolder}" Value="True"/>
+                        <Condition Binding="{Binding Category}" Value="Areas"/>
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.Setters>
+                        <Setter TargetName="FolderClosedBack" Property="Fill" Value="#5DBFB6"/>
+                        <Setter TargetName="FolderClosedFront" Property="Fill" Value="#8DD4CD"/>
+                        <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#1F6E68"/>
+                        <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#1F6E68"/>
+                        <Setter TargetName="FolderOpenBack" Property="Fill" Value="#5DBFB6"/>
+                        <Setter TargetName="FolderOpenFront" Property="Fill" Value="#A6DFD9"/>
+                        <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#1F6E68"/>
+                        <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#1F6E68"/>
+                    </MultiDataTrigger.Setters>
+                </MultiDataTrigger>
+                <!-- Resources：蓝灰 -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFolder}" Value="True"/>
+                        <Condition Binding="{Binding Category}" Value="Resources"/>
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.Setters>
+                        <Setter TargetName="FolderClosedBack" Property="Fill" Value="#8FA0BC"/>
+                        <Setter TargetName="FolderClosedFront" Property="Fill" Value="#B3BFD2"/>
+                        <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#465776"/>
+                        <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#465776"/>
+                        <Setter TargetName="FolderOpenBack" Property="Fill" Value="#8FA0BC"/>
+                        <Setter TargetName="FolderOpenFront" Property="Fill" Value="#C2CCDD"/>
+                        <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#465776"/>
+                        <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#465776"/>
+                    </MultiDataTrigger.Setters>
+                </MultiDataTrigger>
+                <!-- AI：紫红 -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFolder}" Value="True"/>
+                        <Condition Binding="{Binding Category}" Value="Ai"/>
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.Setters>
+                        <Setter TargetName="FolderClosedBack" Property="Fill" Value="#D070D0"/>
+                        <Setter TargetName="FolderClosedFront" Property="Fill" Value="#E099E4"/>
+                        <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#7A2D7A"/>
+                        <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#7A2D7A"/>
+                        <Setter TargetName="FolderOpenBack" Property="Fill" Value="#D070D0"/>
+                        <Setter TargetName="FolderOpenFront" Property="Fill" Value="#EAAFEB"/>
+                        <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#7A2D7A"/>
+                        <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#7A2D7A"/>
+                    </MultiDataTrigger.Setters>
+                </MultiDataTrigger>
+                <!-- Attachments：橙灰 -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFolder}" Value="True"/>
+                        <Condition Binding="{Binding Category}" Value="Attachments"/>
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.Setters>
+                        <Setter TargetName="FolderClosedBack" Property="Fill" Value="#E89668"/>
+                        <Setter TargetName="FolderClosedFront" Property="Fill" Value="#F0B595"/>
+                        <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#9A4D24"/>
+                        <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#9A4D24"/>
+                        <Setter TargetName="FolderOpenBack" Property="Fill" Value="#E89668"/>
+                        <Setter TargetName="FolderOpenFront" Property="Fill" Value="#F4C5AC"/>
+                        <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#9A4D24"/>
+                        <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#9A4D24"/>
+                    </MultiDataTrigger.Setters>
+                </MultiDataTrigger>
+                <!-- Archive：灰 -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFolder}" Value="True"/>
+                        <Condition Binding="{Binding Category}" Value="Archive"/>
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.Setters>
+                        <Setter TargetName="FolderClosedBack" Property="Fill" Value="#A8AEBC"/>
+                        <Setter TargetName="FolderClosedFront" Property="Fill" Value="#C5C9D2"/>
+                        <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#555B6B"/>
+                        <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#555B6B"/>
+                        <Setter TargetName="FolderOpenBack" Property="Fill" Value="#A8AEBC"/>
+                        <Setter TargetName="FolderOpenFront" Property="Fill" Value="#D2D5DD"/>
+                        <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#555B6B"/>
+                        <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#555B6B"/>
+                    </MultiDataTrigger.Setters>
+                </MultiDataTrigger>
+                <!-- Templates：暖粉 -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsFolder}" Value="True"/>
+                        <Condition Binding="{Binding Category}" Value="Templates"/>
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.Setters>
+                        <Setter TargetName="FolderClosedBack" Property="Fill" Value="#E8859A"/>
+                        <Setter TargetName="FolderClosedFront" Property="Fill" Value="#F0AAB9"/>
+                        <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#A03A53"/>
+                        <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#A03A53"/>
+                        <Setter TargetName="FolderOpenBack" Property="Fill" Value="#E8859A"/>
+                        <Setter TargetName="FolderOpenFront" Property="Fill" Value="#F4BCC8"/>
+                        <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#A03A53"/>
+                        <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#A03A53"/>
+                    </MultiDataTrigger.Setters>
+                </MultiDataTrigger>
+
+                <!-- ════════════════════════════════════════════════════════════
+                     笔记按 Kind 显示角标 + 文档主色调微调
+                     ════════════════════════════════════════════════════════════ -->
+                <!-- 截图 -->
+                <DataTrigger Binding="{Binding Kind}" Value="Screenshot">
+                    <Setter TargetName="KindBadgeBg" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeText" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeBg" Property="Fill" Value="#3666B5"/>
+                    <Setter TargetName="KindBadgeText" Property="Text" Value="📷"/>
+                    <Setter TargetName="DocBody" Property="Stroke" Value="#3666B5"/>
+                    <Setter TargetName="DocFold" Property="Stroke" Value="#3666B5"/>
+                </DataTrigger>
+                <!-- AI 对话 -->
+                <DataTrigger Binding="{Binding Kind}" Value="AiConversation">
+                    <Setter TargetName="KindBadgeBg" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeText" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeBg" Property="Fill" Value="#7A2D7A"/>
+                    <Setter TargetName="KindBadgeText" Property="Text" Value="✨"/>
+                    <Setter TargetName="DocBody" Property="Stroke" Value="#7A2D7A"/>
+                    <Setter TargetName="DocFold" Property="Stroke" Value="#7A2D7A"/>
+                </DataTrigger>
+                <!-- AI 生成 -->
+                <DataTrigger Binding="{Binding Kind}" Value="AiGenerated">
+                    <Setter TargetName="KindBadgeBg" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeText" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeBg" Property="Fill" Value="#7C5CFC"/>
+                    <Setter TargetName="KindBadgeText" Property="Text" Value="★"/>
+                    <Setter TargetName="DocBody" Property="Stroke" Value="#7C5CFC"/>
+                    <Setter TargetName="DocFold" Property="Stroke" Value="#7C5CFC"/>
+                </DataTrigger>
+                <!-- 模板 -->
+                <DataTrigger Binding="{Binding Kind}" Value="Template">
+                    <Setter TargetName="KindBadgeBg" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeText" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeBg" Property="Fill" Value="#A03A53"/>
+                    <Setter TargetName="KindBadgeText" Property="Text" Value="T"/>
+                    <Setter TargetName="DocBody" Property="Stroke" Value="#A03A53"/>
+                    <Setter TargetName="DocFold" Property="Stroke" Value="#A03A53"/>
+                </DataTrigger>
+                <!-- 日记 -->
+                <DataTrigger Binding="{Binding Kind}" Value="Daily">
+                    <Setter TargetName="KindBadgeBg" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeText" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeBg" Property="Fill" Value="#3D7A36"/>
+                    <Setter TargetName="KindBadgeText" Property="Text" Value="📅"/>
+                    <Setter TargetName="DocBody" Property="Stroke" Value="#3D7A36"/>
+                    <Setter TargetName="DocFold" Property="Stroke" Value="#3D7A36"/>
+                </DataTrigger>
+                <!-- 便签 -->
+                <DataTrigger Binding="{Binding Kind}" Value="Sticky">
+                    <Setter TargetName="KindBadgeBg" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeText" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeBg" Property="Fill" Value="#D69820"/>
+                    <Setter TargetName="KindBadgeText" Property="Text" Value="◇"/>
+                    <Setter TargetName="DocBody" Property="Stroke" Value="#D69820"/>
+                    <Setter TargetName="DocFold" Property="Stroke" Value="#D69820"/>
+                </DataTrigger>
+                <!-- 快录 -->
+                <DataTrigger Binding="{Binding Kind}" Value="Quick">
+                    <Setter TargetName="KindBadgeBg" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeText" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="KindBadgeBg" Property="Fill" Value="#3666B5"/>
+                    <Setter TargetName="KindBadgeText" Property="Text" Value="⚡"/>
+                    <Setter TargetName="DocBody" Property="Stroke" Value="#3666B5"/>
+                    <Setter TargetName="DocFold" Property="Stroke" Value="#3666B5"/>
+                </DataTrigger>
+
+                <!-- ════════════════════════════════════════════════════════════
+                     选中态：白字 + 图标全部转白色描边、角标改为半透明白底
+                     ════════════════════════════════════════════════════════════ -->
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=TreeViewItem}, Path=IsSelected}" Value="True">
+                    <Setter TargetName="NodeName" Property="Foreground" Value="#FFFFFF"/>
+                    <Setter TargetName="DocBody" Property="Fill" Value="Transparent"/>
+                    <Setter TargetName="DocBody" Property="Stroke" Value="#FFFFFF"/>
+                    <Setter TargetName="DocFold" Property="Fill" Value="Transparent"/>
+                    <Setter TargetName="DocFold" Property="Stroke" Value="#FFFFFF"/>
+                    <Setter TargetName="DocLines" Property="Stroke" Value="#FFFFFF"/>
+                    <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#FFFFFF"/>
+                    <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#FFFFFF"/>
+                    <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#FFFFFF"/>
+                    <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#FFFFFF"/>
+                    <Setter TargetName="KindBadgeBg" Property="Fill" Value="#FFFFFF"/>
+                    <Setter TargetName="KindBadgeBg" Property="Stroke" Value="#4F6EF7"/>
+                    <Setter TargetName="KindBadgeText" Property="Foreground" Value="#4F6EF7"/>
+                </DataTrigger>
+            </HierarchicalDataTemplate.Triggers>
+        </HierarchicalDataTemplate>
+
+        <!-- ══════════════════════════════════════
+             TreeView 容器样式（去边框）
+             ══════════════════════════════════════ -->
+        <Style TargetType="TreeView">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <!-- ══════════════════════════════════════
+             笔记树右键菜单：圆角卡片 + 与主题一致的容器（条目外观依赖 App 内 SystemColors 菜单键）
+             ══════════════════════════════════════ -->
+        <Style x:Key="NotesTreeContextMenuStyle" TargetType="ContextMenu">
+            <Setter Property="Background" Value="{StaticResource BrushSurface}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="HasDropShadow" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10"
+                                Padding="{TemplateBinding Padding}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.12" Color="#2A2418"/>
+                            </Border.Effect>
+                            <ScrollViewer CanContentScroll="True"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          VerticalScrollBarVisibility="Auto"
+                                          Margin="0"
+                                          SnapsToDevicePixels="True">
+                                <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"
+                                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                            </ScrollViewer>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ══════════════════════════════════════
+             右键菜单（x:Shared=False 避免共享实例崩溃）
+             ══════════════════════════════════════ -->
+        <ContextMenu x:Key="TreeNodeContextMenu" x:Shared="False"
+                     Style="{StaticResource NotesTreeContextMenuStyle}"
+                     Opened="TreeNodeContextMenu_Opened"
+                     Closed="TreeNodeContextMenu_Closed">
+            <ContextMenu.Resources>
+                <Style TargetType="Separator">
+                    <Setter Property="Height" Value="1"/>
+                    <Setter Property="Margin" Value="10,6"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="Background" Value="{StaticResource BrushBorder}"/>
+                </Style>
+            </ContextMenu.Resources>
+            <MenuItem Header="📄 新建笔记" Click="Ctx_NewNote_Click"/>
+            <MenuItem Header="📝 新建子笔记" Tag="CtxNewSubNote" Click="Ctx_NewSubNote_Click"/>
+            <MenuItem Header="📋 从模板新建" SubmenuOpened="TemplateSubMenu_Opened"/>
+            <MenuItem Header="📁 新建文件夹" Click="Ctx_NewFolder_Click"/>
+            <Separator/>
+            <MenuItem Header="✏️ 重命名" Click="Ctx_Rename_Click"/>
+            <MenuItem Header="📦 移动到…" Click="Ctx_MoveTo_Click"/>
+            <MenuItem Header="📄 复制副本" Click="Ctx_Duplicate_Click"/>
+            <MenuItem Header="🎨 文件夹颜色">
+                <MenuItem Header="默认（按系统分类）" Tag="default" Click="Ctx_SetFolderColor_Click"/>
+                <Separator/>
+                <MenuItem Header="蓝色" Tag="Inbox" Click="Ctx_SetFolderColor_Click"/>
+                <MenuItem Header="绿色" Tag="Journal" Click="Ctx_SetFolderColor_Click"/>
+                <MenuItem Header="紫色" Tag="Projects" Click="Ctx_SetFolderColor_Click"/>
+                <MenuItem Header="青绿" Tag="Areas" Click="Ctx_SetFolderColor_Click"/>
+                <MenuItem Header="蓝灰" Tag="Resources" Click="Ctx_SetFolderColor_Click"/>
+                <MenuItem Header="紫红" Tag="Ai" Click="Ctx_SetFolderColor_Click"/>
+                <MenuItem Header="橙灰" Tag="Attachments" Click="Ctx_SetFolderColor_Click"/>
+                <MenuItem Header="灰色" Tag="Archive" Click="Ctx_SetFolderColor_Click"/>
+                <MenuItem Header="暖粉" Tag="Templates" Click="Ctx_SetFolderColor_Click"/>
+            </MenuItem>
+            <Separator/>
+            <MenuItem Header="📋 复制路径" Click="Ctx_CopyPath_Click"/>
+            <MenuItem Header="📂 在资源管理器中打开" Click="Ctx_OpenInExplorer_Click"/>
+            <Separator/>
+            <MenuItem Header="🗑️ 删除" Click="Ctx_Delete_Click"/>
+        </ContextMenu>
+
+        <!-- ══════════════════════════════════════
+             工具栏按钮样式
+             ══════════════════════════════════════ -->
+        <Style x:Key="ToolbarMiniBtn" TargetType="Button" BasedOn="{StaticResource UiBtnSecondary}">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="MinWidth" Value="0"/>
+        </Style>
+
+        <Style x:Key="ToolbarMiniAccent" TargetType="Button" BasedOn="{StaticResource UiBtnAccentBlue}">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="MinWidth" Value="0"/>
+        </Style>
+
+        <!-- ══════════════════════════════════════
+             macOS Scrivener 风格工具按钮（顶部图标 + 下方文字）
+             ══════════════════════════════════════ -->
+        <Style x:Key="MacToolbarBtn" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="MinWidth" Value="50"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                CornerRadius="6"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#EEF1F8"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#DEE5F2"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.32"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- 工具栏分组分隔条 -->
+        <Style x:Key="MacToolbarSep" TargetType="Border">
+            <Setter Property="Width" Value="1"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Background" Value="{StaticResource BrushBorder}"/>
+            <Setter Property="Margin" Value="6,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Opacity" Value="0.5"/>
+        </Style>
+
+        <!-- 搜索结果片段项目模板 -->
+        <DataTemplate x:Key="SnippetItemTemplate">
+            <Border Padding="8,6" BorderBrush="#EDF0F7" BorderThickness="0,0,0,1"
+                    Background="Transparent">
+                <StackPanel>
+                    <TextBlock Text="{Binding FileName}" FontSize="11" FontWeight="SemiBold"
+                               Foreground="#3A4A6B" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Snippet}" FontSize="10.5" Foreground="#6B7280"
+                               TextTrimming="CharacterEllipsis" TextWrapping="Wrap"
+                               MaxHeight="34" Margin="0,2,0,0" LineHeight="17"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+    </UserControl.Resources>
+
+    <UserControl.InputBindings>
+        <KeyBinding Gesture="Ctrl+S" Command="{x:Static ApplicationCommands.Save}"/>
+        <KeyBinding Gesture="Ctrl+Z" Command="{x:Static ApplicationCommands.Undo}"/>
+        <KeyBinding Gesture="Ctrl+Y" Command="{x:Static ApplicationCommands.Redo}"/>
+    </UserControl.InputBindings>
+
+    <Grid Margin="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══════════════════ 顶部图标工具栏（macOS Scrivener 风） ═══════════════════ -->
+        <Border Grid.Row="0"
+                Background="{StaticResource BrushSurface}"
+                BorderBrush="{StaticResource BrushBorderSubtle}"
+                BorderThickness="0,0,0,1"
+                Padding="8,6,8,6"
+                Margin="0,0,0,6">
+            <DockPanel LastChildFill="True">
+                <!-- 右端：检视器开关（始终可见） -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Style="{StaticResource MacToolbarSep}"/>
+                    <Button x:Name="TbInspector" Style="{StaticResource MacToolbarBtn}"
+                            Click="ToggleInspector_OnClick" ToolTip="显示/隐藏检视器">
+                        <StackPanel>
+                            <TextBlock Text="&#xE7B5;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="17" HorizontalAlignment="Center"
+                                       Foreground="#4F6EF7"/>
+                            <TextBlock Text="检视器" FontSize="10"
+                                       Foreground="#6B7084" Margin="0,2,0,0"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- 主体：横向滚动按钮组 -->
+                <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                              VerticalScrollBarVisibility="Disabled">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+                        <!-- ── 新建组 ── -->
+                        <Button Style="{StaticResource MacToolbarBtn}"
+                                Click="TbNewNote_OnClick" ToolTip="新建笔记">
+                            <StackPanel>
+                                <TextBlock Text="&#xE7C3;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#4F6EF7"/>
+                                <TextBlock Text="新建" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource MacToolbarBtn}"
+                                Click="TbNewFolder_OnClick" ToolTip="新建文件夹">
+                            <StackPanel>
+                                <TextBlock Text="&#xE8F4;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#D69820"/>
+                                <TextBlock Text="文件夹" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource MacToolbarBtn}"
+                                Click="TbToday_OnClick" ToolTip="今日笔记">
+                            <StackPanel>
+                                <TextBlock Text="&#xE787;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#3D7A36"/>
+                                <TextBlock Text="今日" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Border Style="{StaticResource MacToolbarSep}"/>
+
+                        <!-- ── 速记组 ── -->
+                        <Button Style="{StaticResource MacToolbarBtn}"
+                                Click="TbQuickCapture_OnClick" ToolTip="快速笔录">
+                            <StackPanel>
+                                <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#3666B5"/>
+                                <TextBlock Text="速记" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource MacToolbarBtn}"
+                                Click="TbSticky_OnClick" ToolTip="新便签">
+                            <StackPanel>
+                                <TextBlock Text="&#xE70B;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#D69820"/>
+                                <TextBlock Text="便签" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Border Style="{StaticResource MacToolbarSep}"/>
+
+                        <!-- ── 编辑组 ── -->
+                        <Button x:Name="UndoBtn" Style="{StaticResource MacToolbarBtn}"
+                                Click="Undo_OnClick" IsEnabled="False"
+                                ToolTip="撤销 (Ctrl+Z)">
+                            <StackPanel>
+                                <TextBlock Text="&#xE7A7;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#5A6278"/>
+                                <TextBlock Text="撤销" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="RedoBtn" Style="{StaticResource MacToolbarBtn}"
+                                Click="Redo_OnClick" IsEnabled="False"
+                                ToolTip="重做 (Ctrl+Y)">
+                            <StackPanel>
+                                <TextBlock Text="&#xE7A6;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#5A6278"/>
+                                <TextBlock Text="重做" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="SaveBtn" Style="{StaticResource MacToolbarBtn}"
+                                Click="Save_OnClick" IsEnabled="False"
+                                ToolTip="保存 (Ctrl+S)">
+                            <StackPanel>
+                                <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#16A34A"/>
+                                <TextBlock Text="保存" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Border Style="{StaticResource MacToolbarSep}"/>
+
+                        <!-- ── 视图组 ── -->
+                        <Button x:Name="TbReadMode" Style="{StaticResource MacToolbarBtn}"
+                                Click="TbReadMode_OnClick" ToolTip="切换笔记视图：实时 / 分栏 / 阅读">
+                            <StackPanel>
+                                <TextBlock Text="&#xE736;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#5A6278"/>
+                                <TextBlock x:Name="TbReadModeLabel" Text="实时" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Border Style="{StaticResource MacToolbarSep}"/>
+
+                        <!-- ── 导出组 ── -->
+                        <Button x:Name="ExportHtmlBtn" Style="{StaticResource MacToolbarBtn}"
+                                Click="ExportHtml_OnClick" IsEnabled="False"
+                                ToolTip="导出为 HTML">
+                            <StackPanel>
+                                <TextBlock Text="&#xE898;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#5A6278"/>
+                                <TextBlock Text="HTML" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="GeneratePptBtn" Style="{StaticResource MacToolbarBtn}"
+                                Click="GeneratePpt_OnClick" IsEnabled="False"
+                                ToolTip="AI 生成 PowerPoint（一键直出 .pptx）">
+                            <StackPanel>
+                                <TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#7C5CFC"/>
+                                <TextBlock Text="PPT" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="SendToPptWorkspaceBtn" Style="{StaticResource MacToolbarBtn}"
+                                Click="SendToPptWorkspace_OnClick" IsEnabled="False"
+                                ToolTip="发送到 PPT 工作台（先看大纲、选主题，再渲染）">
+                            <StackPanel>
+                                <TextBlock Text="&#xEC4F;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#7C5CFC"/>
+                                <TextBlock Text="工作台" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="VersionHistoryBtn" Style="{StaticResource MacToolbarBtn}"
+                                Click="VersionHistory_OnClick" IsEnabled="False"
+                                ToolTip="版本历史">
+                            <StackPanel>
+                                <TextBlock Text="&#xE81C;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#5A6278"/>
+                                <TextBlock Text="历史" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Border Style="{StaticResource MacToolbarSep}"/>
+
+                        <!-- ── 操作组 ── -->
+                        <Button x:Name="RenameBtn" Style="{StaticResource MacToolbarBtn}"
+                                Click="Rename_OnClick" IsEnabled="False"
+                                ToolTip="重命名">
+                            <StackPanel>
+                                <TextBlock Text="&#xE70F;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#5A6278"/>
+                                <TextBlock Text="重命名" FontSize="10"
+                                           Foreground="#6B7084" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="DeleteBtn" Style="{StaticResource MacToolbarBtn}"
+                                Click="Delete_OnClick" IsEnabled="False"
+                                ToolTip="删除">
+                            <StackPanel>
+                                <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17" HorizontalAlignment="Center"
+                                           Foreground="#EF4444"/>
+                                <TextBlock Text="删除" FontSize="10"
+                                           Foreground="#EF4444" Margin="0,2,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════ 主内容区（树 / 编辑器 / 检视器） ═══════════════════ -->
+        <Grid Grid.Row="1">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="LeftPanelCol" Width="268" MinWidth="200"/>
+            <ColumnDefinition Width="10"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition x:Name="InspectorSplitterCol" Width="0"/>
+            <ColumnDefinition x:Name="InspectorCol" Width="0"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ═══════════════════ 左侧面板：文件树 ═══════════════════ -->
+        <Border Grid.Column="0"
+                Background="{StaticResource BrushSurface}"
+                CornerRadius="14" Margin="0,0,4,0"
+                BorderBrush="{StaticResource BrushBorderSubtle}"
+                BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- 面板标题 + 操作按钮（紧凑 Binder 风） -->
+                <Border Grid.Row="0" Padding="12,9,8,7"
+                        BorderBrush="#F0F1F5" BorderThickness="0,0,0,1">
+                    <Grid>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="笔记库" FontSize="12.5" FontWeight="SemiBold"
+                                       Foreground="{StaticResource BrushTextPrimary}"
+                                       Opacity="0.85"/>
+                        </StackPanel>
+                        <!-- 右侧工具按钮 -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                            <Button ToolTip="收起所有文件夹" Click="CollapseAll_OnClick"
+                                    Style="{StaticResource ToolbarMiniBtn}"
+                                    Padding="6,3" FontSize="12" Margin="0,0,2,0"
+                                    FontFamily="Segoe MDL2 Assets" Content="&#xE96D;"
+                                    Foreground="{StaticResource BrushTextMuted}"/>
+                            <Button ToolTip="展开一级目录" Click="ExpandTopLevel_OnClick"
+                                    Style="{StaticResource ToolbarMiniBtn}"
+                                    Padding="6,3" FontSize="12" Margin="0,0,2,0"
+                                    FontFamily="Segoe MDL2 Assets" Content="&#xE972;"
+                                    Foreground="{StaticResource BrushTextMuted}"/>
+                            <Button Content="❓" ToolTip="查看笔记库结构说明"
+                                    Click="HelpBtn_OnClick"
+                                    Style="{StaticResource ToolbarMiniBtn}"
+                                    Padding="5,3" FontSize="13" Opacity="0.7"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- 搜索框 + 状态 -->
+                <Border Grid.Row="1" Margin="10,8,10,4">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="SearchBox" Grid.Column="0" Padding="8,6"
+                                     FontSize="12" TextChanged="SearchBox_OnTextChanged">
+                                <TextBox.Style>
+                                    <Style TargetType="TextBox" BasedOn="{StaticResource UiTextBox}">
+                                        <Style.Triggers>
+                                            <Trigger Property="Text" Value="">
+                                                <Setter Property="Background">
+                                                    <Setter.Value>
+                                                        <VisualBrush AlignmentX="Left" AlignmentY="Center" Stretch="None">
+                                                            <VisualBrush.Visual>
+                                                                <TextBlock Text="  🔍  搜索笔记…"
+                                                                           Foreground="#9CA0B0" FontSize="12" Opacity="0.7"/>
+                                                            </VisualBrush.Visual>
+                                                        </VisualBrush>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBox.Style>
+                            </TextBox>
+                            <ToggleButton x:Name="SearchContentToggle" Grid.Column="1"
+                                          Margin="4,0,0,0" Padding="6,4" FontSize="10"
+                                          ToolTip="启用全文内容搜索（较慢）"
+                                          Content="全文" Width="40"
+                                          Click="SearchContentToggle_OnClick"/>
+                        </Grid>
+                        <!-- 搜索状态指示 -->
+                        <TextBlock x:Name="SearchStatusText" Margin="2,4,0,0"
+                                   FontSize="10" Foreground="{StaticResource BrushTextMuted}"
+                                   Visibility="Collapsed"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 文件树（紧凑 Binder 风格） -->
+                <TreeView x:Name="NotesTree" Grid.Row="2"
+                          Margin="4,4,4,6"
+                          SelectedItemChanged="NotesTree_OnSelectedItemChanged"
+                          PreviewMouseRightButtonDown="NotesTree_PreviewMouseRightButtonDown"
+                          BorderThickness="0"
+                          Background="Transparent"
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+
+                <!-- 全文搜索结果片段面板（仅内容搜索时显示） -->
+                <Border x:Name="SnippetPanel" Grid.Row="3"
+                        Visibility="Collapsed"
+                        BorderBrush="#EDEFF5" BorderThickness="0,1,0,0"
+                        Background="#F8F9FC"
+                        MaxHeight="200">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Padding="10,6,10,5"
+                                Background="#FFFFFF" BorderBrush="#EDEFF5" BorderThickness="0,0,0,1">
+                            <Grid>
+                                <TextBlock x:Name="SnippetCountText" FontSize="10" FontWeight="SemiBold"
+                                           Foreground="#4F6EF7" VerticalAlignment="Center"
+                                           Text="搜索结果"/>
+                                <Button x:Name="SnippetCloseBtn" Content="✕"
+                                        HorizontalAlignment="Right"
+                                        Style="{StaticResource ToolbarMiniBtn}"
+                                        Padding="4,2" FontSize="10"
+                                        Click="SnippetClose_OnClick"/>
+                            </Grid>
+                        </Border>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="SnippetList"
+                                          ItemTemplate="{StaticResource SnippetItemTemplate}">
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <EventSetter Event="MouseLeftButtonDown"
+                                                     Handler="SnippetItem_MouseLeftButtonDown"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+
+            </Grid>
+        </Border>
+
+        <!-- 折叠手柄 -->
+        <Border Grid.Column="1" Background="Transparent" VerticalAlignment="Stretch">
+            <Button x:Name="CollapseLeftBtn"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    Click="CollapseLeft_OnClick"
+                    ToolTip="收起 / 展开笔记列表"
+                    Cursor="Hand"
+                    Width="10" Height="44"
+                    Padding="0">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="Bd"
+                                            Background="{TemplateBinding Background}"
+                                            CornerRadius="5"
+                                            SnapsToDevicePixels="True">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#E8EBF5"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="#D8DCF0"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Button.Style>
+                <TextBlock x:Name="CollapseLeftIcon"
+                           Text="&#xE76B;"
+                           FontFamily="Segoe MDL2 Assets"
+                           FontSize="7"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Foreground="#B8BDD0"/>
+            </Button>
+        </Border>
+
+        <!-- ═══════════════════ 右侧面板：编辑 + 预览 ═══════════════════ -->
+        <Border Grid.Column="2"
+                Background="{StaticResource BrushSurface}"
+                CornerRadius="14" Margin="4,0,0,0"
+                BorderBrush="{StaticResource BrushBorderSubtle}"
+                BorderThickness="1">
+            <DockPanel LastChildFill="True" Margin="0">
+                <!-- 顶部标题栏（操作按钮已迁移至全局顶部工具栏） -->
+                <Border DockPanel.Dock="Top" Padding="16,10,16,10"
+                        BorderBrush="{StaticResource BrushBorderSubtle}"
+                        BorderThickness="0,0,0,1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Orientation="Horizontal">
+                            <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="13" Foreground="#5B8AF5"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="EditorTitle" Text="选择左侧 .md 文件"
+                                       FontSize="14.5" FontWeight="SemiBold"
+                                       Foreground="{StaticResource BrushTextPrimary}"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="500"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" x:Name="DirtyIndicator"
+                                   Text="● 未保存" FontSize="10.5"
+                                   Foreground="#EAB308" VerticalAlignment="Center"
+                                   Visibility="Collapsed"/>
+                    </Grid>
+                </Border>
+
+                <!-- 编辑 + 预览分栏 -->
+                <Grid DockPanel.Dock="Bottom">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Markdown 工具条 -->
+                    <Border x:Name="EditorToolbarRow" Grid.Row="0"
+                            Background="{StaticResource BrushSurfaceMuted}"
+                            Padding="12,7" Margin="12,8,12,4"
+                            CornerRadius="8"
+                            BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- 格式化 + 插入工具 -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="{StaticResource BrushAccentMuted}" CornerRadius="4"
+                                        Padding="6,2" Margin="0,0,6,0">
+                                    <TextBlock Text="格式" FontSize="10"
+                                               Foreground="{StaticResource BrushAccent}" FontWeight="Medium"/>
+                                </Border>
+                                <Button Content="B" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        FontWeight="Bold" ToolTip="加粗 (Ctrl+B)" Click="InsertMdBold_OnClick"/>
+                                <Button Content="I" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        FontStyle="Italic" ToolTip="斜体 (Ctrl+I)" Click="InsertMdItalic_OnClick"/>
+                                <Button Content="&lt;/&gt;" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        ToolTip="行内代码" Click="InsertMdCode_OnClick"/>
+                                <Button Content="H" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        FontWeight="Bold" ToolTip="标题（循环 H1~H3）" Click="InsertMdHeading_OnClick"/>
+                                <Button Content="❝" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        ToolTip="引用块" Click="InsertMdQuote_OnClick"/>
+                                <Button Content="—" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        ToolTip="分割线 ---" Click="InsertMdHr_OnClick"/>
+                                <Border Width="1" Height="16" Margin="4,0"
+                                        Background="{StaticResource BrushBorder}" VerticalAlignment="Center"/>
+                                <Button Content="🔗" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        ToolTip="插入链接" Click="InsertMdLink_OnClick"/>
+                                <Button Content="🖼" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        ToolTip="插入图片" Click="InsertMdImage_OnClick"/>
+                                <Button Content="▦" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        ToolTip="插入表格" Click="InsertMdTable_OnClick"/>
+                                <Border Width="1" Height="16" Margin="4,0"
+                                        Background="{StaticResource BrushBorder}" VerticalAlignment="Center"/>
+                                <Button Content="☐" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        ToolTip="待办项：- [ ] " Click="InsertMdTodo_OnClick"/>
+                                <Button Content="•" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        ToolTip="无序列表" Click="InsertMdBullet_OnClick"/>
+                                <Button Content="1." Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
+                                        ToolTip="有序列表" Click="InsertMdOrdered_OnClick"/>
+                            </StackPanel>
+
+                            <Border Grid.Column="1" Width="1" Height="20" Margin="12,0"
+                                    Background="{StaticResource BrushBorder}" VerticalAlignment="Center"/>
+
+                            <!-- AI 工具 -->
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="#F0EEFF" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                                    <TextBlock Text="✨ AI" FontSize="10" Foreground="#7C5CFC" FontWeight="Medium"/>
+                                </Border>
+                                <ComboBox x:Name="NoteAiActionCombo" Width="110" FontSize="11"
+                                          VerticalAlignment="Center" Margin="0,0,6,0"
+                                          ToolTip="使用设置中的 API"/>
+                                <Button x:Name="NoteAiRunBtn" Content="▶ 运行"
+                                        Style="{StaticResource ToolbarMiniAccent}" Padding="12,4"
+                                        ToolTip="发送至 AI，在预览窗口中查看并确认结果"
+                                        Click="NoteAiRun_OnClick"/>
+                                <Button x:Name="NoteSttBtn" Content="🎤 开始听写"
+                                        Style="{StaticResource ToolbarMiniBtn}" Padding="10,4"
+                                        Margin="6,0,0,0" ToolTip="实时语音转文字（本地离线）"
+                                        Click="NoteStt_OnClick"/>
+                                <TextBlock x:Name="NoteSttStatusText" Text="" FontSize="11"
+                                           Foreground="{StaticResource BrushTextMuted}"
+                                           VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 编辑器 + 预览 / 或全宽实时编辑 -->
+                    <Grid Grid.Row="1" Margin="12,4,12,12" MinHeight="160">
+                        <Grid x:Name="ClassicEditorRoot">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition x:Name="EditorColumn" Width="*" MinWidth="140"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="*" MinWidth="140"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Markdown 编辑器 + 状态栏 -->
+                        <Border Grid.Column="0" CornerRadius="10" ClipToBounds="True"
+                                BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
+                                Background="{StaticResource BrushSurfaceMuted}">
+                            <DockPanel>
+                                <Border DockPanel.Dock="Bottom" Padding="12,4,12,4"
+                                        Background="{StaticResource BrushSurface}"
+                                        BorderBrush="{StaticResource BrushBorderSubtle}"
+                                        BorderThickness="0,1,0,0">
+                                    <TextBlock x:Name="WordCountBar"
+                                               Text="字数: 0 · 词数: 0 · 预计阅读: &lt;1 分钟"
+                                               FontSize="10.5"
+                                               Foreground="{StaticResource BrushTextMuted}"/>
+                                </Border>
+                                <TextBox x:Name="EditorBox"
+                                         Style="{StaticResource UiTextBox}"
+                                         AcceptsReturn="True" TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         FontFamily="Cascadia Code, Consolas, monospace"
+                                         FontSize="13"
+                                         Background="Transparent" BorderThickness="0"
+                                         Padding="14,12"
+                                         TextChanged="EditorBox_OnTextChanged">
+                                    <TextBox.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="🔗 创建双链…" Click="EditorBox_CreateWikiLink_Click" FontWeight="SemiBold"/>
+                                            <Separator/>
+                                            <MenuItem Header="剪切" Command="ApplicationCommands.Cut"/>
+                                            <MenuItem Header="复制" Command="ApplicationCommands.Copy"/>
+                                            <MenuItem Header="粘贴" Command="ApplicationCommands.Paste"/>
+                                            <Separator/>
+                                            <MenuItem Header="全选" Command="ApplicationCommands.SelectAll"/>
+                                        </ContextMenu>
+                                    </TextBox.ContextMenu>
+                                </TextBox>
+                            </DockPanel>
+                        </Border>
+
+                        <GridSplitter x:Name="EditorPreviewSplitter" Grid.Column="1"
+                                      Width="6" HorizontalAlignment="Stretch"
+                                      Background="Transparent" Cursor="SizeWE"/>
+
+                        <!-- 预览面板 -->
+                        <Border Grid.Column="2" CornerRadius="10" ClipToBounds="True"
+                                BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
+                                Background="{StaticResource BrushSurfaceMuted}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Border Grid.Row="0" Padding="12,7,8,7"
+                                        BorderBrush="{StaticResource BrushBorderSubtle}"
+                                        BorderThickness="0,0,0,1"
+                                        Background="{StaticResource BrushSurface}">
+                                    <Grid>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                                    HorizontalAlignment="Left">
+                                            <Border Background="{StaticResource BrushAccentMuted}"
+                                                    CornerRadius="4" Padding="6,2" Margin="0,0,6,0">
+                                                <TextBlock x:Name="PreviewHeaderLabel" Text="预览"
+                                                           FontSize="10" Foreground="{StaticResource BrushAccent}"
+                                                           FontWeight="Medium"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                                    VerticalAlignment="Center">
+                                            <Button x:Name="BtnPreviewViewOnly" Content="📖 阅读"
+                                                    Style="{StaticResource ToolbarMiniBtn}" Padding="8,3"
+                                                    ToolTip="仅预览（可点击待办）"
+                                                    Click="BtnPreviewViewOnly_OnClick"/>
+                                            <Button x:Name="BtnPreviewEditSplit" Content="✏️ 分栏"
+                                                    Style="{StaticResource UiBtnPrimary}" Padding="8,3"
+                                                    FontSize="11" ToolTip="左侧编辑、右侧预览"
+                                                    Visibility="Collapsed"
+                                                    Click="BtnPreviewEditSplit_OnClick"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <wv2:WebView2 x:Name="PreviewWeb" Grid.Row="1" Margin="0"/>
+                            </Grid>
+                        </Border>
+                        </Grid>
+                        <Border x:Name="LiveEditorHost" Visibility="Collapsed"
+                                CornerRadius="10" ClipToBounds="True"
+                                BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
+                                Background="{StaticResource BrushSurfaceMuted}">
+                            <wv2:WebView2 x:Name="LiveEditorWeb"/>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════ Inspector 拖拽分隔条 ═══════════════════ -->
+        <GridSplitter x:Name="InspectorSplitter" Grid.Column="3"
+                      Width="6" HorizontalAlignment="Stretch"
+                      Background="Transparent" Cursor="SizeWE"
+                      Visibility="Collapsed"/>
+
+        <!-- ═══════════════════ Inspector 检视器面板 ═══════════════════ -->
+        <Border x:Name="InspectorPanel" Grid.Column="4"
+                Visibility="Collapsed"
+                Background="{StaticResource BrushSurface}"
+                CornerRadius="14" Margin="4,0,0,0"
+                BorderBrush="{StaticResource BrushBorderSubtle}"
+                BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 检视器头部 -->
+                <Border Grid.Row="0" Padding="14,10,10,10"
+                        BorderBrush="{StaticResource BrushBorderSubtle}"
+                        BorderThickness="0,0,0,1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Orientation="Horizontal">
+                            <TextBlock Text="&#xE7B5;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="13" Foreground="#4F6EF7"
+                                       VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="检视器" FontSize="13.5" FontWeight="SemiBold"
+                                       Foreground="{StaticResource BrushTextPrimary}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" x:Name="InspectorCloseBtn"
+                                Style="{StaticResource ToolbarMiniBtn}"
+                                Padding="6,3" FontSize="11"
+                                Content="✕" ToolTip="关闭检视器"
+                                Click="ToggleInspector_OnClick"/>
+                    </Grid>
+                </Border>
+
+                <!-- 检视器内容 -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              Padding="0,8,0,12">
+                    <StackPanel Margin="14,0,14,0">
+
+                        <!-- ── Synopsis（提要 / 来自 frontmatter:summary 或首段） ── -->
+                        <Border Padding="0,8,0,4">
+                            <StackPanel>
+                                <TextBlock Text="提要 SYNOPSIS"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextMuted}"
+                                           Margin="0,0,0,6"/>
+                                <Border Background="#FDF2F2" CornerRadius="6"
+                                        BorderBrush="#F4D9D9" BorderThickness="1"
+                                        Padding="10,8" MinHeight="100">
+                                    <TextBox x:Name="InspectorSynopsisBox"
+                                             Background="Transparent" BorderThickness="0"
+                                             AcceptsReturn="True" TextWrapping="Wrap"
+                                             FontSize="12" Foreground="#3A2A2A"
+                                             VerticalScrollBarVisibility="Auto"
+                                             MaxHeight="220"
+                                             TextChanged="InspectorMeta_OnTextChanged"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── Notes（备注 / 来自 frontmatter:notes） ── -->
+                        <Border Padding="0,12,0,4">
+                            <StackPanel>
+                                <TextBlock Text="备注 NOTES"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextMuted}"
+                                           Margin="0,0,0,6"/>
+                                <Border Background="{StaticResource BrushSurfaceMuted}" CornerRadius="6"
+                                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
+                                        Padding="10,8" MinHeight="100">
+                                    <TextBox x:Name="InspectorNotesBox"
+                                             Background="Transparent" BorderThickness="0"
+                                             AcceptsReturn="True" TextWrapping="Wrap"
+                                             FontSize="12" Foreground="{StaticResource BrushTextPrimary}"
+                                             VerticalScrollBarVisibility="Auto"
+                                             MaxHeight="220"
+                                             TextChanged="InspectorMeta_OnTextChanged"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── Tags（标签 / 来自 frontmatter:tags 数组，逗号分隔） ── -->
+                        <Border Padding="0,12,0,4">
+                            <StackPanel>
+                                <TextBlock Text="标签 TAGS"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextMuted}"
+                                           Margin="0,0,0,6"/>
+                                <TextBox x:Name="InspectorTagsBox"
+                                         Style="{StaticResource UiTextBox}"
+                                         FontSize="11.5"
+                                         Padding="8,6"
+                                         TextChanged="InspectorMeta_OnTextChanged"
+                                         ToolTip="多个标签用逗号分隔"/>
+                                <ItemsControl x:Name="InspectorTagsChips" Margin="0,6,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{StaticResource BrushAccentMuted}"
+                                                    CornerRadius="10" Padding="8,2"
+                                                    Margin="0,2,4,2">
+                                                <TextBlock Text="{Binding}" FontSize="10.5"
+                                                           Foreground="{StaticResource BrushAccent}"
+                                                           FontWeight="Medium"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── 出链 OUTLINKS ── -->
+                        <Border Padding="0,12,0,4">
+                            <StackPanel>
+                                <TextBlock Text="出链 OUTLINKS"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextMuted}"
+                                           Margin="0,0,0,6"/>
+                                <ItemsControl x:Name="OutlinksPanel">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding}"
+                                                    Tag="{Binding}"
+                                                    Style="{StaticResource ToolbarMiniBtn}"
+                                                    HorizontalContentAlignment="Left"
+                                                    Margin="0,1,0,1"
+                                                    Padding="6,3"
+                                                    FontSize="11.5"
+                                                    Foreground="#7c5cbf"
+                                                    Click="OutlinkItem_Click"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="OutlinksEmptyText"
+                                           Text="（无出链）"
+                                           FontSize="11" Foreground="{StaticResource BrushTextMuted}"
+                                           Visibility="Collapsed"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── 反向链接 BACKLINKS ── -->
+                        <Border Padding="0,12,0,4">
+                            <StackPanel>
+                                <TextBlock Text="反向链接 BACKLINKS"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextMuted}"
+                                           Margin="0,0,0,6"/>
+                                <ItemsControl x:Name="BacklinksPanel">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding FileName}"
+                                                    Tag="{Binding FullPath}"
+                                                    Style="{StaticResource ToolbarMiniBtn}"
+                                                    HorizontalContentAlignment="Left"
+                                                    Margin="0,1,0,1"
+                                                    Padding="6,3"
+                                                    FontSize="11.5"
+                                                    Foreground="#4F6EF7"
+                                                    ToolTip="{Binding FullPath}"
+                                                    Click="BacklinkItem_Click"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="BacklinksEmptyText"
+                                           Text="（无反向链接）"
+                                           FontSize="11" Foreground="{StaticResource BrushTextMuted}"
+                                           Visibility="Collapsed"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── 元数据（路径 / 修改时间 / 字数 / 类型） ── -->
+                        <Border Padding="0,12,0,4">
+                            <StackPanel>
+                                <TextBlock Text="元数据 METADATA"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextMuted}"
+                                           Margin="0,0,0,6"/>
+                                <Border Background="{StaticResource BrushSurfaceMuted}" CornerRadius="6"
+                                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
+                                        Padding="10,8">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="60"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="类型" FontSize="11"
+                                                       Foreground="{StaticResource BrushTextMuted}"/>
+                                            <TextBlock x:Name="MetaKindText" Grid.Column="1"
+                                                       FontSize="11.5"
+                                                       Foreground="{StaticResource BrushTextPrimary}"
+                                                       TextWrapping="Wrap"
+                                                       Text="—"/>
+                                        </Grid>
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="60"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="字数" FontSize="11"
+                                                       Foreground="{StaticResource BrushTextMuted}"/>
+                                            <TextBlock x:Name="MetaWordsText" Grid.Column="1"
+                                                       FontSize="11.5"
+                                                       Foreground="{StaticResource BrushTextPrimary}"
+                                                       Text="—"/>
+                                        </Grid>
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="60"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="修改于" FontSize="11"
+                                                       Foreground="{StaticResource BrushTextMuted}"/>
+                                            <TextBlock x:Name="MetaModifiedText" Grid.Column="1"
+                                                       FontSize="11.5"
+                                                       Foreground="{StaticResource BrushTextPrimary}"
+                                                       Text="—"/>
+                                        </Grid>
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="60"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="路径" FontSize="11"
+                                                       Foreground="{StaticResource BrushTextMuted}"
+                                                       VerticalAlignment="Top"/>
+                                            <TextBlock x:Name="MetaPathText" Grid.Column="1"
+                                                       FontSize="10.5"
+                                                       Foreground="{StaticResource BrushTextSecondary}"
+                                                       TextWrapping="Wrap"
+                                                       Text="—"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        </Grid>
+    </Grid>
+</UserControl>

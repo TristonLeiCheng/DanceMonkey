@@ -1,0 +1,88 @@
+﻿<Window x:Class="DesktopAssistant.DesktopPetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title=""
+    Width="90"
+    Height="118"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        AllowsTransparency="True"
+        Background="Transparent"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
+    <Window.Resources>
+        <!-- ═══ 点击反馈：整体轻弹 ═══ -->
+        <Storyboard x:Key="PetPop" Duration="0:0:0.35">
+            <DoubleAnimation Storyboard.TargetName="PetPopScale" Storyboard.TargetProperty="ScaleX"
+                             From="1" To="1.15" Duration="0:0:0.12" AutoReverse="True"/>
+            <DoubleAnimation Storyboard.TargetName="PetPopScale" Storyboard.TargetProperty="ScaleY"
+                             From="1" To="1.15" Duration="0:0:0.12" AutoReverse="True"/>
+        </Storyboard>
+        <!-- ═══ 开心跳跃 ═══ -->
+        <Storyboard x:Key="PetHappyJump" Duration="0:0:0.6">
+            <DoubleAnimation Storyboard.TargetName="PetBounceTransform" Storyboard.TargetProperty="Y"
+                             From="0" To="-16" Duration="0:0:0.2" AutoReverse="True"
+                             EasingFunction="{x:Null}"/>
+            <DoubleAnimation Storyboard.TargetName="PetPopScale" Storyboard.TargetProperty="ScaleX"
+                             From="1" To="1.08" Duration="0:0:0.15" AutoReverse="True" BeginTime="0:0:0.1"/>
+            <DoubleAnimation Storyboard.TargetName="PetPopScale" Storyboard.TargetProperty="ScaleY"
+                             From="1" To="0.92" Duration="0:0:0.15" AutoReverse="True" BeginTime="0:0:0.1"/>
+        </Storyboard>
+        <!-- ═══ 睡觉呼吸 ═══ -->
+        <Storyboard x:Key="PetSleep" RepeatBehavior="Forever" Duration="0:0:3">
+            <DoubleAnimation Storyboard.TargetName="PetPopScale" Storyboard.TargetProperty="ScaleX"
+                             From="1" To="1.03" Duration="0:0:1.5" AutoReverse="True"/>
+            <DoubleAnimation Storyboard.TargetName="PetPopScale" Storyboard.TargetProperty="ScaleY"
+                             From="1" To="0.97" Duration="0:0:1.5" AutoReverse="True"/>
+        </Storyboard>
+        <!-- ═══ 摇头 ═══ -->
+        <Storyboard x:Key="PetShake" Duration="0:0:0.5">
+            <DoubleAnimation Storyboard.TargetName="PetShakeRotate" Storyboard.TargetProperty="Angle"
+                             From="0" To="-8" Duration="0:0:0.08" AutoReverse="True"/>
+            <DoubleAnimation Storyboard.TargetName="PetShakeRotate" Storyboard.TargetProperty="Angle"
+                             From="0" To="8" Duration="0:0:0.08" AutoReverse="True" BeginTime="0:0:0.16"/>
+            <DoubleAnimation Storyboard.TargetName="PetShakeRotate" Storyboard.TargetProperty="Angle"
+                             From="0" To="-5" Duration="0:0:0.06" AutoReverse="True" BeginTime="0:0:0.32"/>
+        </Storyboard>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 气泡对话 -->
+        <Border x:Name="SpeechBubble" Grid.Row="0" Visibility="Collapsed"
+                Background="#E8101924" CornerRadius="8" Padding="8,4" Margin="4,0,4,2"
+                HorizontalAlignment="Center" MaxWidth="140">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="6" ShadowDepth="2" Opacity="0.3" Color="Black"/>
+            </Border.Effect>
+            <TextBlock x:Name="SpeechText" Foreground="White" FontSize="11"
+                       TextWrapping="Wrap" TextAlignment="Center"/>
+        </Border>
+
+        <!-- 宠物主体（像素风格） -->
+        <Border Grid.Row="1" Width="76" Height="76" Background="Transparent" Cursor="Hand">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="PetBounceTransform" X="0" Y="0"/>
+            </Border.RenderTransform>
+            <Grid Width="68" Height="68">
+                <Grid.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="PetPopScale" ScaleX="1" ScaleY="1" CenterX="34" CenterY="34"/>
+                        <RotateTransform x:Name="PetShakeRotate" Angle="0" CenterX="34" CenterY="34"/>
+                    </TransformGroup>
+                </Grid.RenderTransform>
+
+                <!-- 像素宠物（NearestNeighbor 保持像素锐利） -->
+                <Image x:Name="PetImage" Width="68" Height="68" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor"
+                       RenderOptions.EdgeMode="Aliased"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

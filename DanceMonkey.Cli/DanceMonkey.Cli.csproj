@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Version>1.2.0</Version>
+    <FileVersion>1.2.0.0</FileVersion>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <InformationalVersion>1.2.0</InformationalVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>DanceMonkey.Cli</RootNamespace>
+    <AssemblyName>dancemonkey</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <!-- 不启用 InvariantGlobalization：我们需要完整的 ICU 数据支持 CJK 字符比较 / 输出宽度判定 -->
+    <!-- 允许在本地仅装 .NET 10 时直接跑；自包含发布时本设置被忽略 -->
+    <RollForward>Major</RollForward>
+    <!-- 单文件发布用 -->
+    <PublishSingleFile Condition="'$(PublishSingleFile)' == ''">false</PublishSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Markdig" Version="0.37.0" />
+    <PackageReference Include="Spectre.Console" Version="0.49.1" />
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DanceMonkey.Agent.Core\DanceMonkey.Agent.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\ppt_scaffold\**\*">
+      <Link>ppt_scaffold\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

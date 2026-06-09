@@ -1,0 +1,387 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- ══════ Sidebar / Navigation ══════ -->
+    <sys:String x:Key="Nav.DesktopAssistant">桌面助手</sys:String>
+    <sys:String x:Key="Nav.AiChat">AI 对话</sys:String>
+    <sys:String x:Key="Nav.Notes">笔记</sys:String>
+    <sys:String x:Key="Nav.Ppt">PPT 工作台</sys:String>
+    <sys:String x:Key="Nav.PptTip">从笔记 / 文件 / 主题生成高端大气的 PPT</sys:String>
+    <sys:String x:Key="Nav.Todo">Zen Task</sys:String>
+    <sys:String x:Key="Nav.Functions">功 能</sys:String>
+    <sys:String x:Key="Nav.Translate">翻译工作台</sys:String>
+    <sys:String x:Key="Nav.Email">邮件撰写</sys:String>
+    <sys:String x:Key="Nav.Chat">智能对话</sys:String>
+    <sys:String x:Key="Nav.Tools">工 具</sys:String>
+    <sys:String x:Key="Nav.Network">网络监控</sys:String>
+    <sys:String x:Key="Nav.Cleanup">电脑清理</sys:String>
+    <sys:String x:Key="Nav.CodexProxy">DM Proxy</sys:String>
+    <sys:String x:Key="Nav.PasswordVault">密码库</sys:String>
+    <sys:String x:Key="Nav.QuickAccess">快速访问</sys:String>
+    <sys:String x:Key="Nav.PdfTools">PDF 工具</sys:String>
+    <sys:String x:Key="Nav.FileTools">文件工具</sys:String>
+    <sys:String x:Key="Nav.Dance">Pet</sys:String>
+    <sys:String x:Key="Nav.Meeting">会议中心</sys:String>
+    <sys:String x:Key="Nav.FileManager">文件管理</sys:String>
+    <sys:String x:Key="Nav.Settings">设置</sys:String>
+    <sys:String x:Key="Nav.Skills">技能管理</sys:String>
+    <sys:String x:Key="Nav.SkillsTip">管理 Agent Skills（.dancemonkey/skills）</sys:String>
+    <sys:String x:Key="Nav.Cli">CLI 终端</sys:String>
+    <sys:String x:Key="Nav.Collapse">收起</sys:String>
+    <sys:String x:Key="Nav.ExpandSidebar">展开侧栏</sys:String>
+    <sys:String x:Key="Nav.CollapseSidebar">收起侧栏</sys:String>
+    <sys:String x:Key="Nav.Homepage">个人主页</sys:String>
+
+    <!-- ══════ Title Bar ══════ -->
+    <sys:String x:Key="TitleBar.Minimize">最小化</sys:String>
+    <sys:String x:Key="TitleBar.Maximize">最大化</sys:String>
+    <sys:String x:Key="TitleBar.Restore">还原</sys:String>
+    <sys:String x:Key="TitleBar.Close">关闭</sys:String>
+    <sys:String x:Key="TitleBar.Settings">⚙ 设置</sys:String>
+
+    <!-- ══════ Notes Toolbar ══════ -->
+    <sys:String x:Key="Notes.Today">今日</sys:String>
+    <sys:String x:Key="Notes.New">新建</sys:String>
+    <sys:String x:Key="Notes.NewNote">新建笔记</sys:String>
+    <sys:String x:Key="Notes.Folder">文件夹</sys:String>
+    <sys:String x:Key="Notes.NewFolder">新建文件夹</sys:String>
+    <sys:String x:Key="Notes.Sticky">便签</sys:String>
+    <sys:String x:Key="Notes.Capture">笔录</sys:String>
+    <sys:String x:Key="Notes.QuickCapture">快速笔录</sys:String>
+    <sys:String x:Key="Notes.More">更多…</sys:String>
+    <sys:String x:Key="Notes.RefreshList">刷新列表</sys:String>
+    <sys:String x:Key="Notes.ExportZip">导出 ZIP</sys:String>
+    <sys:String x:Key="Notes.ImportZip">导入 ZIP</sys:String>
+    <sys:String x:Key="Notes.OpenFolder">打开笔记目录</sys:String>
+
+    <!-- ══════ Tray Menu ══════ -->
+    <sys:String x:Key="Tray.Show">显示</sys:String>
+    <sys:String x:Key="Tray.Tools">工具</sys:String>
+    <sys:String x:Key="Tray.ShowFloating">显示桌面悬浮图标</sys:String>
+    <sys:String x:Key="Tray.HideFloating">隐藏悬浮图标</sys:String>
+    <sys:String x:Key="Tray.DockMode">桌面 Dock 模式</sys:String>
+    <sys:String x:Key="Tray.QuickScreenshot">快速截图</sys:String>
+    <sys:String x:Key="Tray.RegionScreenshot">框选截图</sys:String>
+    <sys:String x:Key="Tray.ScrollScreenshot">滚动截屏</sys:String>
+    <sys:String x:Key="Tray.ContinuousScreenshot">连续截图模式</sys:String>
+    <sys:String x:Key="Tray.Exit">退出</sys:String>
+    <sys:String x:Key="Tray.NetworkUnavailable">网络不可用或未连接，请检查本机网络。</sys:String>
+
+    <!-- ══════ Quick Access ══════ -->
+    <sys:String x:Key="QuickAccess.Title">快速访问</sys:String>
+    <sys:String x:Key="QuickAccess.Subtitle">一键打开本地、网盘、SharePoint 与网络共享路径</sys:String>
+    <sys:String x:Key="QuickAccess.LocalFolders">📁 本机文件夹</sys:String>
+    <sys:String x:Key="QuickAccess.OneDrive">☁ OneDrive</sys:String>
+    <sys:String x:Key="QuickAccess.NetworkDrives">🖧 网络驱动器</sys:String>
+    <sys:String x:Key="QuickAccess.NoNetworkDrives">未检测到已映射的网络驱动器</sys:String>
+    <sys:String x:Key="QuickAccess.CustomLinks">⭐ 自定义快捷方式</sys:String>
+    <sys:String x:Key="QuickAccess.NoCustomLinks">暂无自定义快捷方式，点击「添加」创建。</sys:String>
+    <sys:String x:Key="QuickAccess.AddLink">+ 添加</sys:String>
+    <sys:String x:Key="QuickAccess.Refresh">刷新</sys:String>
+    <sys:String x:Key="QuickAccess.AddLinkTitle">添加快捷方式</sys:String>
+    <sys:String x:Key="QuickAccess.LinkCategory">类型</sys:String>
+    <sys:String x:Key="QuickAccess.LinkName">名称</sys:String>
+    <sys:String x:Key="QuickAccess.LinkPath">路径 / 链接</sys:String>
+    <sys:String x:Key="QuickAccess.PathHintLocal">输入本机文件夹路径，如 C:\Users\Documents</sys:String>
+    <sys:String x:Key="QuickAccess.PathHintNetwork">输入 UNC 路径，如 \\server\share 或 \\公共盘\部门</sys:String>
+    <sys:String x:Key="QuickAccess.PathHintSharePoint">输入 SharePoint 网址，如 https://company.sharepoint.com/sites/team</sys:String>
+    <sys:String x:Key="QuickAccess.PathHintOneDrive">输入 OneDrive 网页链接</sys:String>
+    <sys:String x:Key="QuickAccess.PathHintWeb">输入任意网页链接</sys:String>
+    <sys:String x:Key="QuickAccess.Cancel">取消</sys:String>
+    <sys:String x:Key="QuickAccess.Confirm">确定</sys:String>
+    <sys:String x:Key="QuickAccess.ValidationError">名称和路径不能为空。</sys:String>
+    <!-- New nav-style fields -->
+    <sys:String x:Key="QuickAccess.TabAll">全部</sys:String>
+    <sys:String x:Key="QuickAccess.TabFreq">⭐ 常用</sys:String>
+    <sys:String x:Key="QuickAccess.TabLocal">📁 本地</sys:String>
+    <sys:String x:Key="QuickAccess.TabNetwork">🖧 网络</sys:String>
+    <sys:String x:Key="QuickAccess.TabOneDrive">☁ OneDrive</sys:String>
+    <sys:String x:Key="QuickAccess.TabSharePoint">🔗 SharePoint</sys:String>
+    <sys:String x:Key="QuickAccess.TabWeb">🌐 网页</sys:String>
+    <sys:String x:Key="QuickAccess.SortFreq">频率排序</sys:String>
+    <sys:String x:Key="QuickAccess.SortName">名称排序</sys:String>
+    <sys:String x:Key="QuickAccess.SortRecent">最近使用</sys:String>
+    <sys:String x:Key="QuickAccess.SearchHint">搜索快捷方式…</sys:String>
+    <sys:String x:Key="QuickAccess.SectionFreq">⭐ 常用</sys:String>
+    <sys:String x:Key="QuickAccess.NoItems">暂无快捷方式</sys:String>
+    <sys:String x:Key="QuickAccess.NoFreqItems">还没有使用记录，点击任意链接后将自动计入常用。</sys:String>
+    <sys:String x:Key="QuickAccess.LinkDescription">描述（选填）</sys:String>
+    <sys:String x:Key="QuickAccess.LinkGroup">分组（选填）</sys:String>
+    <sys:String x:Key="QuickAccess.CtxEdit">编辑</sys:String>
+    <sys:String x:Key="QuickAccess.CtxDelete">删除</sys:String>
+    <sys:String x:Key="QuickAccess.CtxPin">置顶</sys:String>
+    <sys:String x:Key="QuickAccess.CtxUnpin">取消置顶</sys:String>
+    <sys:String x:Key="QuickAccess.DeleteConfirm">确定删除「{0}」吗？</sys:String>
+    <sys:String x:Key="QuickAccess.SaveFailed">保存快捷方式失败，请检查配置文件权限。</sys:String>
+    <sys:String x:Key="QuickAccess.EditLinkTitle">编辑快捷方式</sys:String>
+
+    <!-- ══════ Dock Window ══════ -->
+    <sys:String x:Key="Dock.Title">桌面助手</sys:String>
+    <sys:String x:Key="Dock.CloseDock">关闭 Dock</sys:String>
+    <sys:String x:Key="Dock.FetchingWeather">正在获取天气…</sys:String>
+    <sys:String x:Key="Dock.WeatherFailed">天气获取失败，点击📍设置城市</sys:String>
+    <sys:String x:Key="Dock.SetWeatherCity">设置天气城市</sys:String>
+    <sys:String x:Key="Dock.BtnAiChat">AI对话</sys:String>
+    <sys:String x:Key="Dock.BtnNotes">笔记</sys:String>
+    <sys:String x:Key="Dock.BtnZenTask">Zen Task</sys:String>
+    <sys:String x:Key="Dock.BtnTranslate">翻译</sys:String>
+    <sys:String x:Key="Dock.BtnFileManager">文件管理</sys:String>
+    <sys:String x:Key="Dock.BtnScreenshot">截屏</sys:String>
+    <sys:String x:Key="Dock.BtnCleanup">清理</sys:String>
+    <sys:String x:Key="Dock.BtnCodexProxy">DM Proxy</sys:String>
+    <sys:String x:Key="Dock.BtnCli">CLI</sys:String>
+    <sys:String x:Key="Dock.BtnQuickAccess">快速访问</sys:String>
+    <sys:String x:Key="Dock.CliTip">打开命令行 Agent（dancemonkey.exe）</sys:String>
+    <sys:String x:Key="Dock.TabTask">Task</sys:String>
+    <sys:String x:Key="Dock.PlaceholderZenTask">输入任务标题，回车快速加入 Zen Task…</sys:String>
+    <sys:String x:Key="Dock.ZenTaskAdded">已添加 Zen Task：</sys:String>
+    <sys:String x:Key="Dock.ThemeOcean">海洋蓝</sys:String>
+    <sys:String x:Key="Dock.ThemeAurora">极光绿</sys:String>
+    <sys:String x:Key="Dock.ThemeSunset">日落棕</sys:String>
+    <sys:String x:Key="Dock.ThemeGrape">葡萄紫</sys:String>
+    <sys:String x:Key="Dock.ThemeGraphite">石墨灰</sys:String>
+    <sys:String x:Key="Dock.ThemeNoirPro">暗黑 Pro</sys:String>
+    <sys:String x:Key="Dock.ThemeMenu">Dock 菜单</sys:String>
+    <sys:String x:Key="Dock.StyleMenu">切换 Dock 样式</sys:String>
+    <sys:String x:Key="Dock.ThemeSubMenu">切换主题</sys:String>
+    <sys:String x:Key="Dock.StyleClassic">经典面板</sys:String>
+    <sys:String x:Key="Dock.StyleAssistant">桌面助手</sys:String>
+    <sys:String x:Key="Dock.StyleDancer">舞蹈家</sys:String>
+    <sys:String x:Key="Dock.DancerHint">舞蹈家正在你的桌面上起舞</sys:String>
+
+    <!-- ══════ Settings ══════ -->
+    <sys:String x:Key="Settings.Title">偏好设置</sys:String>
+    <sys:String x:Key="Settings.Subtitle">管理 API 与界面选项，配置保存在 %AppData%\DanceMonkey\config.json</sys:String>
+    <sys:String x:Key="Settings.SaveHint">修改后点击右侧「保存全部设置」统一生效</sys:String>
+    <sys:String x:Key="Settings.SaveAll">保存全部设置</sys:String>
+    <sys:String x:Key="Settings.TestConnection">测试连接</sys:String>
+    <sys:String x:Key="Settings.Testing">测试中...</sys:String>
+
+    <sys:String x:Key="Settings.Connection">连接</sys:String>
+    <sys:String x:Key="Settings.ApiProvider">API 提供商</sys:String>
+    <sys:String x:Key="Settings.ApiEndpoint">API 端点</sys:String>
+    <sys:String x:Key="Settings.ApiEndpointHint">留空则使用所选提供商的默认端点。若使用公司网关根路径（如 …/api/v2/），将自动补全为 …/api/v2/chat/completions。</sys:String>
+    <sys:String x:Key="Settings.ApiKey">API 密钥</sys:String>
+    <sys:String x:Key="Settings.ApiKeyHint">密钥写入本机用户目录下的 DanceMonkey\config.json，请妥善保管设备</sys:String>
+    <sys:String x:Key="Settings.ModelName">模型名称</sys:String>
+    <sys:String x:Key="Settings.ConnectionHint">连接参数在顶部统一操作栏中保存。</sys:String>
+
+    <sys:String x:Key="Settings.GlobalChat">全局快速对话</sys:String>
+    <sys:String x:Key="Settings.GlobalChatHint">按下快捷键可在桌面正中弹出对话框。</sys:String>
+    <sys:String x:Key="Settings.GlobalHotkey">全局快捷键</sys:String>
+    <sys:String x:Key="Settings.GlobalHotkeyHint">示例：Ctrl+Shift+Q、Ctrl+Alt+Space、Alt+Shift+C</sys:String>
+    <sys:String x:Key="Settings.QuickScreenshotHotkey">截图快捷键（全屏）</sys:String>
+    <sys:String x:Key="Settings.QuickScreenshotHotkeyHint">触发全屏截图并打开截图操作面板。示例：Ctrl+Shift+S</sys:String>
+    <sys:String x:Key="Settings.RegionScreenshotHotkey">框选截图快捷键</sys:String>
+    <sys:String x:Key="Settings.RegionScreenshotHotkeyHint">触发框选截图并进入框选工具。示例：Ctrl+Shift+R</sys:String>
+    <sys:String x:Key="Settings.SystemPrompt">系统提示词（可选）</sys:String>
+    <sys:String x:Key="Settings.SystemPromptHint">留空则使用默认「简洁高效助手」人设</sys:String>
+
+    <sys:String x:Key="Settings.UI">界面</sys:String>
+    <sys:String x:Key="Settings.Language">界面语言</sys:String>
+    <sys:String x:Key="Settings.FloatingIcon">显示桌面悬浮图标（置顶，可拖动）</sys:String>
+    <sys:String x:Key="Settings.FloatingIconHint">关闭后可在托盘菜单中重新打开。</sys:String>
+    <sys:String x:Key="Settings.StartWithWindows">开机自动启动（当前用户）</sys:String>
+    <sys:String x:Key="Settings.ClipboardHistory">记录剪贴板文本历史（仅本进程内展示）</sys:String>
+    <sys:String x:Key="Settings.ClipboardHistoryHint">历史条目显示在下方列表，可双击复制。</sys:String>
+    <sys:String x:Key="Settings.ClearClipboard">清空剪贴板历史</sys:String>
+
+    <sys:String x:Key="Settings.NotesDir">Markdown 笔记目录</sys:String>
+    <sys:String x:Key="Settings.NotesDirHint">留空则使用「文档\Daily Note」</sys:String>
+    <sys:String x:Key="Settings.RestoreStickies">启动时恢复上次打开的桌面便签窗口</sys:String>
+    <sys:String x:Key="Settings.BrowseFolder">浏览文件夹…</sys:String>
+    <sys:String x:Key="Settings.SelectNotesRoot">选择笔记根目录</sys:String>
+
+    <sys:String x:Key="Settings.QuickAccess">快速访问（自定义）</sys:String>
+    <sys:String x:Key="Settings.QuickAccessName">名称</sys:String>
+    <sys:String x:Key="Settings.QuickAccessPath">路径</sys:String>
+    <sys:String x:Key="Settings.QuickAccessType">类型</sys:String>
+    <sys:String x:Key="Settings.Add">添加</sys:String>
+    <sys:String x:Key="Settings.RemoveSelected">删除所选</sys:String>
+    <sys:String x:Key="Settings.OpenInExplorer">在资源管理器中打开</sys:String>
+
+    <sys:String x:Key="Settings.PromptSnippets">智能对话 · Prompt 片段</sys:String>
+    <sys:String x:Key="Settings.PromptSnippetsHint">在「智能对话」页可快速应用。</sys:String>
+    <sys:String x:Key="Settings.SnippetTitle">标题</sys:String>
+    <sys:String x:Key="Settings.SnippetSystemPrompt">系统提示词</sys:String>
+    <sys:String x:Key="Settings.AddSnippet">添加片段</sys:String>
+
+    <sys:String x:Key="Settings.MeetingAssistant">会议助手</sys:String>
+    <sys:String x:Key="Settings.SttProvider">语音转写服务</sys:String>
+    <sys:String x:Key="Settings.TranscriptionLang">转写语言</sys:String>
+    <sys:String x:Key="Settings.AudioSource">音频输入源</sys:String>
+    <sys:String x:Key="Settings.SegmentSeconds">分段长度（秒）</sys:String>
+    <sys:String x:Key="Settings.SegmentHint">每段音频上传一次转写，建议 3-10 秒。</sys:String>
+    <sys:String x:Key="Settings.AutoSummary">会议结束后自动生成纪要</sys:String>
+    <sys:String x:Key="Settings.MeetingSaveDir">会议记录保存目录（留空跟随笔记目录）</sys:String>
+    <sys:String x:Key="Settings.MeetingSaveDirHint">会议文件将保存到此目录下的 Meetings/年/月/ 子目录。</sys:String>
+
+    <sys:String x:Key="Settings.FileManager">AI 文件管理</sys:String>
+    <sys:String x:Key="Settings.SandboxDir">沙箱目录（AI 文件操作限制在此目录内）</sys:String>
+    <sys:String x:Key="Settings.SandboxDirHint">留空则使用 %LocalAppData%\DanceMonkey\Sandbox。所有 AI 文件操作均在此目录内执行，不会影响系统其他文件。</sys:String>
+    <sys:String x:Key="Settings.Skills">Agent Skills</sys:String>
+
+    <sys:String x:Key="Settings.About">关于</sys:String>
+    <sys:String x:Key="Settings.AboutDesc">轻量桌面工具：翻译、邮件、对话、网络、清理、笔记、快速访问与 Dance 防休眠。</sys:String>
+
+    <!-- ══════ Settings Messages (code-behind) ══════ -->
+    <sys:String x:Key="Msg.SaveSuccess">设置保存成功！</sys:String>
+    <sys:String x:Key="Msg.SaveFailed">设置保存失败</sys:String>
+    <sys:String x:Key="Msg.Success">成功</sys:String>
+    <sys:String x:Key="Msg.Error">错误</sys:String>
+    <sys:String x:Key="Msg.Hint">提示</sys:String>
+    <sys:String x:Key="Msg.HotkeyInvalid">全局快捷键格式无效。示例：Ctrl+Shift+Q、Ctrl+Alt+Space、Alt+Shift+C</sys:String>
+    <sys:String x:Key="Msg.StartupWriteFailed">已保存配置，但开机启动项写入失败：{0}</sys:String>
+    <sys:String x:Key="Msg.FillNameAndPath">请填写名称与路径</sys:String>
+    <sys:String x:Key="Msg.FillPromptContent">请填写系统提示词内容。</sys:String>
+    <sys:String x:Key="Msg.PathNotExist">路径不存在。</sys:String>
+    <sys:String x:Key="Msg.SaveApiFirst">请先保存API配置</sys:String>
+    <sys:String x:Key="Msg.Custom">自定义</sys:String>
+
+    <!-- ══════ FileManager View ══════ -->
+    <sys:String x:Key="FM.SandboxFiles">📂 沙箱文件</sys:String>
+    <sys:String x:Key="FM.Refresh">🔄</sys:String>
+    <sys:String x:Key="FM.NavUp">⬆</sys:String>
+    <sys:String x:Key="FM.GoUp">返回上层</sys:String>
+    <sys:String x:Key="FM.View">📄 查看</sys:String>
+    <sys:String x:Key="FM.Delete">🗑 删除</sys:String>
+    <sys:String x:Key="FM.OpenDir">📁 打开目录</sys:String>
+    <sys:String x:Key="FM.StatsFormat">{0} 个文件，{1} 个文件夹，{2}</sys:String>
+    <sys:String x:Key="FM.AiTitle">🤖 AI 文件管理</sys:String>
+    <sys:String x:Key="FM.AiDesc">用自然语言告诉 AI 你想创建、修改或管理什么文件，AI 将在沙箱内安全执行。</sys:String>
+    <sys:String x:Key="FM.Send">▶ 执行</sys:String>
+    <sys:String x:Key="FM.QuickList">查看沙箱内容</sys:String>
+    <sys:String x:Key="FM.ClearChat">清空对话</sys:String>
+    <sys:String x:Key="FM.Processing">⏳ AI 正在处理...</sys:String>
+    <sys:String x:Key="FM.ChatCleared">对话已清空。输入指令开始操作。</sys:String>
+    <sys:String x:Key="FM.Welcome">欢迎使用 AI 文件管理器！
+
+你可以用自然语言下达指令，例如：
+• 「创建一个 Python 项目，包含 main.py 和 README.md」
+• 「帮我写一个 HTML 页面，主题是个人简历」
+• 「在 docs 文件夹下创建会议纪要模板」
+• 「把所有 .txt 文件移到 archive 目录」
+• 「删除 temp 文件夹」
+
+所有文件操作都在安全沙箱内执行，不会影响系统其他文件。</sys:String>
+    <sys:String x:Key="FM.ConfirmDeleteFile">确定要删除文件「{0}」吗？</sys:String>
+    <sys:String x:Key="FM.ConfirmDeleteFolder">确定要删除文件夹「{0}」吗？</sys:String>
+    <sys:String x:Key="FM.ConfirmDelete">确认删除</sys:String>
+    <sys:String x:Key="FM.SandboxTree">📂 沙箱目录结构：</sys:String>
+
+    <!-- ══════ AI Chat (merged) ══════ -->
+    <sys:String x:Key="AiChat.PromptConfig">⚙ 提示词配置</sys:String>
+    <sys:String x:Key="AiChat.ApplySnippet">应用所选</sys:String>
+    <sys:String x:Key="AiChat.SelectSnippet">（选择常用 Prompt…）</sys:String>
+    <sys:String x:Key="AiChat.SelectSnippetHint">请先在列表中选择一个 Prompt 片段（在「设置」中维护）。</sys:String>
+    <sys:String x:Key="AiChat.SnippetEmpty">该片段未填写系统提示词内容。</sys:String>
+    <sys:String x:Key="AiChat.Send">发送</sys:String>
+    <sys:String x:Key="AiChat.Stop">⏹ 停止</sys:String>
+    <sys:String x:Key="AiChat.AddFiles">添加文件…</sys:String>
+    <sys:String x:Key="AiChat.SummarizeClip">摘要剪贴板</sys:String>
+    <sys:String x:Key="AiChat.ExportNotes">导出笔记</sys:String>
+    <sys:String x:Key="AiChat.SaveToNotes">保存到笔记</sys:String>
+    <sys:String x:Key="AiChat.SaveToNotesTip">将当前对话导出为 Markdown，保存到笔记库「AI/Conversations」目录</sys:String>
+    <sys:String x:Key="AiChat.SaveToNotesFailed">保存失败：</sys:String>
+    <sys:String x:Key="AiChat.Clear">清空对话</sys:String>
+    <sys:String x:Key="AiChat.Hint">Enter 发送 · Shift+Enter 换行 · Ctrl+V 粘贴图片</sys:String>
+    <sys:String x:Key="AiChat.ClipEmpty">剪贴板中没有可用于摘要的文本。</sys:String>
+    <sys:String x:Key="AiChat.NothingToExport">当前没有对话内容可导出。</sys:String>
+    <sys:String x:Key="AiChat.ExportedTo">已导出到：</sys:String>
+    <sys:String x:Key="AiChat.EmptyHint">输入文字后按 Enter 发送；Ctrl+V 粘贴截图;「添加文件」可加入图片或文本。带图时需使用支持视觉的模型（如 gpt-4o）。</sys:String>
+    <!-- 重设计后的新键 -->
+    <sys:String x:Key="AiChat.Title">AI 对话</sys:String>
+    <sys:String x:Key="AiChat.Subtitle">本地与 OpenAI 兼容服务的统一聊天</sys:String>
+    <sys:String x:Key="AiChat.Prompt">提示词</sys:String>
+    <sys:String x:Key="AiChat.PromptPopoverTitle">系统提示词</sys:String>
+    <sys:String x:Key="AiChat.PromptPopoverHint">定义助手的角色与行为；为空时使用默认。</sys:String>
+    <sys:String x:Key="AiChat.PromptDone">完成</sys:String>
+    <sys:String x:Key="AiChat.More">更多</sys:String>
+    <sys:String x:Key="AiChat.Regenerate">重新生成</sys:String>
+    <sys:String x:Key="AiChat.RegenerateTip">基于上一条用户消息重新生成回复</sys:String>
+    <sys:String x:Key="AiChat.CopyMessage">复制</sys:String>
+    <sys:String x:Key="AiChat.Copied">已复制</sys:String>
+    <sys:String x:Key="AiChat.Thinking">思考中</sys:String>
+    <sys:String x:Key="AiChat.AssistantLabel">助手</sys:String>
+    <sys:String x:Key="AiChat.UserLabel">你</sys:String>
+    <sys:String x:Key="AiChat.ErrorLabel">提示</sys:String>
+    <sys:String x:Key="AiChat.InputPlaceholder">向 AI 提问，Enter 发送；Shift+Enter 换行；Ctrl+V 粘贴截图</sys:String>
+    <sys:String x:Key="AiChat.KbInputPlaceholder">向知识库提问（自动路由），Enter 发送…</sys:String>
+    <sys:String x:Key="AiChat.ModeGeneral">通用</sys:String>
+    <sys:String x:Key="AiChat.ModeKb">知识库</sys:String>
+    <sys:String x:Key="AiChat.ModeGeneralTip">通用 AI 问答（OpenAI 兼容）</sys:String>
+    <sys:String x:Key="AiChat.ModeKbTip">在线知识库问答（POST /api/chat/）</sys:String>
+    <sys:String x:Key="AiChat.AttachImage">添加图片或文本</sys:String>
+    <sys:String x:Key="AiChat.Transcribe">转写音频</sys:String>
+    <sys:String x:Key="AiChat.SummarizeClipMenu">摘要剪贴板</sys:String>
+    <sys:String x:Key="AiChat.NewChat">新对话</sys:String>
+    <sys:String x:Key="AiChat.EmptyTitle">需要点什么帮助？</sys:String>
+    <sys:String x:Key="AiChat.EmptySub">挑一个起点，或直接在下方提问。</sys:String>
+    <sys:String x:Key="AiChat.Quick.Polish.Title">润色文字</sys:String>
+    <sys:String x:Key="AiChat.Quick.Polish.Prompt">请帮我润色以下文字，保持原意，让表达更通顺自然：\n\n</sys:String>
+    <sys:String x:Key="AiChat.Quick.Translate.Title">中英互译</sys:String>
+    <sys:String x:Key="AiChat.Quick.Translate.Prompt">请将以下内容做中英互译（自动识别原文语种）：\n\n</sys:String>
+    <sys:String x:Key="AiChat.Quick.Brainstorm.Title">头脑风暴</sys:String>
+    <sys:String x:Key="AiChat.Quick.Brainstorm.Prompt">围绕以下主题列出 8 个有创意的角度，并按价值排序：\n\n</sys:String>
+    <sys:String x:Key="AiChat.Quick.ExplainCode.Title">解释代码</sys:String>
+    <sys:String x:Key="AiChat.Quick.ExplainCode.Prompt">请逐段解释下面的代码做了什么，并指出潜在问题与优化点：\n\n```\n\n```</sys:String>
+    <sys:String x:Key="AiChat.Quick.Summarize.Title">提炼要点</sys:String>
+    <sys:String x:Key="AiChat.Quick.Summarize.Prompt">请用 Markdown 小标题与列表，提炼以下内容的关键信息，保留数字与日期：\n\n</sys:String>
+
+    <!-- ══════ Health Reminder ══════ -->
+    <sys:String x:Key="Health.WaterTitle">该喝水啦 💧</sys:String>
+    <sys:String x:Key="Health.WaterDesc">久坐工作容易忘记喝水，现在起身倒杯水吧！保持充足的水分有助于提高专注力。</sys:String>
+    <sys:String x:Key="Health.WaterDone">已喝水</sys:String>
+    <sys:String x:Key="Health.WaterStats">今日已喝水 {0} 次</sys:String>
+    <sys:String x:Key="Health.StandTitle">该起身运动了 🏃</sys:String>
+    <sys:String x:Key="Health.StandDesc">你已经连续工作超过一小时了！站起来伸展一下身体，活动活动筋骨吧。</sys:String>
+    <sys:String x:Key="Health.StandDone">已运动</sys:String>
+    <sys:String x:Key="Health.StandStats">今日已运动 {0} 次</sys:String>
+    <sys:String x:Key="Health.Later">稍后提醒</sys:String>
+    <sys:String x:Key="Settings.HealthReminder">健康提醒</sys:String>
+    <sys:String x:Key="Settings.HealthReminderEnabled">启用健康提醒（喝水 / 久坐提醒）</sys:String>
+    <sys:String x:Key="Settings.WaterInterval">喝水提醒间隔（分钟）</sys:String>
+    <sys:String x:Key="Settings.WaterIntervalHint">建议 30–60 分钟，默认 45</sys:String>
+    <sys:String x:Key="Settings.MovementInterval">久坐提醒间隔（分钟）</sys:String>
+    <sys:String x:Key="Settings.MovementIntervalHint">连续操作电脑超过此时间则提醒，默认 60</sys:String>
+
+    <!-- ══════ Skill Manager ══════ -->
+    <sys:String x:Key="SkillManager.Title">Agent Skills</sys:String>
+    <sys:String x:Key="SkillManager.Lead">在此管理沙箱工作区下的 Agent 技能。每个技能为独立文件夹内的 SKILL.md，支持 Claude Code 风格 frontmatter（name / description / allowed-tools / activation / triggers）。Agent 会先加载技能目录，并在用户点名或任务匹配 description/triggers 时注入对应技能正文。</sys:String>
+    <sys:String x:Key="SkillManager.Library">技能库</sys:String>
+    <sys:String x:Key="SkillManager.Refresh">刷新</sys:String>
+    <sys:String x:Key="SkillManager.OpenFolder">在资源管理器中打开</sys:String>
+    <sys:String x:Key="SkillManager.AddGroup">添加新技能</sys:String>
+    <sys:String x:Key="SkillManager.NewNameLabel">技能名称（用作文件夹名，非法字符会替换为 -）</sys:String>
+    <sys:String x:Key="SkillManager.NewDescriptionLabel">触发描述（description，用于自动匹配任务）</sys:String>
+    <sys:String x:Key="SkillManager.NewBodyLabel">内容（可留空，将生成 Claude/Codex 风格默认模板；无 frontmatter 时会自动包裹）</sys:String>
+    <sys:String x:Key="SkillManager.Add">添加技能</sys:String>
+    <sys:String x:Key="SkillManager.InsertTemplate">插入模板</sys:String>
+    <sys:String x:Key="SkillManager.ImportGroup">导入技能</sys:String>
+    <sys:String x:Key="SkillManager.ImportLead">输入本地 SKILL.md、技能目录，或 http/https Markdown URL。导入后会保存到当前沙箱的 .dancemonkey/skills。</sys:String>
+    <sys:String x:Key="SkillManager.Import">导入</sys:String>
+    <sys:String x:Key="SkillManager.BrowseFile">文件</sys:String>
+    <sys:String x:Key="SkillManager.BrowseFolder">目录</sys:String>
+    <sys:String x:Key="SkillManager.Delete">删除</sys:String>
+    <sys:String x:Key="SkillManager.Save">保存</sys:String>
+    <sys:String x:Key="SkillManager.ConfirmDelete">确定删除技能「{0}」及其文件夹吗？</sys:String>
+    <sys:String x:Key="SkillManager.DeleteTitle">删除技能</sys:String>
+    <sys:String x:Key="SkillManager.NameRequired">请填写技能名称。</sys:String>
+    <sys:String x:Key="SkillManager.ImportRequired">请填写导入来源。</sys:String>
+    <sys:String x:Key="SkillManager.NoSelection">未选择技能</sys:String>
+    <sys:String x:Key="SkillManager.Count">{0} 个技能</sys:String>
+    <sys:String x:Key="SkillManager.Loaded">已加载 {0} 个技能。</sys:String>
+    <sys:String x:Key="SkillManager.Saved">技能已保存。</sys:String>
+    <sys:String x:Key="SkillManager.Deleted">技能已删除。</sys:String>
+    <sys:String x:Key="SkillManager.Created">技能已创建。</sys:String>
+    <sys:String x:Key="SkillManager.Imported">已导入技能：{0}</sys:String>
+    <sys:String x:Key="SkillManager.TemplateInserted">已插入标准模板。</sys:String>
+    <sys:String x:Key="SkillManager.SelectSkillFile">选择 SKILL.md 或 Markdown 技能文件</sys:String>
+    <sys:String x:Key="SkillManager.SelectSkillFolder">选择包含 SKILL.md 的技能目录</sys:String>
+    <sys:String x:Key="SkillManager.DefaultBody" xml:space="preserve"># 新技能
+
+（在此编写说明。Agent 会按此内容约束行为。）
+</sys:String>
+
+</ResourceDictionary>

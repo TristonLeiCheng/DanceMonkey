@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>笔记库结构说明</title>
+<style>
+:root {
+  --bg: #1a1d26; --surface: #21242d; --surface2: #282c38;
+  --border: #2e3240; --text: #e4e6ed; --muted: #8b90a0;
+  --accent: #4F6EF7; --accent-bg: rgba(79,110,247,0.12);
+  --green: #34d399; --orange: #fbbf24; --red: #f87171; --purple: #a78bfa;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg); color: var(--text);
+  line-height: 1.7; font-size: 14px; padding: 32px 40px 60px;
+  max-width: 920px; margin: 0 auto;
+}
+h1 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+h1 span { color: var(--accent); }
+.subtitle { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+h2 {
+  font-size: 16px; font-weight: 600; margin: 32px 0 12px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+h2 .badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 10px;
+  font-weight: 500; letter-spacing: 0.5px;
+}
+h3 { font-size: 14px; font-weight: 600; margin: 16px 0 8px; color: var(--accent); }
+
+/* 目录树 */
+.tree { background: var(--surface); border-radius: 12px; padding: 20px 24px; margin: 12px 0 20px; border: 1px solid var(--border); }
+.tree-line { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; }
+.tree-line .icon { font-size: 15px; min-width: 20px; text-align: center; }
+.tree-line .name { font-weight: 600; }
+.tree-line .desc { color: var(--muted); font-size: 12px; font-family: 'Segoe UI', sans-serif; }
+.tree-line .indent { display: inline-block; }
+.tree-line.sub1 .indent { width: 20px; }
+.tree-line.sub2 .indent { width: 40px; }
+.tree-line.sub3 .indent { width: 60px; }
+
+/* 理论卡片 */
+.theory-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 20px; }
+.theory-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px 18px; transition: border-color 0.2s;
+}
+.theory-card:hover { border-color: var(--accent); }
+.theory-card .tag { font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 600; display: inline-block; margin-bottom: 8px; }
+.theory-card h4 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.theory-card p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.theory-card ul { font-size: 12px; color: var(--muted); padding-left: 16px; line-height: 1.7; }
+
+/* 流程图 */
+.flow {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px; margin: 12px 0 20px; overflow-x: auto;
+}
+.flow-row { display: flex; align-items: center; gap: 0; justify-content: center; flex-wrap: wrap; padding: 6px 0; }
+.flow-box {
+  padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  text-align: center; white-space: nowrap; border: 1px solid;
+}
+.flow-arrow { color: var(--muted); font-size: 18px; margin: 0 6px; }
+.flow-box.input { background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.3); color: var(--orange); }
+.flow-box.inbox { background: var(--accent-bg); border-color: rgba(79,110,247,0.3); color: var(--accent); }
+.flow-box.process { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.3); color: var(--green); }
+.flow-box.store { background: rgba(167,139,250,0.1); border-color: rgba(167,139,250,0.3); color: var(--purple); }
+.flow-box.archive { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.3); color: var(--red); }
+
+/* 映射表 */
+table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 13px; }
+th { background: var(--surface2); font-weight: 600; text-align: left; padding: 10px 14px; border-bottom: 2px solid var(--border); }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); }
+tr:hover td { background: var(--surface); }
+td:first-child { font-weight: 500; }
+.tag-pill {
+  display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 6px;
+  font-weight: 600;
+}
+.tag-sense { background: rgba(251,191,36,0.15); color: var(--orange); }
+.tag-work { background: rgba(79,110,247,0.15); color: var(--accent); }
+.tag-long { background: rgba(167,139,250,0.15); color: var(--purple); }
+.tag-semantic { background: rgba(52,211,153,0.15); color: var(--green); }
+.tag-ext { background: rgba(248,113,113,0.15); color: var(--red); }
+
+/* 提示块 */
+.tip {
+  background: var(--accent-bg); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0;
+  padding: 12px 16px; margin: 16px 0; font-size: 13px;
+}
+.tip strong { color: var(--accent); }
+
+.footer { text-align: center; color: var(--muted); font-size: 11px; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<h1>📁 <span>NoteVault</span> 笔记库结构说明</h1>
+<p class="subtitle">基于认知科学与知识管理理论设计的个人知识体系</p>
+
+<!-- ═══════════════════ 目录结构 ═══════════════════ -->
+<h2>
+  <span class="badge" style="background:var(--accent-bg);color:var(--accent);">STRUCTURE</span>
+  目录结构总览
+</h2>
+
+<div class="tree">
+  <div class="tree-line"><span class="icon">📁</span><span class="name">NoteVault/</span><span class="desc">— 笔记库根目录</span></div>
+
+  <div class="tree-line sub1"><span class="indent"></span><span class="icon">📥</span><span class="name">Inbox/</span><span class="desc">— 收集箱：所有未经整理的输入</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📝</span><span class="name">Captures/</span><span class="desc">— 快速笔录 &amp; 截图笔记</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📷</span><span class="name">Screenshots/</span><span class="desc">— 截图原始图片</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📋</span><span class="name">Clipboard/</span><span class="desc">— 剪贴板历史保存</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📂</span><span class="name">Imports/</span><span class="desc">— 外部导入的临时文件</span></div>
+
+  <div class="tree-line sub1"><span class="indent"></span><span class="icon">📅</span><span class="name">Journal/</span><span class="desc">— 时间轴：日记、周报、便签</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📆</span><span class="name">Daily/</span><span class="desc">— 每日笔记 (yyyy-MM-dd.md)</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📊</span><span class="name">Weekly/</span><span class="desc">— 周报 / 周回顾</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📌</span><span class="name">Stickies/</span><span class="desc">— 桌面便签（活跃中）</span></div>
+
+  <div class="tree-line sub1"><span class="indent"></span><span class="icon">🎯</span><span class="name">Projects/</span><span class="desc">— 短期项目（有截止日期）</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📁</span><span class="name">{项目名}/</span><span class="desc">— 每个项目一个文件夹</span></div>
+
+  <div class="tree-line sub1"><span class="indent"></span><span class="icon">🏠</span><span class="name">Areas/</span><span class="desc">— 长期责任领域</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">💼</span><span class="name">Work/</span><span class="desc">— 工作：会议、报告、流程</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">🏡</span><span class="name">Personal/</span><span class="desc">— 个人：健康、财务、目标</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📖</span><span class="name">Learning/</span><span class="desc">— 学习：课程、技能</span></div>
+
+  <div class="tree-line sub1"><span class="indent"></span><span class="icon">📚</span><span class="name">Resources/</span><span class="desc">— 知识库：参考资料</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📖</span><span class="name">Reading/</span><span class="desc">— 读书笔记</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📰</span><span class="name">Articles/</span><span class="desc">— 文章摘录 / 网页剪藏</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📑</span><span class="name">Cheatsheets/</span><span class="desc">— 速查表 / 备忘录</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">🔖</span><span class="name">Bookmarks/</span><span class="desc">— 链接收藏</span></div>
+
+  <div class="tree-line sub1"><span class="indent"></span><span class="icon">🤖</span><span class="name">AI/</span><span class="desc">— AI 专属空间</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">💬</span><span class="name">Conversations/</span><span class="desc">— AI 对话完整记录</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">✨</span><span class="name">Prompts/</span><span class="desc">— 提示词收藏 / 模板</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📄</span><span class="name">Generated/</span><span class="desc">— AI 生成的长文 / 报告</span></div>
+
+  <div class="tree-line sub1"><span class="indent"></span><span class="icon">📎</span><span class="name">Attachments/</span><span class="desc">— 全局附件池</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">🖼</span><span class="name">Images/</span><span class="desc">— 图片资产</span></div>
+  <div class="tree-line sub2"><span class="indent"></span><span class="icon">📎</span><span class="name">Files/</span><span class="desc">— PDF / Office / 其它</span></div>
+
+  <div class="tree-line sub1"><span class="indent"></span><span class="icon">🗄️</span><span class="name">Archive/</span><span class="desc">— 归档（按年份组织）</span></div>
+  <div class="tree-line sub1"><span class="indent"></span><span class="icon">📋</span><span class="name">Templates/</span><span class="desc">— 笔记模板（可自定义）</span></div>
+</div>
+
+<!-- ═══════════════════ 理论基础 ═══════════════════ -->
+<h2>
+  <span class="badge" style="background:rgba(167,139,250,0.15);color:var(--purple);">THEORY</span>
+  设计理论基础
+</h2>
+
+<div class="theory-grid">
+  <div class="theory-card">
+    <span class="tag" style="background:rgba(251,191,36,0.15);color:var(--orange);">认知心理学</span>
+    <h4>Atkinson-Shiffrin 记忆模型</h4>
+    <ul>
+      <li><b>感觉登记器</b> → Inbox（原始输入）</li>
+      <li><b>工作记忆</b> → Journal / Projects（活跃思考）</li>
+      <li><b>长期记忆</b> → Areas / Resources（持久知识）</li>
+    </ul>
+  </div>
+  <div class="theory-card">
+    <span class="tag" style="background:var(--accent-bg);color:var(--accent);">知识管理</span>
+    <h4>PARA 方法 (Tiago Forte)</h4>
+    <ul>
+      <li><b>P</b>rojects — 有明确目标的短期努力</li>
+      <li><b>A</b>reas — 需持续维护的责任领域</li>
+      <li><b>R</b>esources — 感兴趣的参考资料</li>
+      <li><b>A</b>rchives — 不再活跃的归档</li>
+    </ul>
+  </div>
+  <div class="theory-card">
+    <span class="tag" style="background:rgba(52,211,153,0.15);color:var(--green);">笔记方法论</span>
+    <h4>Zettelkasten 卡片盒 (Luhmann)</h4>
+    <ul>
+      <li><b>闪念笔记</b> → Inbox，快速不加工</li>
+      <li><b>文献笔记</b> → Resources，阅读提炼</li>
+      <li><b>永久笔记</b> → Areas，原子化知识</li>
+    </ul>
+  </div>
+  <div class="theory-card">
+    <span class="tag" style="background:rgba(248,113,113,0.15);color:var(--red);">效率方法</span>
+    <h4>GTD - Getting Things Done (Allen)</h4>
+    <ul>
+      <li><b>收集</b> → 一切先进 Inbox</li>
+      <li><b>处理</b> → 定期清空，分流各目录</li>
+      <li><b>归档</b> → 完成后移入 Archive</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════════════════ 信息流 ═══════════════════ -->
+<h2>
+  <span class="badge" style="background:rgba(52,211,153,0.15);color:var(--green);">FLOW</span>
+  信息流动路径
+</h2>
+
+<div class="flow">
+  <div class="flow-row">
+    <div class="flow-box input">截图 / 剪贴板</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box inbox">📥 Inbox</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box process">定期清空 & 分流</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box store">🎯 Projects</div>
+  </div>
+  <div class="flow-row">
+    <div class="flow-box input">快速笔录 / AI</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box inbox">📥 Inbox</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box process">整理 & 编码</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box store">🏠 Areas / 📚 Resources</div>
+  </div>
+  <div class="flow-row">
+    <div class="flow-box input">每日记录 / 便签</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box inbox">📅 Journal</div>
+    <span class="flow-arrow" style="visibility:hidden">→</span>
+    <div class="flow-box process" style="visibility:hidden">—</div>
+    <span class="flow-arrow" style="visibility:hidden">→</span>
+    <div class="flow-box archive">🗄️ Archive (年度归档)</div>
+  </div>
+</div>
+
+<div class="tip">
+  <strong>💡 核心工作流：</strong>
+  所有未经整理的内容先进入 <b>Inbox</b>，每天花 5~10 分钟清空 Inbox，将内容分流到 Projects / Areas / Resources，或直接删除。完成的项目移入 Archive。
+</div>
+
+<!-- ═══════════════════ 记忆层次映射 ═══════════════════ -->
+<h2>
+  <span class="badge" style="background:rgba(251,191,36,0.15);color:var(--orange);">MAPPING</span>
+  认知层次 × 目录映射
+</h2>
+
+<table>
+  <thead>
+    <tr><th>认知层次</th><th>对应目录</th><th>特征</th><th>管理策略</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="tag-pill tag-sense">感觉登记</span></td>
+      <td>Inbox/</td><td>生命周期 &lt; 48h</td><td>每日清空（Review &amp; Refile）</td>
+    </tr>
+    <tr>
+      <td><span class="tag-pill tag-work">工作记忆</span></td>
+      <td>Journal/ · Projects/</td><td>1天 ~ 数月</td><td>活跃使用，完成后归档</td>
+    </tr>
+    <tr>
+      <td><span class="tag-pill tag-long">长期记忆（情景）</span></td>
+      <td>Areas/</td><td>持续更新</td><td>与现实责任同步</td>
+    </tr>
+    <tr>
+      <td><span class="tag-pill tag-semantic">长期记忆（语义）</span></td>
+      <td>Resources/</td><td>永久保存</td><td>原子化、可链接</td>
+    </tr>
+    <tr>
+      <td><span class="tag-pill tag-ext">外存储</span></td>
+      <td>Archive/</td><td>不再活跃</td><td>仅备查检索</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ═══════════════════ 使用建议 ═══════════════════ -->
+<h2>
+  <span class="badge" style="background:var(--accent-bg);color:var(--accent);">TIPS</span>
+  使用建议
+</h2>
+
+<div class="tip">
+  <strong>📝 放入位置不确定？</strong> 先放 Inbox。永远不会出错。
+</div>
+<div class="tip">
+  <strong>🎯 Projects vs Areas 的区别：</strong> 有明确截止日期的放 Projects；需要长期维护、没有终点的放 Areas。例如「Q2 产品发布」→ Projects，「团队管理」→ Areas。
+</div>
+<div class="tip">
+  <strong>📋 Templates 可自定义：</strong> 在 Templates/ 文件夹中添加 .md 文件即可，使用 <code>{{date}}</code> 占位符会自动替换为当前日期。
+</div>
+<div class="tip">
+  <strong>🤖 AI 内容独立存放：</strong> AI 对话和生成内容增长速度快，独立存放避免与手工笔记混杂。
+</div>
+<div class="tip">
+  <strong>🗄️ 定期归档：</strong> 每季度或每年将完成的 Projects、过期的 Journal 移入 Archive/{年份}/ 文件夹。
+</div>
+
+<div class="footer">
+  NoteVault · 基于 PARA + Zettelkasten + GTD + 认知心理学设计
+</div>
+
+</body>
+</html>

@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- 减少 restore 时对 nuget.org 的漏洞审计请求（内网代理下易失败） -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+</Project>

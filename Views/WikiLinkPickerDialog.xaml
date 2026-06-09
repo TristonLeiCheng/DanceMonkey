@@ -1,0 +1,90 @@
+<Window x:Class="DesktopAssistant.Views.WikiLinkPickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="选择笔记 - 创建双链" Height="520" Width="460"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        MinHeight="360" MinWidth="360"
+        Background="{StaticResource BrushPageBg}">
+    <Border Padding="16" Background="{StaticResource BrushPageBg}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- 提示文字 -->
+            <TextBlock Grid.Row="0" Margin="0,0,0,8" FontSize="13"
+                       Foreground="{StaticResource BrushTextSecondary}" TextWrapping="Wrap"
+                       Text="在下方搜索并选择目标笔记，支持按名称或路径过滤。"/>
+
+            <!-- 搜索框 -->
+            <Grid Grid.Row="1" Margin="0,0,0,8">
+                <TextBox x:Name="SearchBox"
+                         Style="{StaticResource UiTextBox}"
+                         TextChanged="SearchBox_TextChanged"/>
+                <TextBlock x:Name="SearchPlaceholder"
+                           IsHitTestVisible="False"
+                           Text="搜索笔记名或路径…"
+                           Foreground="{StaticResource BrushTextMuted}"
+                           FontSize="13" VerticalAlignment="Center"
+                           Margin="10,0,0,0"/>
+            </Grid>
+
+            <!-- 笔记列表 -->
+            <Border Grid.Row="2" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
+                    CornerRadius="8" Background="{StaticResource BrushSurface}" Padding="2">
+                <ListBox x:Name="NoteList"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         SelectionChanged="NoteList_SelectionChanged"
+                         MouseDoubleClick="NoteList_MouseDoubleClick">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="4,3">
+                                <TextBlock Text="{Binding Stem}" FontSize="13"
+                                           Foreground="{StaticResource BrushTextPrimary}" FontWeight="Medium"/>
+                                <TextBlock Text="{Binding RelativePath}" FontSize="11"
+                                           Foreground="{StaticResource BrushTextSecondary}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Padding" Value="6,2"/>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+            </Border>
+
+            <!-- 预览当前选中的链接文本 -->
+            <Border Grid.Row="3" Margin="0,8,0,0" Padding="8,6"
+                    Background="{StaticResource BrushSurface}"
+                    BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
+                    CornerRadius="6">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="将插入：" FontSize="12" Foreground="{StaticResource BrushTextSecondary}"
+                               VerticalAlignment="Center"/>
+                    <TextBlock x:Name="PreviewText" FontSize="12" FontFamily="Consolas"
+                               Foreground="{StaticResource BrushAccent}"
+                               VerticalAlignment="Center"
+                               Text="（请选择笔记）"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 按钮 -->
+            <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                <Button x:Name="OkBtn" Content="插入双链" Style="{StaticResource UiBtnPrimary}"
+                        MinWidth="100" Margin="0,0,8,0" IsEnabled="False" Click="Ok_OnClick"/>
+                <Button Content="取消" Style="{StaticResource UiBtnSecondary}"
+                        MinWidth="80" IsCancel="True" Click="Cancel_OnClick"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

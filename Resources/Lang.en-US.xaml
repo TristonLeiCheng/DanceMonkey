@@ -1,0 +1,387 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- ══════ Sidebar / Navigation ══════ -->
+    <sys:String x:Key="Nav.DesktopAssistant">Desktop Assistant</sys:String>
+    <sys:String x:Key="Nav.AiChat">AI Chat</sys:String>
+    <sys:String x:Key="Nav.Notes">Notes</sys:String>
+    <sys:String x:Key="Nav.Ppt">PPT Studio</sys:String>
+    <sys:String x:Key="Nav.PptTip">Generate polished decks from notes / files / topics</sys:String>
+    <sys:String x:Key="Nav.Todo">Zen Task</sys:String>
+    <sys:String x:Key="Nav.Functions">Features</sys:String>
+    <sys:String x:Key="Nav.Translate">Translate</sys:String>
+    <sys:String x:Key="Nav.Email">Compose Email</sys:String>
+    <sys:String x:Key="Nav.Chat">Smart Chat</sys:String>
+    <sys:String x:Key="Nav.Tools">Tools</sys:String>
+    <sys:String x:Key="Nav.Network">Network Monitor</sys:String>
+    <sys:String x:Key="Nav.Cleanup">PC Cleanup</sys:String>
+    <sys:String x:Key="Nav.CodexProxy">DM Proxy</sys:String>
+    <sys:String x:Key="Nav.PasswordVault">Password Vault</sys:String>
+    <sys:String x:Key="Nav.QuickAccess">Quick Access</sys:String>
+    <sys:String x:Key="Nav.PdfTools">PDF Tools</sys:String>
+    <sys:String x:Key="Nav.FileTools">File Tools</sys:String>
+    <sys:String x:Key="Nav.Dance">Pet</sys:String>
+    <sys:String x:Key="Nav.Meeting">Meeting Hub</sys:String>
+    <sys:String x:Key="Nav.FileManager">File Manager</sys:String>
+    <sys:String x:Key="Nav.Settings">Settings</sys:String>
+    <sys:String x:Key="Nav.Skills">Skills</sys:String>
+    <sys:String x:Key="Nav.SkillsTip">Manage Agent skills (.dancemonkey/skills)</sys:String>
+    <sys:String x:Key="Nav.Cli">CLI Terminal</sys:String>
+    <sys:String x:Key="Nav.Collapse">Collapse</sys:String>
+    <sys:String x:Key="Nav.ExpandSidebar">Expand sidebar</sys:String>
+    <sys:String x:Key="Nav.CollapseSidebar">Collapse sidebar</sys:String>
+    <sys:String x:Key="Nav.Homepage">Homepage</sys:String>
+
+    <!-- ══════ Title Bar ══════ -->
+    <sys:String x:Key="TitleBar.Minimize">Minimize</sys:String>
+    <sys:String x:Key="TitleBar.Maximize">Maximize</sys:String>
+    <sys:String x:Key="TitleBar.Restore">Restore</sys:String>
+    <sys:String x:Key="TitleBar.Close">Close</sys:String>
+    <sys:String x:Key="TitleBar.Settings">⚙ Settings</sys:String>
+
+    <!-- ══════ Notes Toolbar ══════ -->
+    <sys:String x:Key="Notes.Today">Today</sys:String>
+    <sys:String x:Key="Notes.New">New</sys:String>
+    <sys:String x:Key="Notes.NewNote">New Note</sys:String>
+    <sys:String x:Key="Notes.Folder">Folder</sys:String>
+    <sys:String x:Key="Notes.NewFolder">New Folder</sys:String>
+    <sys:String x:Key="Notes.Sticky">Sticky</sys:String>
+    <sys:String x:Key="Notes.Capture">Capture</sys:String>
+    <sys:String x:Key="Notes.QuickCapture">Quick Capture</sys:String>
+    <sys:String x:Key="Notes.More">More…</sys:String>
+    <sys:String x:Key="Notes.RefreshList">Refresh List</sys:String>
+    <sys:String x:Key="Notes.ExportZip">Export ZIP</sys:String>
+    <sys:String x:Key="Notes.ImportZip">Import ZIP</sys:String>
+    <sys:String x:Key="Notes.OpenFolder">Open Notes Folder</sys:String>
+
+    <!-- ══════ Tray Menu ══════ -->
+    <sys:String x:Key="Tray.Show">Show</sys:String>
+    <sys:String x:Key="Tray.Tools">Tools</sys:String>
+    <sys:String x:Key="Tray.ShowFloating">Show Floating Icon</sys:String>
+    <sys:String x:Key="Tray.HideFloating">Hide Floating Icon</sys:String>
+    <sys:String x:Key="Tray.DockMode">Desktop Dock Mode</sys:String>
+    <sys:String x:Key="Tray.QuickScreenshot">Quick Screenshot</sys:String>
+    <sys:String x:Key="Tray.RegionScreenshot">Region Screenshot</sys:String>
+    <sys:String x:Key="Tray.ScrollScreenshot">Scrolling Screenshot</sys:String>
+    <sys:String x:Key="Tray.ContinuousScreenshot">Continuous Screenshot Mode</sys:String>
+    <sys:String x:Key="Tray.Exit">Exit</sys:String>
+    <sys:String x:Key="Tray.NetworkUnavailable">Network unavailable. Please check your connection.</sys:String>
+
+    <!-- ══════ Quick Access ══════ -->
+    <sys:String x:Key="QuickAccess.Title">Quick Access</sys:String>
+    <sys:String x:Key="QuickAccess.Subtitle">Open local, cloud, SharePoint and network share paths in one click</sys:String>
+    <sys:String x:Key="QuickAccess.LocalFolders">📁 Local Folders</sys:String>
+    <sys:String x:Key="QuickAccess.OneDrive">☁ OneDrive</sys:String>
+    <sys:String x:Key="QuickAccess.NetworkDrives">🖧 Network Drives</sys:String>
+    <sys:String x:Key="QuickAccess.NoNetworkDrives">No mapped network drives detected</sys:String>
+    <sys:String x:Key="QuickAccess.CustomLinks">⭐ Custom Shortcuts</sys:String>
+    <sys:String x:Key="QuickAccess.NoCustomLinks">No custom shortcuts yet. Click "Add" to create one.</sys:String>
+    <sys:String x:Key="QuickAccess.AddLink">+ Add</sys:String>
+    <sys:String x:Key="QuickAccess.Refresh">Refresh</sys:String>
+    <sys:String x:Key="QuickAccess.AddLinkTitle">Add Shortcut</sys:String>
+    <sys:String x:Key="QuickAccess.LinkCategory">Type</sys:String>
+    <sys:String x:Key="QuickAccess.LinkName">Name</sys:String>
+    <sys:String x:Key="QuickAccess.LinkPath">Path / URL</sys:String>
+    <sys:String x:Key="QuickAccess.PathHintLocal">Enter a local folder path, e.g. C:\Users\Documents</sys:String>
+    <sys:String x:Key="QuickAccess.PathHintNetwork">Enter a UNC path, e.g. \\server\share</sys:String>
+    <sys:String x:Key="QuickAccess.PathHintSharePoint">Enter a SharePoint URL, e.g. https://company.sharepoint.com/sites/team</sys:String>
+    <sys:String x:Key="QuickAccess.PathHintOneDrive">Enter a OneDrive web link</sys:String>
+    <sys:String x:Key="QuickAccess.PathHintWeb">Enter any web URL</sys:String>
+    <sys:String x:Key="QuickAccess.Cancel">Cancel</sys:String>
+    <sys:String x:Key="QuickAccess.Confirm">OK</sys:String>
+    <sys:String x:Key="QuickAccess.ValidationError">Name and path cannot be empty.</sys:String>
+    <!-- New nav-style fields -->
+    <sys:String x:Key="QuickAccess.TabAll">All</sys:String>
+    <sys:String x:Key="QuickAccess.TabFreq">⭐ Frequent</sys:String>
+    <sys:String x:Key="QuickAccess.TabLocal">📁 Local</sys:String>
+    <sys:String x:Key="QuickAccess.TabNetwork">🖧 Network</sys:String>
+    <sys:String x:Key="QuickAccess.TabOneDrive">☁ OneDrive</sys:String>
+    <sys:String x:Key="QuickAccess.TabSharePoint">🔗 SharePoint</sys:String>
+    <sys:String x:Key="QuickAccess.TabWeb">🌐 Web</sys:String>
+    <sys:String x:Key="QuickAccess.SortFreq">By Frequency</sys:String>
+    <sys:String x:Key="QuickAccess.SortName">By Name</sys:String>
+    <sys:String x:Key="QuickAccess.SortRecent">Recently Used</sys:String>
+    <sys:String x:Key="QuickAccess.SearchHint">Search shortcuts…</sys:String>
+    <sys:String x:Key="QuickAccess.SectionFreq">⭐ Frequent</sys:String>
+    <sys:String x:Key="QuickAccess.NoItems">No shortcuts found</sys:String>
+    <sys:String x:Key="QuickAccess.NoFreqItems">No usage history yet. Links you click will appear here automatically.</sys:String>
+    <sys:String x:Key="QuickAccess.LinkDescription">Description (optional)</sys:String>
+    <sys:String x:Key="QuickAccess.LinkGroup">Group (optional)</sys:String>
+    <sys:String x:Key="QuickAccess.CtxEdit">Edit</sys:String>
+    <sys:String x:Key="QuickAccess.CtxDelete">Delete</sys:String>
+    <sys:String x:Key="QuickAccess.CtxPin">Pin to Top</sys:String>
+    <sys:String x:Key="QuickAccess.CtxUnpin">Unpin</sys:String>
+    <sys:String x:Key="QuickAccess.DeleteConfirm">Delete "{0}"?</sys:String>
+    <sys:String x:Key="QuickAccess.SaveFailed">Failed to save shortcut. Check config file permissions.</sys:String>
+    <sys:String x:Key="QuickAccess.EditLinkTitle">Edit Shortcut</sys:String>
+
+    <!-- ══════ Dock Window ══════ -->
+    <sys:String x:Key="Dock.Title">Desktop Assistant</sys:String>
+    <sys:String x:Key="Dock.CloseDock">Close Dock</sys:String>
+    <sys:String x:Key="Dock.FetchingWeather">Fetching weather…</sys:String>
+    <sys:String x:Key="Dock.WeatherFailed">Weather unavailable. Click 📍 to set city</sys:String>
+    <sys:String x:Key="Dock.SetWeatherCity">Set Weather City</sys:String>
+    <sys:String x:Key="Dock.BtnAiChat">AI Chat</sys:String>
+    <sys:String x:Key="Dock.BtnNotes">Notes</sys:String>
+    <sys:String x:Key="Dock.BtnZenTask">Zen Task</sys:String>
+    <sys:String x:Key="Dock.BtnTranslate">Translate</sys:String>
+    <sys:String x:Key="Dock.BtnFileManager">Files</sys:String>
+    <sys:String x:Key="Dock.BtnScreenshot">Screenshot</sys:String>
+    <sys:String x:Key="Dock.BtnCleanup">Cleanup</sys:String>
+    <sys:String x:Key="Dock.BtnCodexProxy">DM Proxy</sys:String>
+    <sys:String x:Key="Dock.BtnCli">CLI</sys:String>
+    <sys:String x:Key="Dock.BtnQuickAccess">Quick Access</sys:String>
+    <sys:String x:Key="Dock.CliTip">Open command-line Agent (dancemonkey.exe)</sys:String>
+    <sys:String x:Key="Dock.TabTask">Task</sys:String>
+    <sys:String x:Key="Dock.PlaceholderZenTask">Task title — Enter to add to Zen Task…</sys:String>
+    <sys:String x:Key="Dock.ZenTaskAdded">Zen Task added: </sys:String>
+    <sys:String x:Key="Dock.ThemeOcean">Ocean Blue</sys:String>
+    <sys:String x:Key="Dock.ThemeAurora">Aurora Green</sys:String>
+    <sys:String x:Key="Dock.ThemeSunset">Sunset Amber</sys:String>
+    <sys:String x:Key="Dock.ThemeGrape">Grape Purple</sys:String>
+    <sys:String x:Key="Dock.ThemeGraphite">Graphite Gray</sys:String>
+    <sys:String x:Key="Dock.ThemeNoirPro">Noir Pro</sys:String>
+    <sys:String x:Key="Dock.ThemeMenu">Dock Menu</sys:String>
+    <sys:String x:Key="Dock.StyleMenu">Switch Dock Style</sys:String>
+    <sys:String x:Key="Dock.ThemeSubMenu">Switch Theme</sys:String>
+    <sys:String x:Key="Dock.StyleClassic">Classic Panel</sys:String>
+    <sys:String x:Key="Dock.StyleAssistant">Desktop Assistant</sys:String>
+    <sys:String x:Key="Dock.StyleDancer">Dancer</sys:String>
+    <sys:String x:Key="Dock.DancerHint">Dancer performing on your desktop</sys:String>
+
+    <!-- ══════ Settings ══════ -->
+    <sys:String x:Key="Settings.Title">Preferences</sys:String>
+    <sys:String x:Key="Settings.Subtitle">Manage API and UI options. Config saved at %AppData%\DanceMonkey\config.json</sys:String>
+    <sys:String x:Key="Settings.SaveHint">Click "Save All" on the right to apply changes</sys:String>
+    <sys:String x:Key="Settings.SaveAll">Save All Settings</sys:String>
+    <sys:String x:Key="Settings.TestConnection">Test Connection</sys:String>
+    <sys:String x:Key="Settings.Testing">Testing...</sys:String>
+
+    <sys:String x:Key="Settings.Connection">Connection</sys:String>
+    <sys:String x:Key="Settings.ApiProvider">API Provider</sys:String>
+    <sys:String x:Key="Settings.ApiEndpoint">API Endpoint</sys:String>
+    <sys:String x:Key="Settings.ApiEndpointHint">Leave empty to use the default endpoint. If using a gateway root (e.g. …/api/v2/), it will auto-complete to …/chat/completions.</sys:String>
+    <sys:String x:Key="Settings.ApiKey">API Key</sys:String>
+    <sys:String x:Key="Settings.ApiKeyHint">Key is stored in DanceMonkey\config.json under user profile. Keep your device secure.</sys:String>
+    <sys:String x:Key="Settings.ModelName">Model Name</sys:String>
+    <sys:String x:Key="Settings.ConnectionHint">Connection settings are saved via the top action bar.</sys:String>
+
+    <sys:String x:Key="Settings.GlobalChat">Global Quick Chat</sys:String>
+    <sys:String x:Key="Settings.GlobalChatHint">Press the hotkey to open a chat dialog at screen center.</sys:String>
+    <sys:String x:Key="Settings.GlobalHotkey">Global Hotkey</sys:String>
+    <sys:String x:Key="Settings.GlobalHotkeyHint">Examples: Ctrl+Shift+Q, Ctrl+Alt+Space, Alt+Shift+C</sys:String>
+    <sys:String x:Key="Settings.QuickScreenshotHotkey">Screenshot Hotkey (Fullscreen)</sys:String>
+    <sys:String x:Key="Settings.QuickScreenshotHotkeyHint">Trigger fullscreen screenshot and open actions. Example: Ctrl+Shift+S</sys:String>
+    <sys:String x:Key="Settings.RegionScreenshotHotkey">Region Screenshot Hotkey</sys:String>
+    <sys:String x:Key="Settings.RegionScreenshotHotkeyHint">Trigger region capture tool. Example: Ctrl+Shift+R</sys:String>
+    <sys:String x:Key="Settings.SystemPrompt">System Prompt (optional)</sys:String>
+    <sys:String x:Key="Settings.SystemPromptHint">Leave empty to use default assistant persona</sys:String>
+
+    <sys:String x:Key="Settings.UI">Interface</sys:String>
+    <sys:String x:Key="Settings.Language">Language</sys:String>
+    <sys:String x:Key="Settings.FloatingIcon">Show floating desktop icon (always on top, draggable)</sys:String>
+    <sys:String x:Key="Settings.FloatingIconHint">Can be re-enabled from the tray menu.</sys:String>
+    <sys:String x:Key="Settings.StartWithWindows">Start with Windows (current user)</sys:String>
+    <sys:String x:Key="Settings.ClipboardHistory">Record clipboard text history (in-process only)</sys:String>
+    <sys:String x:Key="Settings.ClipboardHistoryHint">History entries shown below. Double-click to copy.</sys:String>
+    <sys:String x:Key="Settings.ClearClipboard">Clear Clipboard History</sys:String>
+
+    <sys:String x:Key="Settings.NotesDir">Markdown Notes Directory</sys:String>
+    <sys:String x:Key="Settings.NotesDirHint">Leave empty to use "Documents\Daily Note"</sys:String>
+    <sys:String x:Key="Settings.RestoreStickies">Restore sticky notes on startup</sys:String>
+    <sys:String x:Key="Settings.BrowseFolder">Browse…</sys:String>
+    <sys:String x:Key="Settings.SelectNotesRoot">Select notes root directory</sys:String>
+
+    <sys:String x:Key="Settings.QuickAccess">Quick Access (Custom)</sys:String>
+    <sys:String x:Key="Settings.QuickAccessName">Name</sys:String>
+    <sys:String x:Key="Settings.QuickAccessPath">Path</sys:String>
+    <sys:String x:Key="Settings.QuickAccessType">Type</sys:String>
+    <sys:String x:Key="Settings.Add">Add</sys:String>
+    <sys:String x:Key="Settings.RemoveSelected">Remove Selected</sys:String>
+    <sys:String x:Key="Settings.OpenInExplorer">Open in Explorer</sys:String>
+
+    <sys:String x:Key="Settings.PromptSnippets">Smart Chat · Prompt Snippets</sys:String>
+    <sys:String x:Key="Settings.PromptSnippetsHint">Can be quickly applied in "Smart Chat" page.</sys:String>
+    <sys:String x:Key="Settings.SnippetTitle">Title</sys:String>
+    <sys:String x:Key="Settings.SnippetSystemPrompt">System Prompt</sys:String>
+    <sys:String x:Key="Settings.AddSnippet">Add Snippet</sys:String>
+
+    <sys:String x:Key="Settings.MeetingAssistant">Meeting Assistant</sys:String>
+    <sys:String x:Key="Settings.SttProvider">Speech-to-Text Provider</sys:String>
+    <sys:String x:Key="Settings.TranscriptionLang">Transcription Language</sys:String>
+    <sys:String x:Key="Settings.AudioSource">Audio Input Source</sys:String>
+    <sys:String x:Key="Settings.SegmentSeconds">Segment Length (seconds)</sys:String>
+    <sys:String x:Key="Settings.SegmentHint">Each segment is uploaded for transcription. Recommended: 3-10 seconds.</sys:String>
+    <sys:String x:Key="Settings.AutoSummary">Auto-generate meeting summary</sys:String>
+    <sys:String x:Key="Settings.MeetingSaveDir">Meeting save directory (empty = follow notes dir)</sys:String>
+    <sys:String x:Key="Settings.MeetingSaveDirHint">Meeting files will be saved under Meetings/year/month/ subdirectory.</sys:String>
+
+    <sys:String x:Key="Settings.FileManager">AI File Manager</sys:String>
+    <sys:String x:Key="Settings.SandboxDir">Sandbox directory (AI file operations confined here)</sys:String>
+    <sys:String x:Key="Settings.SandboxDirHint">Leave empty to use %LocalAppData%\DanceMonkey\Sandbox. All AI file operations run inside this directory only.</sys:String>
+    <sys:String x:Key="Settings.Skills">Agent Skills</sys:String>
+
+    <sys:String x:Key="Settings.About">About</sys:String>
+    <sys:String x:Key="Settings.AboutDesc">Lightweight desktop tools: translate, email, chat, network, cleanup, notes, quick access, and Dance anti-sleep.</sys:String>
+
+    <!-- ══════ Settings Messages (code-behind) ══════ -->
+    <sys:String x:Key="Msg.SaveSuccess">Settings saved successfully!</sys:String>
+    <sys:String x:Key="Msg.SaveFailed">Failed to save settings</sys:String>
+    <sys:String x:Key="Msg.Success">Success</sys:String>
+    <sys:String x:Key="Msg.Error">Error</sys:String>
+    <sys:String x:Key="Msg.Hint">Notice</sys:String>
+    <sys:String x:Key="Msg.HotkeyInvalid">Invalid hotkey format. Examples: Ctrl+Shift+Q, Ctrl+Alt+Space, Alt+Shift+C</sys:String>
+    <sys:String x:Key="Msg.StartupWriteFailed">Settings saved, but failed to update startup entry: {0}</sys:String>
+    <sys:String x:Key="Msg.FillNameAndPath">Please fill in both name and path</sys:String>
+    <sys:String x:Key="Msg.FillPromptContent">Please fill in the system prompt content.</sys:String>
+    <sys:String x:Key="Msg.PathNotExist">Path does not exist.</sys:String>
+    <sys:String x:Key="Msg.SaveApiFirst">Please save API configuration first</sys:String>
+    <sys:String x:Key="Msg.Custom">Custom</sys:String>
+
+    <!-- ══════ FileManager View ══════ -->
+    <sys:String x:Key="FM.SandboxFiles">📂 Sandbox Files</sys:String>
+    <sys:String x:Key="FM.Refresh">🔄</sys:String>
+    <sys:String x:Key="FM.NavUp">⬆</sys:String>
+    <sys:String x:Key="FM.GoUp">Go Up</sys:String>
+    <sys:String x:Key="FM.View">📄 View</sys:String>
+    <sys:String x:Key="FM.Delete">🗑 Delete</sys:String>
+    <sys:String x:Key="FM.OpenDir">📁 Open Folder</sys:String>
+    <sys:String x:Key="FM.StatsFormat">{0} files, {1} folders, {2}</sys:String>
+    <sys:String x:Key="FM.AiTitle">🤖 AI File Manager</sys:String>
+    <sys:String x:Key="FM.AiDesc">Tell the AI what files to create, modify, or manage using natural language. Operations run safely inside the sandbox.</sys:String>
+    <sys:String x:Key="FM.Send">▶ Run</sys:String>
+    <sys:String x:Key="FM.QuickList">View Sandbox</sys:String>
+    <sys:String x:Key="FM.ClearChat">Clear Chat</sys:String>
+    <sys:String x:Key="FM.Processing">⏳ AI processing...</sys:String>
+    <sys:String x:Key="FM.ChatCleared">Chat cleared. Enter a command to start.</sys:String>
+    <sys:String x:Key="FM.Welcome">Welcome to AI File Manager!
+
+You can give instructions in natural language, for example:
+• "Create a Python project with main.py and README.md"
+• "Write an HTML page for a personal resume"
+• "Create a meeting minutes template in the docs folder"
+• "Move all .txt files to the archive directory"
+• "Delete the temp folder"
+
+All file operations run safely inside the sandbox and won't affect other system files.</sys:String>
+    <sys:String x:Key="FM.ConfirmDeleteFile">Are you sure you want to delete file "{0}"?</sys:String>
+    <sys:String x:Key="FM.ConfirmDeleteFolder">Are you sure you want to delete folder "{0}"?</sys:String>
+    <sys:String x:Key="FM.ConfirmDelete">Confirm Delete</sys:String>
+    <sys:String x:Key="FM.SandboxTree">📂 Sandbox directory structure:</sys:String>
+
+    <!-- ══════ AI Chat (merged) ══════ -->
+    <sys:String x:Key="AiChat.PromptConfig">⚙ Prompt Config</sys:String>
+    <sys:String x:Key="AiChat.ApplySnippet">Apply</sys:String>
+    <sys:String x:Key="AiChat.SelectSnippet">(Select a Prompt…)</sys:String>
+    <sys:String x:Key="AiChat.SelectSnippetHint">Please select a Prompt snippet first (manage in Settings).</sys:String>
+    <sys:String x:Key="AiChat.SnippetEmpty">This snippet has no system prompt content.</sys:String>
+    <sys:String x:Key="AiChat.Send">Send</sys:String>
+    <sys:String x:Key="AiChat.Stop">⏹ Stop</sys:String>
+    <sys:String x:Key="AiChat.AddFiles">Add Files…</sys:String>
+    <sys:String x:Key="AiChat.SummarizeClip">Summarize Clipboard</sys:String>
+    <sys:String x:Key="AiChat.ExportNotes">Export Notes</sys:String>
+    <sys:String x:Key="AiChat.SaveToNotes">Save to notes</sys:String>
+    <sys:String x:Key="AiChat.SaveToNotesTip">Export this chat as Markdown to your vault (AI/Conversations).</sys:String>
+    <sys:String x:Key="AiChat.SaveToNotesFailed">Save failed: </sys:String>
+    <sys:String x:Key="AiChat.Clear">Clear Chat</sys:String>
+    <sys:String x:Key="AiChat.Hint">Enter to send · Shift+Enter newline · Ctrl+V paste image</sys:String>
+    <sys:String x:Key="AiChat.ClipEmpty">No text found in clipboard for summarization.</sys:String>
+    <sys:String x:Key="AiChat.NothingToExport">No conversation to export.</sys:String>
+    <sys:String x:Key="AiChat.ExportedTo">Exported to:</sys:String>
+    <sys:String x:Key="AiChat.EmptyHint">Type and press Enter to send; Ctrl+V to paste screenshot; "Add Files" for images or text. Use a vision model (e.g. gpt-4o) for images.</sys:String>
+    <!-- Redesign keys -->
+    <sys:String x:Key="AiChat.Title">AI Chat</sys:String>
+    <sys:String x:Key="AiChat.Subtitle">Unified chat for local and OpenAI-compatible services</sys:String>
+    <sys:String x:Key="AiChat.Prompt">Prompt</sys:String>
+    <sys:String x:Key="AiChat.PromptPopoverTitle">System prompt</sys:String>
+    <sys:String x:Key="AiChat.PromptPopoverHint">Define the assistant's role and behavior; default is used if empty.</sys:String>
+    <sys:String x:Key="AiChat.PromptDone">Done</sys:String>
+    <sys:String x:Key="AiChat.More">More</sys:String>
+    <sys:String x:Key="AiChat.Regenerate">Regenerate</sys:String>
+    <sys:String x:Key="AiChat.RegenerateTip">Regenerate the response based on the last user message</sys:String>
+    <sys:String x:Key="AiChat.CopyMessage">Copy</sys:String>
+    <sys:String x:Key="AiChat.Copied">Copied</sys:String>
+    <sys:String x:Key="AiChat.Thinking">Thinking</sys:String>
+    <sys:String x:Key="AiChat.AssistantLabel">Assistant</sys:String>
+    <sys:String x:Key="AiChat.UserLabel">You</sys:String>
+    <sys:String x:Key="AiChat.ErrorLabel">Notice</sys:String>
+    <sys:String x:Key="AiChat.InputPlaceholder">Ask anything. Enter to send; Shift+Enter for newline; Ctrl+V to paste a screenshot.</sys:String>
+    <sys:String x:Key="AiChat.KbInputPlaceholder">Ask the knowledge base (auto-route). Enter to send…</sys:String>
+    <sys:String x:Key="AiChat.ModeGeneral">General</sys:String>
+    <sys:String x:Key="AiChat.ModeKb">Knowledge Base</sys:String>
+    <sys:String x:Key="AiChat.ModeGeneralTip">General AI chat (OpenAI-compatible)</sys:String>
+    <sys:String x:Key="AiChat.ModeKbTip">Online knowledge base (POST /api/chat/)</sys:String>
+    <sys:String x:Key="AiChat.AttachImage">Add image or text</sys:String>
+    <sys:String x:Key="AiChat.Transcribe">Transcribe audio</sys:String>
+    <sys:String x:Key="AiChat.SummarizeClipMenu">Summarize clipboard</sys:String>
+    <sys:String x:Key="AiChat.NewChat">New chat</sys:String>
+    <sys:String x:Key="AiChat.EmptyTitle">What can I help with?</sys:String>
+    <sys:String x:Key="AiChat.EmptySub">Pick a starter or just type below.</sys:String>
+    <sys:String x:Key="AiChat.Quick.Polish.Title">Polish text</sys:String>
+    <sys:String x:Key="AiChat.Quick.Polish.Prompt">Please polish the following text while preserving meaning, making it more natural:\n\n</sys:String>
+    <sys:String x:Key="AiChat.Quick.Translate.Title">Translate</sys:String>
+    <sys:String x:Key="AiChat.Quick.Translate.Prompt">Translate the following content between Chinese and English (auto-detect source):\n\n</sys:String>
+    <sys:String x:Key="AiChat.Quick.Brainstorm.Title">Brainstorm</sys:String>
+    <sys:String x:Key="AiChat.Quick.Brainstorm.Prompt">List 8 creative angles around the topic below, ranked by value:\n\n</sys:String>
+    <sys:String x:Key="AiChat.Quick.ExplainCode.Title">Explain code</sys:String>
+    <sys:String x:Key="AiChat.Quick.ExplainCode.Prompt">Explain the following code section by section, and call out potential issues and improvements:\n\n```\n\n```</sys:String>
+    <sys:String x:Key="AiChat.Quick.Summarize.Title">Summarize</sys:String>
+    <sys:String x:Key="AiChat.Quick.Summarize.Prompt">Use Markdown headings and lists to summarize the key points below, keeping numbers and dates:\n\n</sys:String>
+
+    <!-- ══════ Health Reminder ══════ -->
+    <sys:String x:Key="Health.WaterTitle">Time to Drink Water 💧</sys:String>
+    <sys:String x:Key="Health.WaterDesc">It's easy to forget to hydrate while working. Grab a glass of water now — staying hydrated helps you focus!</sys:String>
+    <sys:String x:Key="Health.WaterDone">Done</sys:String>
+    <sys:String x:Key="Health.WaterStats">Water intake today: {0} times</sys:String>
+    <sys:String x:Key="Health.StandTitle">Time to Stand Up 🏃</sys:String>
+    <sys:String x:Key="Health.StandDesc">You've been working for over an hour! Stand up, stretch, and move around for a bit.</sys:String>
+    <sys:String x:Key="Health.StandDone">Done</sys:String>
+    <sys:String x:Key="Health.StandStats">Exercise today: {0} times</sys:String>
+    <sys:String x:Key="Health.Later">Remind Later</sys:String>
+    <sys:String x:Key="Settings.HealthReminder">Health Reminder</sys:String>
+    <sys:String x:Key="Settings.HealthReminderEnabled">Enable health reminders (water / sedentary alerts)</sys:String>
+    <sys:String x:Key="Settings.WaterInterval">Water reminder interval (min)</sys:String>
+    <sys:String x:Key="Settings.WaterIntervalHint">Recommended 30–60 min, default 45</sys:String>
+    <sys:String x:Key="Settings.MovementInterval">Sedentary alert interval (min)</sys:String>
+    <sys:String x:Key="Settings.MovementIntervalHint">Alert after continuous computer use, default 60</sys:String>
+
+    <!-- ══════ Skill Manager ══════ -->
+    <sys:String x:Key="SkillManager.Title">Agent Skills</sys:String>
+    <sys:String x:Key="SkillManager.Lead">Manage Agent skills under the sandbox. Each skill is a folder with SKILL.md and supports Claude Code style frontmatter (name / description / allowed-tools / activation / triggers). The agent loads the catalog first, then injects full skill instructions when the user names a skill or the task matches description/triggers.</sys:String>
+    <sys:String x:Key="SkillManager.Library">Skill library</sys:String>
+    <sys:String x:Key="SkillManager.Refresh">Refresh</sys:String>
+    <sys:String x:Key="SkillManager.OpenFolder">Open folder</sys:String>
+    <sys:String x:Key="SkillManager.AddGroup">Add skill</sys:String>
+    <sys:String x:Key="SkillManager.NewNameLabel">Name (used as folder name; invalid characters become -)</sys:String>
+    <sys:String x:Key="SkillManager.NewDescriptionLabel">Trigger description (description, used for automatic matching)</sys:String>
+    <sys:String x:Key="SkillManager.NewBodyLabel">Content (optional; creates a Claude/Codex style template if empty; content without frontmatter is wrapped automatically)</sys:String>
+    <sys:String x:Key="SkillManager.Add">Add</sys:String>
+    <sys:String x:Key="SkillManager.InsertTemplate">Insert template</sys:String>
+    <sys:String x:Key="SkillManager.ImportGroup">Import skill</sys:String>
+    <sys:String x:Key="SkillManager.ImportLead">Enter a local SKILL.md, skill folder, or http/https Markdown URL. Imported skills are saved into the current sandbox .dancemonkey/skills folder.</sys:String>
+    <sys:String x:Key="SkillManager.Import">Import</sys:String>
+    <sys:String x:Key="SkillManager.BrowseFile">File</sys:String>
+    <sys:String x:Key="SkillManager.BrowseFolder">Folder</sys:String>
+    <sys:String x:Key="SkillManager.Delete">Delete</sys:String>
+    <sys:String x:Key="SkillManager.Save">Save</sys:String>
+    <sys:String x:Key="SkillManager.ConfirmDelete">Delete skill "{0}" and its folder?</sys:String>
+    <sys:String x:Key="SkillManager.DeleteTitle">Delete skill</sys:String>
+    <sys:String x:Key="SkillManager.NameRequired">Please enter a skill name.</sys:String>
+    <sys:String x:Key="SkillManager.ImportRequired">Please enter an import source.</sys:String>
+    <sys:String x:Key="SkillManager.NoSelection">No skill selected</sys:String>
+    <sys:String x:Key="SkillManager.Count">{0} skills</sys:String>
+    <sys:String x:Key="SkillManager.Loaded">Loaded {0} skills.</sys:String>
+    <sys:String x:Key="SkillManager.Saved">Skill saved.</sys:String>
+    <sys:String x:Key="SkillManager.Deleted">Skill deleted.</sys:String>
+    <sys:String x:Key="SkillManager.Created">Skill created.</sys:String>
+    <sys:String x:Key="SkillManager.Imported">Imported skill: {0}</sys:String>
+    <sys:String x:Key="SkillManager.TemplateInserted">Inserted the standard template.</sys:String>
+    <sys:String x:Key="SkillManager.SelectSkillFile">Select SKILL.md or a Markdown skill file</sys:String>
+    <sys:String x:Key="SkillManager.SelectSkillFolder">Select a skill folder containing SKILL.md</sys:String>
+    <sys:String x:Key="SkillManager.DefaultBody" xml:space="preserve"># New skill
+
+(Describe how the agent should behave.)
+</sys:String>
+
+</ResourceDictionary>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI助手</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            overflow: hidden;
+        }
+        #chatbot-container {
+            width: 100%;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="chatbot-container"></div>
+    
+    <!-- 加载必需的脚本 -->
+    <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.1/highlight.min.js"></script>
+    
+    <!-- 配置聊天机器人 -->
+    <script>
+        window.mgaChatbotConfig = {
+            baseUrl: "https://chat.int.bayer.com",
+            assistantId: "4d841964-6a47-476a-84fa-0a340ebc482d",
+            dynamicScript: true
+        };
+    </script>
+    
+    <!-- 加载聊天机器人脚本 -->
+    <script src="https://chat.int.bayer.com/embed.min.js" defer></script>
+</body>
+</html>

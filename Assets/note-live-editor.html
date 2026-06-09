@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>DanceMonkey Live Editor</title>
+  <style>
+    :root {
+      --bg: #fafbfc;
+      --fg: #1a1d26;
+      --muted: #6b7280;
+      --accent: #4F6EF7;
+      --code-bg: #f0f1f6;
+      --code-fg: #b03060;
+      --quote-bar: #d0d5e0;
+      --link: #2f6feb;
+      --highlight-bg: #fff3a3;
+    }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: var(--bg); color: var(--fg);
+      font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+      font-size: 15px; line-height: 1.6;
+      overflow: hidden;
+    }
+    #editor {
+      box-sizing: border-box;
+      width: 100%; height: 100%;
+      padding: 18px 24px 80px 24px;
+      outline: none;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      caret-color: var(--accent);
+      tab-size: 4;
+      -moz-tab-size: 4;
+    }
+    #editor:empty::before {
+      content: attr(data-placeholder);
+      color: #b8bdd0;
+      pointer-events: none;
+    }
+
+    /* 行容器：用于行级样式 */
+    .ln {
+      display: block;
+      padding: 1px 0;
+      min-height: 1.6em;
+    }
+    .ln.h1 { font-size: 1.85em; font-weight: 700; color: #111827; margin-top: 0.45em; }
+    .ln.h2 { font-size: 1.5em;  font-weight: 650; color: #1f2937; margin-top: 0.4em; }
+    .ln.h3 { font-size: 1.25em; font-weight: 600; color: #374151; margin-top: 0.35em; }
+    .ln.h4 { font-size: 1.1em;  font-weight: 600; color: #4b5563; }
+    .ln.h5 { font-size: 1.02em; font-weight: 600; }
+    .ln.h6 { font-size: 0.98em; font-weight: 600; color: #6b7280; }
+    .ln.quote {
+      border-left: 3px solid var(--quote-bar);
+      padding-left: 10px;
+      color: #4b5563;
+    }
+    .ln.code-fence {
+      font-family: Consolas, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.94em;
+      color: var(--code-fg);
+    }
+    .ln.hr {
+      color: #c0c5d2;
+    }
+
+    /* 标记符号：默认隐藏（Obsidian Live Preview 风格） */
+    .mk {
+      color: #9aa3b2;
+      font-weight: 400;
+      display: none;
+    }
+    /* 当前行（光标所在行）：显示原始标记 */
+    .ln.active .mk {
+      display: inline;
+    }
+
+    /* 行内格式样式 */
+    .md-bold   { font-weight: 700; }
+    .md-italic { font-style: italic; }
+    .md-strike { text-decoration: line-through; color: #6b7280; }
+    .md-mark   { background: var(--highlight-bg); padding: 0 2px; border-radius: 3px; }
+    .md-code   {
+      font-family: Consolas, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      color: var(--code-fg);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.94em;
+    }
+    .md-link {
+      color: var(--link);
+      text-decoration: underline;
+      cursor: text;
+    }
+    .wiki-link {
+      color: #7c5cbf;
+      text-decoration: underline;
+      cursor: text;
+    }
+    .wiki-link:hover { color: #5a3d9e; }
+
+    /* 行号显示提示：行级别标记符在非激活时不占空间 */
+    .ln:not(.active) .mk-block {
+      display: none;
+    }
+    /* 列表项行：在标记隐藏后用伪元素绘制圆点/数字 */
+    .ln.list-bullet:not(.active)::before {
+      content: "•";
+      display: inline-block;
+      width: 1.2em;
+      margin-left: -0.2em;
+      color: #6b7280;
+    }
+    .ln.list-num:not(.active)::before {
+      content: attr(data-num) ".";
+      display: inline-block;
+      width: 1.6em;
+      color: #6b7280;
+    }
+    .ln.list-todo:not(.active)::before {
+      content: "";
+      display: inline-block;
+      width: 1em; height: 1em;
+      vertical-align: -2px;
+      margin-right: 6px;
+      border: 1.5px solid #9aa3b2;
+      border-radius: 3px;
+      background: transparent;
+    }
+    .ln.list-todo.todo-done:not(.active)::before {
+      background: var(--accent);
+      border-color: var(--accent);
+      background-image: linear-gradient(45deg, transparent 35%, #fff 35%, #fff 45%, transparent 45%, transparent 55%, #fff 55%, #fff 70%, transparent 70%);
+    }
+    .ln.list-todo.todo-done {
+      color: #9aa3b2;
+      text-decoration: line-through;
+    }
+    /* 缩进：根据 data-indent 在视觉上偏移列表项 */
+    .ln.list-bullet[data-indent="1"]:not(.active),
+    .ln.list-num[data-indent="1"]:not(.active),
+    .ln.list-todo[data-indent="1"]:not(.active) { padding-left: 1.6em; }
+    .ln.list-bullet[data-indent="2"]:not(.active),
+    .ln.list-num[data-indent="2"]:not(.active),
+    .ln.list-todo[data-indent="2"]:not(.active) { padding-left: 3.2em; }
+    .ln.list-bullet[data-indent="3"]:not(.active),
+    .ln.list-num[data-indent="3"]:not(.active),
+    .ln.list-todo[data-indent="3"]:not(.active) { padding-left: 4.8em; }
+
+    /* Markdown 表格（实时渲染） */
+    .ln.table-row,
+    .ln.table-sep {
+      padding: 0;
+    }
+    .ln.table-row .mk-table-raw,
+    .ln.table-sep .mk-table-raw {
+      display: none;
+      white-space: pre-wrap;
+    }
+    .ln.table-row .tbl-vis {
+      display: grid;
+      gap: 0;
+      border-left: 1px solid #d8dde8;
+      border-right: 1px solid #d8dde8;
+    }
+    .ln.table-row .tbl-cell {
+      padding: 6px 10px;
+      border-bottom: 1px solid #d8dde8;
+      border-right: 1px solid #d8dde8;
+      background: #fff;
+      min-height: 1.4em;
+    }
+    .ln.table-row .tbl-cell:last-child {
+      border-right: none;
+    }
+    .ln.table-row.table-header .tbl-cell {
+      font-weight: 600;
+      background: #f6f8fc;
+    }
+    /* 分隔线行在可视态隐藏；由 header/row 的边框体现 */
+    .ln.table-sep:not(.active) {
+      display: none;
+    }
+    /* 当前编辑行恢复原始 Markdown，隐藏可视化网格 */
+    .ln.table-row.active .mk-table-raw,
+    .ln.table-sep.active .mk-table-raw {
+      display: inline;
+    }
+    .ln.table-row.active .tbl-vis {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div id="editor"
+     contenteditable="true"
+     spellcheck="false"
+     data-placeholder="输入 Markdown… # 空格 即为一级标题"></div>
+
+<script>
+(function () {
+  const editor = document.getElementById("editor");
+  let suppressNotify = false;
+  let debounceTimer = null;
+  let currentText = "";
+  let activeLineIdx = -1;
+  let isComposing = false;
+  /** 宿主在 IME 组合期间下发的 setMarkdown，延后到 compositionend 再应用，避免整页 replace 打断输入法。 */
+  let pendingHostMarkdown = null;
+  let inputFlushMicrotask = false;
+  let selectionChangeTimer = null;
+  /** 右键上下文菜单触发时保存的选区 Range，供宿主回调 replaceSelectionWithWikiLink 使用。 */
+  let savedContextMenuRange = null;
+
+  // ===== 工具 =====
+
+  function escapeHtml(s) {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function escapeAttr(s) {
+    return escapeHtml(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  // 行内 Markdown：粗体/斜体/删除线/高亮/行内代码/链接
+  // 返回 HTML 片段；mk 标记用 <span class="mk">…</span> 包装，便于按行隐藏。
+  function renderInline(text) {
+    if (!text) return "";
+    // 先把转义字符替换掉
+    text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    // 行内代码 `...`（最高优先级，避免内部被再次解析）
+    text = text.replace(/`([^`\n]+?)`/g, (_m, p) =>
+      `<span class="mk">\`</span><span class="md-code">${p}</span><span class="mk">\`</span>`);
+
+    // 双链 [[target]] / [[target|display]]（在普通链接之前处理，避免正则冲突）
+    text = text.replace(/\[\[([^\]\|\n]+?)(?:\|([^\]\n]+?))?\]\]/g, (_m, tgt, disp) => {
+      const label = disp ? escapeHtml(disp) : escapeHtml(tgt);
+      return `<span class="mk">[[</span><span class="wiki-link" data-target="${escapeAttr(tgt)}">${label}</span><span class="mk">]]</span>`;
+    });
+
+    // 链接 [text](url)
+    text = text.replace(/\[([^\]\n]+)\]\(([^)\n\s]+)\)/g, (_m, t, u) =>
+      `<span class="mk">[</span><span class="md-link" data-href="${u}">${t}</span><span class="mk">](${u})</span>`);
+
+    // 高亮 ==...==
+    text = text.replace(/==([^=\n]+?)==/g, (_m, p) =>
+      `<span class="mk">==</span><span class="md-mark">${p}</span><span class="mk">==</span>`);
+
+    // 删除线 ~~...~~
+    text = text.replace(/~~([^~\n]+?)~~/g, (_m, p) =>
+      `<span class="mk">~~</span><span class="md-strike">${p}</span><span class="mk">~~</span>`);
+
+    // 粗体 **...**（必须在斜体之前）
+    text = text.replace(/\*\*([^*\n]+?)\*\*/g, (_m, p) =>
+      `<span class="mk">**</span><span class="md-bold">${p}</span><span class="mk">**</span>`);
+
+    // 斜体 *...*（确保不是 ** 的一部分；前面替换后 ** 已被 mk 包装）
+    text = text.replace(/(^|[^*\w])\*([^*\n]+?)\*(?!\*)/g, (_m, pre, p) =>
+      `${pre}<span class="mk">*</span><span class="md-italic">${p}</span><span class="mk">*</span>`);
+
+    return text;
+  }
+
+  function splitTableCells(line) {
+    let s = (line || "").trim();
+    if (s.startsWith("|")) s = s.slice(1);
+    if (s.endsWith("|")) s = s.slice(0, -1);
+    return s.split("|").map(x => x.trim());
+  }
+
+  function isTableSeparatorLine(line) {
+    const s = (line || "").trim();
+    return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(s);
+  }
+
+  function isTableCandidateLine(line) {
+    const s = (line || "").trim();
+    if (!s.includes("|")) return false;
+    if (isTableSeparatorLine(s)) return false;
+    const cells = splitTableCells(s);
+    return cells.length >= 2;
+  }
+
+  function isTableBlockStart(lines, i) {
+    if (i < 0 || i + 1 >= lines.length) return false;
+    if (!isTableCandidateLine(lines[i])) return false;
+    if (!isTableSeparatorLine(lines[i + 1])) return false;
+    const headCells = splitTableCells(lines[i]).length;
+    const sepCells = splitTableCells(lines[i + 1]).length;
+    return headCells >= 2 && sepCells >= 2;
+  }
+
+  function renderTableRowLine(line, colCount, isHeader, isActive) {
+    const cells = splitTableCells(line);
+    while (cells.length < colCount) cells.push("");
+    const gridStyle = `grid-template-columns: repeat(${colCount}, minmax(0, 1fr));`;
+    const vis = cells
+      .map(c => `<span class="tbl-cell">${renderInline(c)}</span>`)
+      .join("");
+    const activeCls = isActive ? " active" : "";
+    const headerCls = isHeader ? " table-header" : "";
+    return `<div class="ln table-row${headerCls}${activeCls}" data-raw="${escapeAttr(line)}"><span class="mk-table-raw">${escapeHtml(line)}</span><span class="tbl-vis" style="${gridStyle}">${vis}</span></div>`;
+  }
+
+  function renderTableSepLine(line, isActive) {
+    const activeCls = isActive ? " active" : "";
+    return `<div class="ln table-sep${activeCls}" data-raw="${escapeAttr(line)}"><span class="mk-table-raw">${escapeHtml(line)}</span></div>`;
+  }
+
+  // 行级解析。返回：
+  //   { cls: "h1 list-bullet ...", attrs: {}, html: "...", inner: "纯文本含义" }
+  function styleLine(raw) {
+    const text = raw == null ? "" : raw;
+    if (text.length === 0) {
+      return { cls: "", attrs: {}, html: "<br/>" };
+    }
+
+    // 标题
+    let m = /^(#{1,6})(\s+)(.*)$/.exec(text);
+    if (m) {
+      const lvl = m[1].length;
+      return {
+        cls: `h${lvl}`,
+        attrs: {},
+        html: `<span class="mk mk-block">${escapeHtml(m[1] + m[2])}</span>${renderInline(m[3])}`,
+      };
+    }
+
+    // 引用
+    m = /^(>\s?)(.*)$/.exec(text);
+    if (m) {
+      return {
+        cls: "quote",
+        attrs: {},
+        html: `<span class="mk mk-block">${escapeHtml(m[1])}</span>${renderInline(m[2])}`,
+      };
+    }
+
+    // 待办 - [ ] / - [x]
+    m = /^(\s*)([-*+])(\s+)\[( |x|X)\](\s+)(.*)$/.exec(text);
+    if (m) {
+      const indent = Math.floor(m[1].replace(/\t/g, "    ").length / 2);
+      const done = m[4].toLowerCase() === "x";
+      const mk = `${m[1]}${m[2]}${m[3]}[${m[4]}]${m[5]}`;
+      return {
+        cls: `list-todo${done ? " todo-done" : ""}`,
+        attrs: { "data-indent": String(Math.min(indent, 3)) },
+        html: `<span class="mk mk-block">${escapeHtml(mk)}</span>${renderInline(m[6])}`,
+      };
+    }
+
+    // 无序列表
+    m = /^(\s*)([-*+])(\s+)(.*)$/.exec(text);
+    if (m) {
+      const indent = Math.floor(m[1].replace(/\t/g, "    ").length / 2);
+      const mk = `${m[1]}${m[2]}${m[3]}`;
+      return {
+        cls: "list-bullet",
+        attrs: { "data-indent": String(Math.min(indent, 3)) },
+        html: `<span class="mk mk-block">${escapeHtml(mk)}</span>${renderInline(m[4])}`,
+      };
+    }
+
+    // 有序列表
+    m = /^(\s*)(\d+)\.(\s+)(.*)$/.exec(text);
+    if (m) {
+      const indent = Math.floor(m[1].replace(/\t/g, "    ").length / 2);
+      const mk = `${m[1]}${m[2]}.${m[3]}`;
+      return {
+        cls: "list-num",
+        attrs: { "data-indent": String(Math.min(indent, 3)), "data-num": m[2] },
+        html: `<span class="mk mk-block">${escapeHtml(mk)}</span>${renderInline(m[4])}`,
+      };
+    }
+
+    // 分割线
+    if (/^\s*(---+|\*\*\*+|___+)\s*$/.test(text)) {
+      return {
+        cls: "hr",
+        attrs: {},
+        html: `<span class="mk">${escapeHtml(text)}</span><span class="md-hr-vis" style="display:inline-block;width:100%;border-top:1px solid #d8dde6;height:1px;vertical-align:middle;"></span>`,
+      };
+    }
+
+    // 代码围栏行（``` 开头/结尾）
+    if (/^```/.test(text)) {
+      return {
+        cls: "code-fence",
+        attrs: {},
+        html: `<span>${escapeHtml(text)}</span>`,
+      };
+    }
+
+    // 普通段落（行内格式）
+    return { cls: "", attrs: {}, html: renderInline(text) };
+  }
+
+  function buildAttrString(attrs) {
+    let s = "";
+    for (const k in attrs) {
+      s += ` ${k}="${attrs[k]}"`;
+    }
+    return s;
+  }
+
+  function renderText(text) {
+    const lines = (text || "").split("\n");
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (isTableBlockStart(lines, i)) {
+        const tableRows = [];
+        tableRows.push(lines[i]);     // header
+        tableRows.push(lines[i + 1]); // separator
+        let j = i + 2;
+        while (j < lines.length && isTableCandidateLine(lines[j])) {
+          tableRows.push(lines[j]);
+          j++;
+        }
+
+        const colCount = Math.max(2, ...tableRows
+          .filter((_, idx) => idx !== 1)
+          .map(r => splitTableCells(r).length));
+
+        // header line
+        out.push(renderTableRowLine(lines[i], colCount, true, i === activeLineIdx));
+        // separator line
+        out.push(renderTableSepLine(lines[i + 1], i + 1 === activeLineIdx));
+        // body lines
+        for (let k = i + 2; k < j; k++) {
+          out.push(renderTableRowLine(lines[k], colCount, false, k === activeLineIdx));
+        }
+
+        i = j - 1;
+        continue;
+      }
+
+      const { cls, attrs, html } = styleLine(lines[i]);
+      const activeCls = i === activeLineIdx ? " active" : "";
+      out.push(`<div class="ln ${cls}${activeCls}"${buildAttrString(attrs)}>${html}</div>`);
+    }
+    return out.join("");
+  }
+
+  function readDomText(node) {
+    if (!node) return "";
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.nodeValue || "";
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return "";
+    }
+    const el = node;
+    if (el.tagName === "BR") {
+      return "\n";
+    }
+
+    let text = "";
+    for (const child of el.childNodes) {
+      text += readDomText(child);
+    }
+    return text;
+  }
+
+  /** 从一行 .ln 读出纯文本；行与行之间的换行只由 readText 的 join 负责，避免 sole &lt;br&gt; 变成多余 \\n。 */
+  function readLogicalLineText(lineEl) {
+    if (!lineEl || lineEl.nodeType !== Node.ELEMENT_NODE) return "";
+    const kids = Array.from(lineEl.childNodes);
+    if (kids.length === 0) return "";
+    // 空行占位：styleLine 对 "" 输出单个 <br/>
+    if (kids.length === 1) {
+      const only = kids[0];
+      if (only.nodeType === 1 && only.tagName === "BR") return "";
+    }
+    return readDomText(lineEl).replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ");
+  }
+
+  function readText() {
+    const blocks = editor.children;
+    if (blocks.length === 0) {
+      const t = readDomText(editor).replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ");
+      return t.replace(/\n+$/g, "");
+    }
+    const arr = [];
+    for (let i = 0; i < blocks.length; i++) {
+      const el = blocks[i];
+      if (el.dataset && typeof el.dataset.raw === "string") {
+        if (el.classList.contains("active")) {
+          const rawEl = el.querySelector(".mk-table-raw");
+          arr.push((rawEl ? rawEl.textContent : el.dataset.raw).replace(/\u00a0/g, " "));
+        } else {
+          arr.push(el.dataset.raw.replace(/\u00a0/g, " "));
+        }
+      } else {
+        arr.push(readLogicalLineText(el));
+      }
+    }
+    return arr.join("\n");
+  }
+
+  // ===== 选区（光标）路径：行号 + 列偏移 =====
+
+  function getCaretPath() {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return null;
+    const range = sel.getRangeAt(0);
+    return nodeToPath(range.startContainer, range.startOffset);
+  }
+
+  function nodeToPath(node, offset) {
+    let cur = node;
+    while (cur && cur !== editor && !(cur.nodeType === 1 && cur.classList && cur.classList.contains("ln"))) {
+      cur = cur.parentNode;
+    }
+    if (!cur || cur === editor) {
+      const lines = editor.children;
+      return { line: Math.max(0, lines.length - 1), col: 0 };
+    }
+    const lineEl = cur;
+    let line = 0;
+    let p = lineEl.previousSibling;
+    while (p) { if (p.nodeType === 1) line++; p = p.previousSibling; }
+    const range = document.createRange();
+    range.setStart(lineEl, 0);
+    try { range.setEnd(node, offset); }
+    catch { return { line, col: lineEl.textContent.length }; }
+    return { line, col: range.toString().length };
+  }
+
+  function setCaret(path) {
+    if (!path) return;
+    const lineEl = editor.children[path.line];
+    if (!lineEl) {
+      const last = editor.lastElementChild;
+      if (!last) return;
+      placeAt(last, last.textContent.length);
+      return;
+    }
+    placeAt(lineEl, Math.max(0, Math.min(path.col, lineEl.textContent.length)));
+  }
+
+  function placeAt(lineEl, col) {
+    let remaining = col;
+    let target = null;
+    let targetOffset = 0;
+    const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT, null);
+    let n;
+    while ((n = walker.nextNode())) {
+      const len = n.nodeValue.length;
+      if (remaining <= len) {
+        target = n;
+        targetOffset = remaining;
+        break;
+      }
+      remaining -= len;
+    }
+    const sel = window.getSelection();
+    const range = document.createRange();
+    if (target) {
+      range.setStart(target, targetOffset);
+    } else {
+      range.selectNodeContents(lineEl);
+      range.collapse(false);
+    }
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  // ===== 渲染调度（保留光标） =====
+
+  let renderRaf = null;
+  function scheduleRender() {
+    if (renderRaf) return;
+    renderRaf = requestAnimationFrame(() => {
+      renderRaf = null;
+      doRender();
+    });
+  }
+
+  function doRender() {
+    if (isComposing) return;
+    const text = readText();
+    const path = getCaretPath();
+    activeLineIdx = path ? path.line : -1;
+    suppressNotify = true;
+    try {
+      editor.innerHTML = renderText(text);
+      currentText = text;
+      setCaret(path);
+    } finally {
+      suppressNotify = false;
+    }
+    notifyDocChange();
+  }
+
+  // 仅切换 active 行的样式（不重建 DOM、不动光标），用于纯方向键移动时
+  function updateActiveLineOnly() {
+    if (isComposing) return;
+    const path = getCaretPath();
+    const newIdx = path ? path.line : -1;
+    if (newIdx === activeLineIdx) return;
+    const lines = editor.children;
+    if (activeLineIdx >= 0 && activeLineIdx < lines.length) {
+      lines[activeLineIdx].classList.remove("active");
+    }
+    activeLineIdx = newIdx;
+    if (activeLineIdx >= 0 && activeLineIdx < lines.length) {
+      lines[activeLineIdx].classList.add("active");
+    }
+    // 因为同一行内 mk 显隐会改变行内文本布局，需要保持光标在原列（按纯文本计）
+    // 由于 mk 用 display:none，textContent 不受影响，col 仍有效
+    setCaret(path);
+  }
+
+  // ===== 与宿主通信 =====
+
+  function notifyDocChange() {
+    if (suppressNotify) return;
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      try {
+        if (window.chrome && window.chrome.webview) {
+          window.chrome.webview.postMessage({ type: "docChange", text: currentText });
+        }
+      } catch (_) {}
+    }, 160);
+  }
+
+  function setMarkdown(text) {
+    const next = text ?? "";
+    // 宿主次次下发相同全文时跳过 innerHTML 替换，避免刚建立的 IME 被反复打断（尤其刚进入笔记页时）。
+    if (next === currentText && editor.children.length > 0) {
+      return;
+    }
+    suppressNotify = true;
+    try {
+      currentText = next;
+      activeLineIdx = -1;
+      editor.innerHTML = renderText(currentText);
+      const last = editor.lastElementChild;
+      if (last) placeAt(last, last.textContent.length);
+    } finally {
+      suppressNotify = false;
+    }
+  }
+
+  function insertText(snippet) {
+    if (typeof snippet !== "string" || snippet.length === 0) return;
+    editor.focus();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      currentText = (currentText || "") + snippet;
+      activeLineIdx = -1;
+      editor.innerHTML = renderText(currentText);
+      notifyDocChange();
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    const lines = snippet.split("\n");
+    if (lines.length === 1) {
+      range.insertNode(document.createTextNode(lines[0]));
+    } else {
+      const frag = document.createDocumentFragment();
+      lines.forEach((l, i) => {
+        if (i > 0) frag.appendChild(document.createElement("br"));
+        frag.appendChild(document.createTextNode(l));
+      });
+      range.insertNode(frag);
+    }
+    sel.removeAllRanges();
+    scheduleRender();
+  }
+
+  // ===== 输入事件 =====
+
+  editor.addEventListener("compositionstart", () => {
+    isComposing = true;
+  });
+
+  editor.addEventListener("compositionend", () => {
+    isComposing = false;
+    if (pendingHostMarkdown !== null) {
+      const t = pendingHostMarkdown;
+      pendingHostMarkdown = null;
+      setMarkdown(t);
+      return;
+    }
+    // 中文上屏后再统一重绘，避免打断输入法候选态。
+    scheduleRender();
+  });
+
+  // 在 input 之前标记组合输入（部分 WebView2 上首个拼音键的 input 早于 compositionstart 且 isComposing 仍为 false）
+  editor.addEventListener("beforeinput", (e) => {
+    const t = e.inputType || "";
+    if (t === "insertCompositionText" || t === "deleteCompositionText" || t === "insertFromComposition") {
+      isComposing = true;
+    }
+  });
+
+  editor.addEventListener("keydown", (e) => {
+    if (e.isComposing) {
+      isComposing = true;
+      return;
+    }
+    // Windows IME：正在处理的按键
+    if (e.key === "Process") {
+      isComposing = true;
+    }
+  });
+
+  editor.addEventListener("input", (e) => {
+    if (isComposing || (e && e.isComposing)) return;
+    // 延后到微任务：让同一次按键触发的 compositionstart / beforeinput 先执行，避免误触发整页重绘打断 IME。
+    if (inputFlushMicrotask) return;
+    inputFlushMicrotask = true;
+    queueMicrotask(() => {
+      inputFlushMicrotask = false;
+      if (isComposing) return;
+      scheduleRender();
+    });
+  });
+
+  // 光标移动（不修改文本）：只切换 active 行，避免不必要的整页重绘
+  function onCaretMaybeMoved() {
+    if (isComposing) return;
+    // 在事件循环结束后取最新选区
+    requestAnimationFrame(updateActiveLineOnly);
+  }
+  editor.addEventListener("keyup", (e) => {
+    // 仅方向键、Home/End、PageUp/Down、Tab 触发
+    const k = e.key;
+    if (k === "ArrowUp" || k === "ArrowDown" || k === "ArrowLeft" || k === "ArrowRight"
+        || k === "Home" || k === "End" || k === "PageUp" || k === "PageDown") {
+      onCaretMaybeMoved();
+    }
+  });
+  editor.addEventListener("mouseup", onCaretMaybeMoved);
+  document.addEventListener("selectionchange", () => {
+    if (document.activeElement !== editor) return;
+    clearTimeout(selectionChangeTimer);
+    selectionChangeTimer = setTimeout(() => {
+      selectionChangeTimer = null;
+      onCaretMaybeMoved();
+    }, 48);
+  });
+  editor.addEventListener("focus", onCaretMaybeMoved);
+  editor.addEventListener("blur", () => {
+    isComposing = false;
+    if (pendingHostMarkdown !== null) {
+      const p = pendingHostMarkdown;
+      pendingHostMarkdown = null;
+      setMarkdown(p);
+    }
+    // 失焦后清除 active，回归"完全隐藏标记"的纯净阅读态
+    if (activeLineIdx >= 0 && activeLineIdx < editor.children.length) {
+      editor.children[activeLineIdx].classList.remove("active");
+    }
+    activeLineIdx = -1;
+  });
+
+  editor.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData("text") || "";
+    insertText(text);
+  });
+
+  editor.addEventListener("drop", (e) => {
+    if (!e.dataTransfer) return;
+    const t = e.dataTransfer.getData("text");
+    if (t) {
+      e.preventDefault();
+      insertText(t);
+    }
+  });
+
+  // 恢复保存的选区并插入文本（供宿主回调使用）
+  function restoreSavedRangeAndInsert(text) {
+    if (savedContextMenuRange) {
+      try {
+        editor.focus();
+        const sel2 = window.getSelection();
+        sel2.removeAllRanges();
+        sel2.addRange(savedContextMenuRange);
+      } catch (_) {}
+      savedContextMenuRange = null;
+    }
+    insertText(text);
+  }
+
+  // 右键上下文菜单：阻止浏览器默认菜单，保存选区，通知宿主显示 WPF 菜单
+  editor.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sel = window.getSelection();
+    const selectedText = (sel && sel.rangeCount > 0) ? sel.toString() : "";
+    // 保存当前选区 Range，供后续 replaceSelectionWithWikiLink 恢复
+    savedContextMenuRange = (sel && sel.rangeCount > 0) ? sel.getRangeAt(0).cloneRange() : null;
+    try {
+      if (window.chrome && window.chrome.webview)
+        window.chrome.webview.postMessage({ type: "contextMenuRequest", selectedText, hasSelection: selectedText.length > 0 });
+    } catch (_) {}
+  });
+
+  // 链接：Ctrl+点击打开（普通链接用系统浏览器，双链跳转到笔记库内笔记）
+  editor.addEventListener("click", (e) => {
+    const t = e.target;
+    if (!t || !t.classList) return;
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    try {
+      if (t.classList.contains("md-link")) {
+        const href = t.getAttribute("data-href");
+        if (href && window.chrome && window.chrome.webview)
+          window.chrome.webview.postMessage({ type: "openLink", href });
+      } else if (t.classList.contains("wiki-link")) {
+        const target = t.getAttribute("data-target");
+        if (target && window.chrome && window.chrome.webview)
+          window.chrome.webview.postMessage({ type: "openWikiLink", target });
+      }
+    } catch (_) {}
+  });
+
+  window.__dmSetText = setMarkdown;
+  window.__dmGetText = () => currentText;
+  window.__dmInsert = insertText;
+
+  if (window.chrome && window.chrome.webview) {
+    window.chrome.webview.addEventListener("message", (ev) => {
+      let data = ev.data;
+      if (typeof data === "string") {
+        try { data = JSON.parse(data); } catch { return; }
+      }
+      if (!data || typeof data !== "object") return;
+      if (data.type === "setMarkdown") {
+        if (isComposing) {
+          pendingHostMarkdown = data.text ?? "";
+        } else {
+          setMarkdown(data.text ?? "");
+        }
+      } else if (data.type === "insert" && typeof data.text === "string") {
+        insertText(data.text);
+      } else if (data.type === "insertWikiLink" && typeof data.target === "string") {
+        insertText(`[[${data.target}]]`);
+      } else if (data.type === "replaceSelectionWithWikiLink" && typeof data.target === "string") {
+        const target = data.target;
+        const display = typeof data.display === "string" ? data.display : "";
+        const wikiText = (display && display !== target) ? `[[${target}|${display}]]` : `[[${target}]]`;
+        restoreSavedRangeAndInsert(wikiText);
+      } else if (data.type === "replaceSelectionWithText" && typeof data.text === "string") {
+        restoreSavedRangeAndInsert(data.text);
+      }
+    });
+  }
+
+  setMarkdown("");
+
+  try {
+    if (window.chrome && window.chrome.webview) {
+      window.chrome.webview.postMessage({ type: "ready" });
+    }
+  } catch (_) {}
+})();
+</script>
+</body>
+</html>

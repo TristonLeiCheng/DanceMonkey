@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>今日重心 · 筛选与排序说明</title>
+  <style>
+    body { font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; margin: 24px auto; max-width: 900px; line-height: 1.75; color: #1f2937; padding: 0 16px; }
+    h1, h2 { color: #111827; }
+    h1 { font-size: 26px; margin-bottom: 8px; }
+    h2 { margin-top: 24px; font-size: 18px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+    .muted { color: #6b7280; font-size: 14px; margin-bottom: 20px; }
+    .card { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+    ul { margin: 8px 0 0; padding-left: 1.2em; }
+    li { margin: 6px 0; }
+    code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.92em; }
+  </style>
+</head>
+<body>
+  <h1>「今日重心」如何生成</h1>
+  <p class="muted">本页说明执行面板中「今日重心」列表的过滤与排序逻辑，对应 GTD、艾森豪威尔矩阵与 RACI 责任模型。</p>
+
+  <h2>一、为何不是「全部任务」</h2>
+  <p>「今日重心」是经过算法筛选的<strong>优先级队列</strong>，用于减少噪音、聚焦当下最值得推进的项；完整未完成任务请从「全部任务」进入收件箱等视图查看。</p>
+
+  <h2>二、入选条件（满足任一且未完成、未取消）</h2>
+  <div class="card">
+    <ul>
+      <li><strong>时间</strong>：截止日期为<strong>今天或更早</strong>（含逾期与今日到期）。</li>
+      <li><strong>优先级</strong>：影响与紧急度组合为 <code>Urgent &amp; Important</code>（紧急且重要）的任务，<strong>无论截止日期</strong>都会进入。</li>
+      <li><strong>RACI</strong>：你的角色为 <code>Accountable</code>（最终责任人，含 RACI-A）时，该项会进入重心区，便于对「谁来解释结果」负责。</li>
+    </ul>
+  </div>
+
+  <h2>三、排序规则</h2>
+  <div class="card">
+    <ul>
+      <li>优先按象限标签：<code>Urgent &amp; Important</code> → <code>Not Urgent &amp; Important</code> → 其余。</li>
+      <li>同梯队内：<strong>逾期</strong>优先于<strong>今日</strong>，再参考影响与紧急度之和、截止日期。</li>
+    </ul>
+  </div>
+
+  <h2>四、交互</h2>
+  <p>在列表中勾选完成时，任务会立即从「今日重心」消失，形成列表收缩的正向反馈。</p>
+</body>
+</html>

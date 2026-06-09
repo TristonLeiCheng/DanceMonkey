@@ -1,0 +1,58 @@
+## .NET / Visual Studio build artifacts
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+
+## Publish output
+publish/
+[Pp]ublish/
+PublishProfiles/
+*.azurePubxml
+
+## Visual Studio / Rider / VS Code user-specific
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Build logs
+build_output.txt
+msbuild.log
+*.binlog
+
+## Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## .NET build outputs
+*.dll.config
+*.pdb
+*.cache
+
+## OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+## Python (tools / ppt_scaffold)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+## Misc
+*.tmp
+*.bak

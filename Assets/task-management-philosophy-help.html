@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>任务管理模块设计理念</title>
+  <style>
+    body { font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; margin: 24px auto; max-width: 980px; line-height: 1.7; color: #1f2937; padding: 0 16px; }
+    h1, h2, h3 { color: #111827; }
+    h1 { font-size: 28px; margin-bottom: 10px; }
+    h2 { margin-top: 26px; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+    .card { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+    ul { margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; vertical-align: top; }
+    th { background: #f3f4f6; }
+    .muted { color: #6b7280; }
+  </style>
+</head>
+<body>
+  <h1>任务管理模块设计理念</h1>
+  <p class="muted">用于说明本系统“战略任务管理模块”的理论基础、功能结构与行为引导逻辑。</p>
+
+  <h2>一、设计哲学与方法论</h2>
+  <div class="card">
+    <ul>
+      <li><strong>GTD (Getting Things Done)</strong>：通过外部系统承接任务，减轻蔡格尼克效应带来的心理占用。</li>
+      <li><strong>艾森豪威尔矩阵</strong>：区分“紧急”与“重要”，避免持续陷入低价值救火。</li>
+      <li><strong>OKRs</strong>：确保任务与目标、关键结果对齐，强化结果导向执行。</li>
+    </ul>
+  </div>
+
+  <h2>二、功能架构图景</h2>
+  <h3>1) 任务捕获层（Capture &amp; Input）</h3>
+  <ul>
+    <li>全渠道接入：邮件、IM 消息、会议纪要等来源。</li>
+    <li>来源标签：<code>External</code> / <code>Internal-Push</code> / <code>Internal-Self</code> / <code>Routine</code>。</li>
+  </ul>
+
+  <h3>2) 任务结构层（Hierarchy &amp; Structure）</h3>
+  <ul>
+    <li><strong>Goal/Project</strong>：阶段性目标产出。</li>
+    <li><strong>Task</strong>：带截止时间的可执行动作。</li>
+    <li><strong>Sub-task</strong>：15~30 分钟粒度拆分。</li>
+    <li><strong>Inbox</strong>：未分类待澄清项，遵循 2 分钟原则。</li>
+  </ul>
+
+  <h3>3) 优先级决策层（Priority Engine）</h3>
+  <ul>
+    <li><strong>Impact</strong>：对业务/KPI 的影响。</li>
+    <li><strong>Urgency</strong>：时间限制压力。</li>
+    <li><strong>RACI</strong>：A(负责) / R(执行) / I(知会)。</li>
+  </ul>
+
+  <h2>三、核心视图矩阵</h2>
+  <table>
+    <thead>
+      <tr><th>视图</th><th>方法依据</th><th>典型场景</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>四象限看板</td><td>艾森豪威尔矩阵</td><td>每日排产与优先级再平衡</td></tr>
+      <tr><td>甘特视图</td><td>关键路径法（CPM）</td><td>多任务排期与依赖管理</td></tr>
+      <tr><td>心流清单</td><td>专注执行/番茄钟</td><td>高能量时段处理高认知任务</td></tr>
+      <tr><td>回顾视窗</td><td>复盘与反思</td><td>周报、复盘、阻塞分析</td></tr>
+    </tbody>
+  </table>
+
+  <h2>四、外企协作与合规扩展</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Audit Trail</strong>：记录任务状态变更与关键操作。</li>
+      <li><strong>Meeting to Action</strong>：把会议纪要快速转换为行动项。</li>
+      <li><strong>Done-Update</strong>：完成后向相关方同步闭环。</li>
+    </ul>
+  </div>
+
+  <h2>五、心理学融合策略</h2>
+  <ul>
+    <li><strong>反焦虑</strong>：执行视图降低未来噪声，聚焦今日关键任务。</li>
+    <li><strong>延期引导</strong>：任务延期时强调原因分析（资源/估时）而非单纯红字惩罚。</li>
+    <li><strong>Q2 激励</strong>：鼓励“重要不紧急”任务，避免长期战略被日常琐事挤压。</li>
+  </ul>
+</body>
+</html>

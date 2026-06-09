@@ -1,0 +1,605 @@
+﻿<UserControl x:Class="DesktopAssistant.Views.MeetingAssistantView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+             Background="{StaticResource BrushPageBg}">
+    <UserControl.Resources>
+        <Style x:Key="HubTabItem" TargetType="TabItem">
+            <Setter Property="Foreground" Value="{StaticResource BrushTextSecondary}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="Margin" Value="0,0,6,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Root"
+                                Background="{StaticResource BrushSurface}"
+                                BorderBrush="{StaticResource BrushBorder}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushSurfaceMuted}"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource BrushBorderFocus}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushSurfaceMuted}"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource BrushBorderFocus}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HubTabControl" TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource HubTabItem}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TabPanel Grid.Row="0"
+                                      IsItemsHost="True"
+                                      Panel.ZIndex="1"
+                                      Background="Transparent"
+                                      Margin="0,0,0,4"/>
+                            <ContentPresenter Grid.Row="1"
+                                              ContentSource="SelectedContent"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <TabControl x:Name="HubTabs" Style="{StaticResource HubTabControl}" Margin="14,12,14,12" SelectionChanged="HubTabs_OnSelectionChanged">
+
+        <!-- ═══════════ 工作台 ═══════════ -->
+        <TabItem Header="📝 工作台">
+            <Grid Margin="0,8,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- 模板 / 项目 / 标题 -->
+                <Border Grid.Row="0" Background="{StaticResource BrushSurface}" CornerRadius="10" Padding="14,12"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="180"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="模板" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{StaticResource BrushTextSecondary}" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="TemplateCombo" Grid.Column="1" Style="{StaticResource UiComboBox}"
+                                  SelectionChanged="TemplateCombo_OnSelectionChanged" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="项目" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{StaticResource BrushTextSecondary}" Margin="16,0,8,0"/>
+                        <ComboBox x:Name="ProjectCombo" Grid.Column="3" Style="{StaticResource UiComboBox}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="4" Text="主题" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{StaticResource BrushTextSecondary}" Margin="16,0,8,0"/>
+                        <TextBox x:Name="MeetingTitleBox" Grid.Column="5" Style="{StaticResource UiTextBox}"
+                                 Text="会议记录" VerticalContentAlignment="Center"/>
+                    </Grid>
+                </Border>
+
+                <!-- 主体：议程 + 手记 并排（+ AI 纪要） -->
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition x:Name="SummaryColumn" Width="0"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 议程 -->
+                    <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="10"
+                            BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Padding="14,10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="📋 议程" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource BrushTextPrimary}"/>
+                                        <TextBlock Text="  每行一项，可由模板预填" FontSize="11.5"
+                                                   Foreground="{StaticResource BrushTextMuted}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <Button x:Name="BtnPrepPack" Content="🧭 AI 会前准备" Style="{StaticResource UiBtnSecondary}"
+                                            Padding="8,3" FontSize="11.5" HorizontalAlignment="Right" Click="BtnPrepPack_OnClick"
+                                            ToolTip="根据所选项目近期会议，AI 生成本次议程草稿"/>
+                                </Grid>
+                            </Border>
+                            <TextBox x:Name="AgendaBox" Grid.Row="1" AcceptsReturn="True"
+                                     TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="Transparent"
+                                     BorderThickness="0" Padding="14,12" FontSize="13"
+                                     Foreground="{StaticResource BrushTextPrimary}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- 会上手记 -->
+                    <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="10" Margin="10,0,0,0"
+                            BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Padding="14,10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                                <TextBlock Text="✍ 会上手记（手动速记，会并入纪要）" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextPrimary}"/>
+                            </Border>
+                            <TextBox x:Name="QuickNotesBox" Grid.Row="1" AcceptsReturn="True"
+                                     TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="Transparent"
+                                     BorderThickness="0" Padding="14,12" FontSize="13"
+                                     Foreground="{StaticResource BrushTextPrimary}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- AI 纪要 -->
+                    <Border x:Name="SummaryPanel" Grid.Column="2" Background="{StaticResource BrushSurface}" CornerRadius="10"
+                            Margin="10,0,0,0" Visibility="Collapsed"
+                            BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Padding="14,10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                                <TextBlock Text="📋 会议纪要" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextPrimary}"/>
+                            </Border>
+                            <wv2:WebView2 x:Name="SummaryBox" Grid.Row="1"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- 底部操作 -->
+                <Border Grid.Row="2" Margin="0,10,0,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                        <Button x:Name="BtnSummary" Content="📋 生成纪要" Style="{StaticResource UiBtnPrimary}" Padding="14,8"
+                                FontSize="12.5" IsEnabled="False" Click="BtnSummary_OnClick"/>
+                        <Button x:Name="BtnSave" Content="💾 保存到会议库" Style="{StaticResource UiBtnSecondary}" Padding="14,8"
+                                FontSize="12.5" Margin="8,0,0,0" IsEnabled="False" Click="BtnSave_OnClick"/>
+                        <Button x:Name="BtnCopy" Content="📄 复制全文" Style="{StaticResource UiBtnSecondary}" Padding="14,8"
+                                FontSize="12.5" Margin="8,0,0,0" IsEnabled="False" Click="BtnCopy_OnClick"/>
+                        <Button x:Name="BtnClear" Content="🗑 清空" Style="{StaticResource UiBtnSecondary}" Padding="14,8"
+                                FontSize="12.5" Margin="8,0,0,0" IsEnabled="False" Click="BtnClear_OnClick"/>
+                        <TextBlock x:Name="ErrorText" Text="" Foreground="#E53935" FontSize="12" VerticalAlignment="Center"
+                                   Margin="20,0,0,0" TextWrapping="Wrap" MaxWidth="380"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- ═══════════ 日历 ═══════════ -->
+        <TabItem Header="📅 日历">
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="300"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="10"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Padding="14">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,12">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                <Button x:Name="BtnCalPrev" Content="‹" Style="{StaticResource UiBtnSecondary}"
+                                        Padding="14,4" FontSize="16" Click="BtnCalPrev_OnClick"/>
+                                <TextBlock x:Name="CalMonthLabel" Text="" FontSize="16" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" Margin="14,0" MinWidth="130" TextAlignment="Center"
+                                           Foreground="{StaticResource BrushTextPrimary}"/>
+                                <Button x:Name="BtnCalNext" Content="›" Style="{StaticResource UiBtnSecondary}"
+                                        Padding="14,4" FontSize="16" Click="BtnCalNext_OnClick"/>
+                                <Button x:Name="BtnCalToday" Content="今天" Style="{StaticResource UiBtnSecondary}"
+                                        Padding="12,6" FontSize="12" Margin="12,0,0,0" Click="BtnCalToday_OnClick"/>
+                            </StackPanel>
+                            <TextBlock x:Name="CalSummaryText" Text="" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       FontSize="12" Foreground="{StaticResource BrushTextMuted}"/>
+                        </Grid>
+
+                        <UniformGrid Grid.Row="1" Columns="7" Margin="0,0,0,6">
+                            <TextBlock Text="一" TextAlignment="Center" FontSize="12" Foreground="{StaticResource BrushTextSecondary}"/>
+                            <TextBlock Text="二" TextAlignment="Center" FontSize="12" Foreground="{StaticResource BrushTextSecondary}"/>
+                            <TextBlock Text="三" TextAlignment="Center" FontSize="12" Foreground="{StaticResource BrushTextSecondary}"/>
+                            <TextBlock Text="四" TextAlignment="Center" FontSize="12" Foreground="{StaticResource BrushTextSecondary}"/>
+                            <TextBlock Text="五" TextAlignment="Center" FontSize="12" Foreground="{StaticResource BrushTextSecondary}"/>
+                            <TextBlock Text="六" TextAlignment="Center" FontSize="12" Foreground="{StaticResource BrushAccent}"/>
+                            <TextBlock Text="日" TextAlignment="Center" FontSize="12" Foreground="{StaticResource BrushAccent}"/>
+                        </UniformGrid>
+
+                        <UniformGrid x:Name="CalendarDaysGrid" Grid.Row="2" Columns="7"/>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="10" Margin="10,0,0,0"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Padding="14,10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                            <TextBlock x:Name="CalDayTitle" Text="点击日期查看当天会议" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource BrushTextPrimary}"/>
+                        </Border>
+                        <ListBox x:Name="CalDayMeetingList" Grid.Row="1" BorderThickness="0" Background="Transparent"
+                                 Padding="6" SelectionChanged="CalDayMeetingList_OnSelectionChanged"/>
+                        <Border Grid.Row="2" Padding="10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,1,0,0">
+                            <Button x:Name="BtnCalSchedule" Content="＋ 在选定日排会" Style="{StaticResource UiBtnSecondary}"
+                                    Padding="12,7" FontSize="12" HorizontalAlignment="Stretch" Click="BtnCalSchedule_OnClick"/>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- ═══════════ 会议库 ═══════════ -->
+        <TabItem Header="🗂 会议库">
+            <Grid Margin="0,8,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Background="{StaticResource BrushSurface}" CornerRadius="10" Padding="14,12"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="项目筛选" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{StaticResource BrushTextSecondary}" Margin="0,0,8,0"/>
+                        <ComboBox x:Name="LibProjectFilter" Grid.Column="1" Style="{StaticResource UiComboBox}"
+                                  SelectionChanged="LibProjectFilter_OnSelectionChanged" VerticalAlignment="Center"/>
+                        <Button Grid.Column="2" x:Name="BtnLibRefresh" Content="↺ 刷新" Style="{StaticResource UiBtnSecondary}"
+                                Padding="12,7" FontSize="12" Margin="12,0,0,0" Click="BtnLibRefresh_OnClick"/>
+                        <TextBlock Grid.Column="4" x:Name="LibStatsText" Text="" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{StaticResource BrushTextMuted}"/>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="320"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="10"
+                            BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ListBox x:Name="LibMeetingList" Grid.Row="0" BorderThickness="0" Background="Transparent"
+                                     Padding="6" SelectionChanged="LibMeetingList_OnSelectionChanged"/>
+                            <Border Grid.Row="1" Padding="10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,1,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="新建项目" FontSize="12" Foreground="{StaticResource BrushTextSecondary}" Margin="0,0,0,6"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="NewProjectNameBox" Grid.Column="0" Style="{StaticResource UiTextBox}"/>
+                                        <Button Grid.Column="1" x:Name="BtnAddProject" Content="添加" Style="{StaticResource UiBtnSecondary}"
+                                                Padding="12,7" FontSize="12" Margin="8,0,0,0" Click="BtnAddProject_OnClick"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="10" Margin="10,0,0,0"
+                            BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Padding="14,10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                                <TextBlock x:Name="LibDetailTitle" Text="选择左侧会议查看详情" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextPrimary}"/>
+                            </Border>
+                            <wv2:WebView2 x:Name="LibDetailBox" Grid.Row="1"/>
+                            <Border Grid.Row="2" Padding="12,8" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,1,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="BtnLibEmail" Content="✉ 会后邮件" Style="{StaticResource UiBtnSecondary}"
+                                            Padding="10,5" FontSize="12" Margin="0,0,8,0" Click="BtnLibEmail_OnClick"
+                                            ToolTip="把本场会议纪要送入 AI 写邮件，生成会后纪要邮件"/>
+                                    <Button x:Name="BtnLibSyncTasks" Content="✅ 行动项入待办" Style="{StaticResource UiBtnSecondary}"
+                                            Padding="10,5" FontSize="12" Click="BtnLibSyncTasks_OnClick"
+                                            ToolTip="AI 抽取行动项并写入 ZenTask 待办"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+        </TabItem>
+
+        <!-- ═══════════ 例会 ═══════════ -->
+        <TabItem Header="🔁 例会">
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="10"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Padding="14,10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                            <TextBlock Text="🔁 例会系列" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource BrushTextPrimary}"/>
+                        </Border>
+                        <ListBox x:Name="SeriesList" Grid.Row="1" BorderThickness="0" Background="Transparent"
+                                 Padding="6" SelectionChanged="SeriesList_OnSelectionChanged"/>
+                        <Border Grid.Row="2" Padding="10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,1,0,0">
+                            <Button x:Name="BtnSeriesNew" Content="＋ 新建例会" Style="{StaticResource UiBtnSecondary}"
+                                    Padding="12,7" FontSize="12" HorizontalAlignment="Stretch" Click="BtnSeriesNew_OnClick"/>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="10" Margin="10,0,0,0"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Padding="16">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Text="例会设置" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,12"/>
+
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="名称" Style="{StaticResource UiFieldLabel}"/>
+                                    <TextBox x:Name="SeriesNameBox" Style="{StaticResource UiTextBox}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="项目" Style="{StaticResource UiFieldLabel}"/>
+                                    <ComboBox x:Name="SeriesProjectCombo" Style="{StaticResource UiComboBox}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="重复方式" Style="{StaticResource UiFieldLabel}"/>
+                                    <ComboBox x:Name="SeriesRecurrenceCombo" Style="{StaticResource UiComboBox}"
+                                              SelectionChanged="SeriesRecurrenceCombo_OnSelectionChanged"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="模板" Style="{StaticResource UiFieldLabel}"/>
+                                    <ComboBox x:Name="SeriesTemplateCombo" Style="{StaticResource UiComboBox}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <StackPanel x:Name="SeriesWeekdayPanel" Margin="0,0,0,8">
+                                <TextBlock Text="星期（可多选）" Style="{StaticResource UiFieldLabel}"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <CheckBox x:Name="Dow1" Content="一" Margin="0,0,12,0" Foreground="{StaticResource BrushTextPrimary}"/>
+                                    <CheckBox x:Name="Dow2" Content="二" Margin="0,0,12,0" Foreground="{StaticResource BrushTextPrimary}"/>
+                                    <CheckBox x:Name="Dow3" Content="三" Margin="0,0,12,0" Foreground="{StaticResource BrushTextPrimary}"/>
+                                    <CheckBox x:Name="Dow4" Content="四" Margin="0,0,12,0" Foreground="{StaticResource BrushTextPrimary}"/>
+                                    <CheckBox x:Name="Dow5" Content="五" Margin="0,0,12,0" Foreground="{StaticResource BrushTextPrimary}"/>
+                                    <CheckBox x:Name="Dow6" Content="六" Margin="0,0,12,0" Foreground="{StaticResource BrushAccent}"/>
+                                    <CheckBox x:Name="Dow0" Content="日" Margin="0,0,12,0" Foreground="{StaticResource BrushAccent}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel x:Name="SeriesMonthdayPanel" Margin="0,0,0,8" Visibility="Collapsed">
+                                <TextBlock Text="每月第几天 (1-31)" Style="{StaticResource UiFieldLabel}"/>
+                                <TextBox x:Name="SeriesDayOfMonthBox" Style="{StaticResource UiTextBox}" Width="90" HorizontalAlignment="Left"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <StackPanel Margin="0,0,18,0">
+                                    <TextBlock Text="时（0-23）" Style="{StaticResource UiFieldLabel}"/>
+                                    <TextBox x:Name="SeriesHourBox" Style="{StaticResource UiTextBox}" Width="70"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,0,18,0">
+                                    <TextBlock Text="分（0-59）" Style="{StaticResource UiFieldLabel}"/>
+                                    <TextBox x:Name="SeriesMinuteBox" Style="{StaticResource UiTextBox}" Width="70"/>
+                                </StackPanel>
+                                <StackPanel Margin="0,0,18,0">
+                                    <TextBlock Text="时长（分钟）" Style="{StaticResource UiFieldLabel}"/>
+                                    <TextBox x:Name="SeriesDurationBox" Style="{StaticResource UiTextBox}" Width="90"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="提前提醒（分钟）" Style="{StaticResource UiFieldLabel}"/>
+                                    <TextBox x:Name="SeriesReminderBox" Style="{StaticResource UiTextBox}" Width="110"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Margin="0,0,0,8">
+                                <TextBlock Text="默认议程（每行一项）" Style="{StaticResource UiFieldLabel}"/>
+                                <TextBox x:Name="SeriesAgendaBox" Style="{StaticResource UiTextBox}" TextWrapping="Wrap"
+                                         AcceptsReturn="True" MinHeight="70" VerticalScrollBarVisibility="Auto"/>
+                            </StackPanel>
+
+                            <CheckBox x:Name="SeriesActiveCheck" Content="启用该例会" Margin="0,0,0,12"
+                                      Foreground="{StaticResource BrushTextPrimary}" IsChecked="True"/>
+
+                            <Border Background="{StaticResource BrushSurfaceMuted}" CornerRadius="8" Padding="12" Margin="0,0,0,12">
+                                <TextBlock x:Name="SeriesNextText" Text="下次发生：保存或预览后显示" FontSize="12"
+                                           Foreground="{StaticResource BrushTextSecondary}" TextWrapping="Wrap"/>
+                            </Border>
+
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button x:Name="BtnSeriesPreview" Content="预览下次时间" Style="{StaticResource UiBtnSecondary}"
+                                        Padding="12,7" FontSize="12" Margin="0,0,8,0" Click="BtnSeriesPreview_OnClick"/>
+                                <Button x:Name="BtnSeriesStart" Content="▶ 开始本期" Style="{StaticResource UiBtnSuccess}"
+                                        Padding="12,7" FontSize="12" Margin="0,0,8,0" Click="BtnSeriesStart_OnClick"/>
+                                <Button x:Name="BtnSeriesDelete" Content="删除" Style="{StaticResource UiBtnSecondary}"
+                                        Padding="12,7" FontSize="12" Margin="0,0,8,0" Click="BtnSeriesDelete_OnClick"/>
+                                <Button x:Name="BtnSeriesSave" Content="保存例会" Style="{StaticResource UiBtnPrimary}"
+                                        Padding="14,7" FontSize="12" Click="BtnSeriesSave_OnClick"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- ═══════════ 模板 ═══════════ -->
+        <TabItem Header="📐 模板">
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="300"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="10"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                    <ListBox x:Name="TplList" BorderThickness="0" Background="Transparent" Padding="6"
+                             SelectionChanged="TplList_OnSelectionChanged"/>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="10" Margin="10,0,0,0"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Padding="16">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="新建 / 编辑模板" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,10"/>
+                        <Grid Grid.Row="1" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="模板名称" Style="{StaticResource UiFieldLabel}"/>
+                                <TextBox x:Name="TplNameBox" Style="{StaticResource UiTextBox}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="分类" Style="{StaticResource UiFieldLabel}"/>
+                                <TextBox x:Name="TplCategoryBox" Style="{StaticResource UiTextBox}"/>
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel Grid.Row="2" Margin="0,0,0,8">
+                            <TextBlock Text="议程模板（每行一项）" Style="{StaticResource UiFieldLabel}"/>
+                            <TextBox x:Name="TplAgendaBox" Style="{StaticResource UiTextBox}" TextWrapping="Wrap"
+                                     AcceptsReturn="True" MinHeight="80" VerticalScrollBarVisibility="Auto"/>
+                        </StackPanel>
+                        <StackPanel Grid.Row="3" Margin="0,0,0,8">
+                            <TextBlock Text="专属 AI 纪要提示词（可留空用默认）" Style="{StaticResource UiFieldLabel}"/>
+                            <TextBox x:Name="TplPromptBox" Style="{StaticResource UiTextBox}" TextWrapping="Wrap"
+                                     AcceptsReturn="True" MinHeight="60" VerticalScrollBarVisibility="Auto"/>
+                        </StackPanel>
+                        <wv2:WebView2 x:Name="TplDetailBox" Grid.Row="4" Margin="0,0,0,10"/>
+                        <Button Grid.Row="5" x:Name="BtnAddTemplate" Content="保存模板" Style="{StaticResource UiBtnPrimary}"
+                                HorizontalAlignment="Right" MinWidth="110" Click="BtnAddTemplate_OnClick"/>
+                    </Grid>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- ═══════════ 统计 ═══════════ -->
+        <TabItem Header="📊 统计">
+            <Grid Margin="2,12,2,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="380"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 左：全局看板 -->
+                <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,0,4,0">
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock Text="📊 全局看板" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
+                            <Button x:Name="BtnDashRefresh" Content="↺ 刷新" Style="{StaticResource UiBtnSecondary}"
+                                    Padding="10,4" FontSize="12" HorizontalAlignment="Right" Click="BtnDashRefresh_OnClick"/>
+                        </Grid>
+                        <WrapPanel x:Name="DashCardsHost"/>
+                        <TextBlock Text="🏆 项目排行（按会议时长）" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource BrushTextPrimary}" Margin="2,16,0,8"/>
+                        <StackPanel x:Name="DashProjectsHost"/>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- 右：跨会议检索 -->
+                <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="10" Margin="10,0,0,0"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                    <Grid Margin="14,12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="🔍 跨会议检索" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource BrushTextPrimary}" Margin="0,0,0,8"/>
+                        <TextBox x:Name="DashSearchBox" Grid.Row="1" Style="{StaticResource UiTextBox}"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,8"
+                                 ToolTip="输入关键词或问题，如：预算的结论是什么"/>
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+                            <Button x:Name="BtnDashKeyword" Content="🔍 关键词" Style="{StaticResource UiBtnSecondary}"
+                                    Padding="10,5" FontSize="12" Margin="0,0,8,0" Click="BtnDashKeyword_OnClick"/>
+                            <Button x:Name="BtnDashAsk" Content="🤖 AI 问答" Style="{StaticResource UiBtnPrimary}"
+                                    Padding="10,5" FontSize="12" Click="BtnDashAsk_OnClick"/>
+                        </StackPanel>
+                        <TextBox x:Name="DashSearchResult" Grid.Row="3" IsReadOnly="True" AcceptsReturn="True"
+                                 TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                 Style="{StaticResource UiResultBox}" FontSize="12.5"/>
+                    </Grid>
+                </Border>
+            </Grid>
+        </TabItem>
+    </TabControl>
+</UserControl>

@@ -1,0 +1,148 @@
+<UserControl x:Class="DesktopAssistant.Views.CodexProxyView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent"
+             Loaded="CodexProxyView_OnLoaded">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0">
+        <StackPanel Margin="4,0,4,20" MaxWidth="860">
+            <StackPanel Margin="0,0,0,16">
+                <TextBlock Text="DM Proxy" Style="{StaticResource UiPageTitle}"/>
+                <TextBlock Text="在本机暴露 OpenAI Responses 接口，并转发到公司的 Chat Completions 平台。"
+                           Style="{StaticResource UiPageSubtitle}"/>
+            </StackPanel>
+
+            <Border Style="{StaticResource UiCard}">
+                <StackPanel>
+                    <TextBlock Text="运行状态" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border x:Name="StatusBadge"
+                                Background="{StaticResource BrushSurfaceMuted}"
+                                BorderBrush="{StaticResource BrushBorder}"
+                                BorderThickness="1"
+                                CornerRadius="999"
+                                Padding="12,6">
+                            <TextBlock x:Name="StatusText"
+                                       Text="未启动"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource BrushTextPrimary}"/>
+                        </Border>
+                        <TextBlock x:Name="StatusDetailText"
+                                   Text="点击启动后，Codex 可连接到本地 /v1/responses。"
+                                   Style="{StaticResource UiHint}"
+                                   Margin="12,0,0,0"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Grid Margin="0,18,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Codex Base URL" Style="{StaticResource UiHint}" Margin="0,0,12,8"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="BaseUrlText" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Responses 地址" Style="{StaticResource UiHint}" Margin="0,0,12,8"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="ResponsesUrlText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="上游地址" Style="{StaticResource UiHint}" Margin="0,0,12,0"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="UpstreamText" TextWrapping="Wrap"/>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                        <Button x:Name="StartBtn" Content="启动 DM Proxy" Style="{StaticResource UiBtnPrimary}"
+                                MinWidth="118" Margin="0,0,10,0" Click="StartBtn_OnClick"/>
+                        <Button x:Name="StopBtn" Content="停止" Style="{StaticResource UiBtnSecondary}"
+                                MinWidth="88" Margin="0,0,10,0" Click="StopBtn_OnClick"/>
+                        <Button x:Name="CopyBaseUrlBtn" Content="复制 Base URL" Style="{StaticResource UiBtnSecondary}"
+                                MinWidth="126" Click="CopyBaseUrlBtn_OnClick"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UiCard}">
+                <StackPanel>
+                    <TextBlock Text="中转配置" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,12"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="监听 Host" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="HostBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="监听端口" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="PortBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="上游 Chat 地址" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="EndpointBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="上游 API Key" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <PasswordBox Grid.Row="3" Grid.Column="1" x:Name="ApiKeyBox"
+                                     Background="{StaticResource BrushSurfaceMuted}"
+                                     Foreground="{StaticResource BrushTextPrimary}"
+                                     BorderBrush="{StaticResource BrushBorder}"
+                                     BorderThickness="1"
+                                     Padding="10,7"
+                                     FontSize="13.5"
+                                     Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="默认模型" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="ModelBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="超时（秒）" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <TextBox Grid.Row="5" Grid.Column="1" x:Name="TimeoutBox" Style="{StaticResource UiTextBox}"/>
+                    </Grid>
+
+                    <TextBlock Text="上游地址可填写 /v1 或完整 /v1/chat/completions；API Key 留空时，会使用 Codex 请求里的 Authorization Bearer。"
+                               Style="{StaticResource UiHint}"
+                               Margin="0,12,0,0"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UiCard}">
+                <StackPanel>
+                    <TextBlock Text="Codex 连接方式" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,12"/>
+                    <TextBox x:Name="EnvBox"
+                             Style="{StaticResource UiResultBox}"
+                             MinHeight="82"
+                             IsReadOnly="True"
+                             TextWrapping="NoWrap"
+                             HorizontalScrollBarVisibility="Auto"
+                             VerticalScrollBarVisibility="Disabled"/>
+                    <TextBlock Text="启动后在 Codex 中使用上面的 OPENAI_BASE_URL；如果已在本页配置上游 Key，Codex 侧的 Key 可使用任意非空占位值。"
+                               Style="{StaticResource UiHint}"
+                               Margin="0,10,0,0"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UiCard}">
+                <StackPanel>
+                    <TextBlock Text="日志" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,12"/>
+                    <TextBox x:Name="LogBox"
+                             Style="{StaticResource UiResultBox}"
+                             MinHeight="150"
+                             IsReadOnly="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

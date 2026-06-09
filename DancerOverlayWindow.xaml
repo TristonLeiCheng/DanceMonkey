@@ -1,0 +1,176 @@
+﻿<Window x:Class="DesktopAssistant.DancerOverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Dancer Overlay"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        Focusable="False"
+        SnapsToDevicePixels="True">
+    <Window.Resources>
+        <!-- 整条状态条文字样式 -->
+        <Style x:Key="StateBadge" TargetType="Border">
+            <Setter Property="Background" Value="#B0101924"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Margin" Value="16"/>
+            <Setter Property="Opacity" Value="0.92"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <!-- 舞台（与主屏工作区同尺寸，鼠标穿透） -->
+        <Canvas x:Name="Stage">
+            <!-- 阴影 -->
+            <Ellipse x:Name="DancerShadow" Width="70" Height="10" Fill="#55000000"
+                     Canvas.Left="0" Canvas.Top="0"/>
+
+            <!-- 角色根容器：Canvas.Left / Canvas.Top 通过代码实时更新（世界坐标） -->
+            <Canvas x:Name="DancerRoot" Canvas.Left="200" Canvas.Top="400"
+                    MouseLeftButtonDown="DancerRoot_MouseLeftButtonDown">
+                <Canvas.RenderTransform>
+                    <TransformGroup>
+                        <!-- 整体翻转（翻跟头 / 攻击前跳） -->
+                        <RotateTransform x:Name="DancerFlipRotate" Angle="0" CenterX="35" CenterY="90"/>
+                        <!-- 整体上下跳动 -->
+                        <TranslateTransform x:Name="DancerBounce" Y="0"/>
+                        <!-- 面向（1 向右, -1 向左）——通过 ScaleX 实现镜像 -->
+                        <ScaleTransform x:Name="DancerFacing" ScaleX="1" ScaleY="1" CenterX="35" CenterY="45"/>
+                    </TransformGroup>
+                </Canvas.RenderTransform>
+
+                <!-- 头 -->
+                <Ellipse Canvas.Left="26" Canvas.Top="0" Width="18" Height="18"
+                         Fill="#FFE9CC" Stroke="#FFFFFF" StrokeThickness="0.8"/>
+                <!-- 头发 -->
+                <Path Fill="#3A3328"
+                      Data="M26,4 Q35,-3 44,4 L44,9 Q40,6 35,7 Q30,6 26,9 Z"/>
+                <!-- 眼睛 -->
+                <Ellipse Canvas.Left="31" Canvas.Top="7" Width="2.2" Height="2.2" Fill="#202020"/>
+                <Ellipse Canvas.Left="37.5" Canvas.Top="7" Width="2.2" Height="2.2" Fill="#202020"/>
+                <!-- 微笑 -->
+                <Path Stroke="#202020" StrokeThickness="1" Data="M32,12 Q35,14.5 38,12"/>
+
+                <!-- 颈 -->
+                <Line x:Name="NeckVisual" X1="35" Y1="18" X2="35" Y2="24" Stroke="#FFE9CC" StrokeThickness="3"/>
+
+                <!-- 躯干 -->
+                <Rectangle x:Name="BodyVisual" Canvas.Left="27" Canvas.Top="24" Width="16" Height="38"
+                           Fill="#FF6C8BE8" RadiusX="5" RadiusY="5"/>
+                <!-- 领口装饰 -->
+                <Path Stroke="#80FFFFFF" StrokeThickness="1" Data="M28,26 L35,31 L42,26"/>
+
+                <!-- 左肩关节 -->
+                <Canvas Canvas.Left="28" Canvas.Top="26">
+                    <Canvas.RenderTransform>
+                        <RotateTransform x:Name="LeftShoulderRot" Angle="-20" CenterX="0" CenterY="0"/>
+                    </Canvas.RenderTransform>
+                    <Line x:Name="LeftUpperArmLine" X1="0" Y1="0" X2="0" Y2="18" Stroke="#FFE9CC" StrokeThickness="3.2"/>
+                    <Canvas Canvas.Left="0" Canvas.Top="18">
+                        <Canvas.RenderTransform>
+                            <RotateTransform x:Name="LeftElbowRot" Angle="25" CenterX="0" CenterY="0"/>
+                        </Canvas.RenderTransform>
+                        <Line x:Name="LeftForearmLine" X1="0" Y1="0" X2="0" Y2="16" Stroke="#FFE9CC" StrokeThickness="3"/>
+                        <Ellipse x:Name="LeftHandEllipse" Canvas.Left="-3" Canvas.Top="15" Width="6" Height="6"
+                                 Fill="#FFE9CC" Stroke="#E0C8A8" StrokeThickness="0.6"/>
+                    </Canvas>
+                </Canvas>
+
+                <!-- 右肩关节 -->
+                <Canvas Canvas.Left="42" Canvas.Top="26">
+                    <Canvas.RenderTransform>
+                        <RotateTransform x:Name="RightShoulderRot" Angle="20" CenterX="0" CenterY="0"/>
+                    </Canvas.RenderTransform>
+                    <Line x:Name="RightUpperArmLine" X1="0" Y1="0" X2="0" Y2="18" Stroke="#FFE9CC" StrokeThickness="3.2"/>
+                    <Canvas Canvas.Left="0" Canvas.Top="18">
+                        <Canvas.RenderTransform>
+                            <RotateTransform x:Name="RightElbowRot" Angle="-25" CenterX="0" CenterY="0"/>
+                        </Canvas.RenderTransform>
+                        <Line x:Name="RightForearmLine" X1="0" Y1="0" X2="0" Y2="16" Stroke="#FFE9CC" StrokeThickness="3"/>
+                        <Ellipse x:Name="RightHandEllipse" Canvas.Left="-3" Canvas.Top="15" Width="6" Height="6"
+                                 Fill="#FFE9CC" Stroke="#E0C8A8" StrokeThickness="0.6"/>
+                    </Canvas>
+                </Canvas>
+
+                <!-- 左髋关节 -->
+                <Canvas Canvas.Left="30" Canvas.Top="62">
+                    <Canvas.RenderTransform>
+                        <RotateTransform x:Name="LeftHipRot" Angle="-5" CenterX="0" CenterY="0"/>
+                    </Canvas.RenderTransform>
+                    <Line x:Name="LeftUpperLegLine" X1="0" Y1="0" X2="0" Y2="22" Stroke="#FF3A4B78" StrokeThickness="3.8"/>
+                    <Canvas Canvas.Left="0" Canvas.Top="22">
+                        <Canvas.RenderTransform>
+                            <RotateTransform x:Name="LeftKneeRot" Angle="5" CenterX="0" CenterY="0"/>
+                        </Canvas.RenderTransform>
+                        <Line x:Name="LeftShinLine" X1="0" Y1="0" X2="0" Y2="22" Stroke="#FFE9CC" StrokeThickness="3.2"/>
+                        <Ellipse Canvas.Left="-5" Canvas.Top="20" Width="12" Height="5"
+                                 Fill="#222" Stroke="#000" StrokeThickness="0.4"/>
+                    </Canvas>
+                </Canvas>
+
+                <!-- 气泡对话框（宠物模式，默认隐藏） -->
+                <Border x:Name="SpeechBubble" Visibility="Collapsed"
+                        Canvas.Left="-30" Canvas.Top="-52"
+                        Background="#EEFFFFFF" CornerRadius="10"
+                        Padding="8,5" BorderBrush="#CCBBBBBB" BorderThickness="1">
+                    <TextBlock x:Name="SpeechText" FontSize="11" Foreground="#222222"
+                               TextAlignment="Center" MaxWidth="110" TextWrapping="Wrap"/>
+                </Border>
+                <!-- 气泡尾巴 -->
+                <Path x:Name="SpeechBubbleTail" Visibility="Collapsed"
+                      Canvas.Left="26" Canvas.Top="-10"
+                      Fill="#EEFFFFFF" Stroke="#CCBBBBBB" StrokeThickness="1"
+                      Data="M0,0 L8,-10 L16,0 Z"/>
+                <!-- Zzz 睡眠标识（宠物模式，默认隐藏） -->
+                <TextBlock x:Name="ZzzLabel" Visibility="Collapsed"
+                           Canvas.Left="44" Canvas.Top="-26"
+                           FontSize="14" FontWeight="Bold" Foreground="#88AACCFF"
+                           Text="z z z">
+                    <TextBlock.RenderTransform>
+                        <TranslateTransform x:Name="ZzzFloat" Y="0"/>
+                    </TextBlock.RenderTransform>
+                </TextBlock>
+
+                <!-- 右髋关节 -->
+                <Canvas Canvas.Left="40" Canvas.Top="62">
+                    <Canvas.RenderTransform>
+                        <RotateTransform x:Name="RightHipRot" Angle="5" CenterX="0" CenterY="0"/>
+                    </Canvas.RenderTransform>
+                    <Line x:Name="RightUpperLegLine" X1="0" Y1="0" X2="0" Y2="22" Stroke="#FF3A4B78" StrokeThickness="3.8"/>
+                    <Canvas Canvas.Left="0" Canvas.Top="22">
+                        <Canvas.RenderTransform>
+                            <RotateTransform x:Name="RightKneeRot" Angle="-5" CenterX="0" CenterY="0"/>
+                        </Canvas.RenderTransform>
+                        <Line x:Name="RightShinLine" X1="0" Y1="0" X2="0" Y2="22" Stroke="#FFE9CC" StrokeThickness="3.2"/>
+                        <Ellipse Canvas.Left="-5" Canvas.Top="20" Width="12" Height="5"
+                                 Fill="#222" Stroke="#000" StrokeThickness="0.4"/>
+                    </Canvas>
+                </Canvas>
+
+                <!-- ═══ 宠物皮肤图像（PNG，按需显隐，覆盖头部） ═══ -->
+                <Image x:Name="PetSkinImage"
+                       Canvas.Left="5" Canvas.Top="-22" Width="60" Height="60"
+                       Visibility="Collapsed" IsHitTestVisible="False"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       SnapsToDevicePixels="False"/>
+
+            </Canvas>
+
+            <!-- 状态徽章 -->
+            <Border x:Name="StateBadgeBorder" Style="{StaticResource StateBadge}"
+                    Canvas.Left="16" Canvas.Top="16">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="StateIcon" Text="🎭" FontSize="14" Foreground="#FFD0E8"
+                               Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="StateLabel" Text="舞蹈家进入桌面…" FontSize="12"
+                               Foreground="#E0FFFFFF" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Canvas>
+    </Grid>
+</Window>

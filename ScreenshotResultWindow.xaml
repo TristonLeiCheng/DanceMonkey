@@ -1,0 +1,39 @@
+<Window x:Class="DesktopAssistant.ScreenshotResultWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="截图完成"
+        Width="520"
+        MinHeight="420"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResizeWithGrip"
+        Background="{StaticResource BrushPageBg}">
+    <Border Padding="20" Background="{StaticResource BrushSurface}" CornerRadius="12" Margin="16">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*" MinHeight="180"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Text="可对截图进行以下操作" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,10"/>
+
+            <Border Grid.Row="1" Background="{StaticResource BrushSurfaceMuted}" CornerRadius="8" Padding="8" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="360">
+                    <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+                </ScrollViewer>
+            </Border>
+
+            <TextBlock x:Name="StatusText" Grid.Row="2" Text="" Style="{StaticResource UiHint}" Margin="0,10,0,0" TextWrapping="Wrap"/>
+
+            <WrapPanel Grid.Row="3" Margin="0,14,0,0" HorizontalAlignment="Left">
+                <Button Content="复制图片" Style="{StaticResource UiBtnSecondary}" Padding="12,8" Margin="0,0,8,8" Click="Copy_OnClick"/>
+                <Button Content="保存到笔记" Style="{StaticResource UiBtnSuccess}" Padding="12,8" Margin="0,0,8,8" Click="SaveToNote_OnClick"/>
+                <Button Content="AI 分析" Style="{StaticResource UiBtnAccentBlue}" Padding="12,8" Margin="0,0,8,8" Click="AiAnalyze_OnClick"/>
+                <Button Content="提取文字" Style="{StaticResource UiBtnPrimary}" Padding="12,8" Margin="0,0,8,8" Click="Ocr_OnClick"/>
+                <Button Content="关闭" Style="{StaticResource UiBtnSecondary}" Padding="12,8" Margin="0,0,0,8" Click="Close_OnClick"/>
+            </WrapPanel>
+        </Grid>
+    </Border>
+</Window>

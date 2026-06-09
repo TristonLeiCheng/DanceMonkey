@@ -1,0 +1,1998 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>个人主页编辑器</title>
+  <style>
+    :root {
+      /* === Champagne Noir palette === */
+      --bg: #0a0b0f;
+      --surface: #15171c;
+      --surface-2: #1c1f26;
+      --surface-3: #232730;
+      --input-bg: #0e0f14;
+
+      --line: rgba(255,255,255,.06);
+      --line-strong: rgba(255,255,255,.10);
+      --line-soft: rgba(255,255,255,.04);
+
+      --text: #ececf1;
+      --text-2: #b6bac5;
+      --muted: #7a8090;
+      --subtle: #4d5263;
+
+      --accent: #c9a875;
+      --accent-strong: #d9bd8e;
+      --accent-soft: rgba(201,168,117,.12);
+      --accent-line: rgba(201,168,117,.30);
+
+      --success: #6dd0a5;
+      --success-soft: rgba(109,208,165,.10);
+      --success-line: rgba(109,208,165,.30);
+
+      --danger: #e87878;
+      --danger-soft: rgba(232,120,120,.10);
+      --danger-line: rgba(232,120,120,.28);
+
+      --warning: #d8b85a;
+      --warning-soft: rgba(216,184,90,.10);
+
+      --shadow-xs: 0 1px 2px rgba(0,0,0,.30);
+      --shadow-sm: 0 4px 14px rgba(0,0,0,.30), 0 1px 2px rgba(0,0,0,.30);
+      --shadow-md: 0 10px 30px rgba(0,0,0,.40), 0 4px 12px rgba(0,0,0,.30);
+      --shadow-lg: 0 32px 80px rgba(0,0,0,.55), 0 12px 32px rgba(0,0,0,.40);
+      --glow-accent: 0 0 0 3px var(--accent-soft);
+
+      --r-sm: 6px;
+      --r-md: 8px;
+      --r-lg: 12px;
+      --r-xl: 14px;
+      --r-2xl: 18px;
+
+      --font-sans: "Inter", "SF Pro Display", "Segoe UI Variable", "Segoe UI",
+                   "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--font-sans);
+      font-feature-settings: "ss01", "cv11", "calt";
+      background:
+        radial-gradient(1200px 600px at 8% -10%, rgba(201,168,117,.05), transparent 60%),
+        radial-gradient(900px 600px at 100% 100%, rgba(120,140,180,.04), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      letter-spacing: -.005em;
+    }
+
+    button, input, select, textarea { font: inherit; color: inherit; }
+
+    /* === global scrollbar === */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,.06);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255,255,255,.14);
+      background-clip: padding-box;
+    }
+
+    .app-shell {
+      height: 100%;
+      display: grid;
+      grid-template-columns: 412px minmax(0, 1fr);
+      gap: 16px;
+      padding: 16px;
+      min-height: 100vh;
+    }
+
+    .panel {
+      min-height: 0;
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--r-2xl);
+      box-shadow: var(--shadow-md);
+    }
+
+    .editor,
+    .preview {
+      display: grid;
+      min-height: 0;
+    }
+
+    .editor {
+      grid-template-rows: auto auto 1fr auto;
+    }
+
+    .editor-header,
+    .preview-header {
+      padding: 24px 26px 22px;
+      border-bottom: 1px solid var(--line);
+      position: relative;
+    }
+
+    .editor-header {
+      background:
+        radial-gradient(800px 200px at 0% 0%, rgba(201,168,117,.10), transparent 70%),
+        linear-gradient(180deg, #1c1f26 0%, #15171c 100%);
+    }
+
+    .editor-header::before {
+      content: "";
+      position: absolute;
+      left: 26px; right: 26px; bottom: -1px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
+    }
+
+    .editor-header::after {
+      content: "ENTERPRISE · PROFILE WORKBENCH";
+      display: inline-flex;
+      margin-top: 16px;
+      padding: 5px 11px;
+      border-radius: 999px;
+      border: 1px solid var(--accent-line);
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .14em;
+    }
+
+    .editor-header h1,
+    .preview-header h2 {
+      margin: 0;
+      letter-spacing: -.04em;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .editor-header h1 { font-size: 28px; line-height: 1.15; }
+    .preview-header h2 { font-size: 18px; }
+
+    .editor-header p,
+    .preview-header p,
+    .hint {
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.65;
+      margin: 8px 0 0;
+    }
+
+    .editor-header p {
+      color: var(--text-2);
+      max-width: 340px;
+    }
+
+    .status-bar,
+    .preview-toolbar,
+    .footer-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.018) 0%, rgba(255,255,255,0) 100%);
+    }
+
+    .footer-bar {
+      justify-content: space-between;
+      border-bottom: 0;
+      border-top: 1px solid var(--line);
+      padding: 14px 20px 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.022) 100%);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.025);
+      border: 1px solid var(--line-strong);
+      color: var(--text-2);
+      font-size: 10.5px;
+      font-weight: 600;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 2px;
+      flex-wrap: wrap;
+      padding: 10px 16px 0;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 0;
+      border-bottom: 1px solid transparent;
+      margin-bottom: -1px;
+      border-radius: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 11px 13px 12px;
+      cursor: pointer;
+      font-size: 12.5px;
+      font-weight: 600;
+      letter-spacing: -.005em;
+      transition: color .18s, border-color .18s;
+    }
+
+    .tab-btn:hover { color: var(--text-2); }
+
+    .tab-btn.active {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-host {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .tab-body {
+      min-height: 0;
+      overflow: auto;
+      padding: 18px 18px 22px;
+      background: var(--bg);
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .section-card {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-xs);
+      padding: 18px 18px 16px;
+      margin-bottom: 14px;
+      position: relative;
+    }
+
+    .section-card h3 {
+      margin: 0 0 14px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -.005em;
+      color: var(--text);
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line-soft);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-card h3::before {
+      content: "";
+      width: 3px;
+      height: 12px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--r-md);
+      padding: 10px 12px;
+      background: var(--input-bg);
+      color: var(--text);
+      font-size: 13px;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+
+    input::placeholder, textarea::placeholder { color: var(--subtle); }
+
+    input:hover:not(:focus),
+    textarea:hover:not(:focus),
+    select:hover:not(:focus) { border-color: rgba(255,255,255,.16); }
+
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: var(--glow-accent);
+      background: #0b0d12;
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+      line-height: 1.55;
+    }
+
+    select {
+      appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--text-2) 50%),
+        linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+      background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+      padding-right: 32px;
+    }
+
+    .btn-row,
+    .module-item .ops,
+    .item-ops {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button.action,
+    .small-btn {
+      cursor: pointer;
+      transition: .15s ease;
+      font-weight: 600;
+    }
+
+    /* Primary = inverted: warm white on near-black */
+    button.action {
+      padding: 9px 16px;
+      border-radius: var(--r-md);
+      border: 1px solid transparent;
+      background: var(--text);
+      color: var(--bg);
+      font-size: 12.5px;
+      letter-spacing: -.005em;
+      box-shadow: 0 1px 0 rgba(255,255,255,.20) inset, 0 4px 14px rgba(0,0,0,.35);
+    }
+
+    button.action:hover {
+      background: #ffffff;
+      box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 8px 24px rgba(255,255,255,.10);
+    }
+
+    button.action.secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--line-strong);
+      box-shadow: none;
+    }
+
+    button.action.secondary:hover {
+      background: var(--surface-3);
+      border-color: rgba(255,255,255,.18);
+      color: var(--text);
+    }
+
+    button.action.success {
+      background: var(--success-soft);
+      color: var(--success);
+      border-color: var(--success-line);
+      box-shadow: none;
+    }
+
+    button.action.success:hover {
+      background: rgba(109,208,165,.16);
+      border-color: rgba(109,208,165,.45);
+    }
+
+    button.action.danger {
+      background: var(--danger-soft);
+      color: var(--danger);
+      border-color: var(--danger-line);
+      box-shadow: none;
+    }
+
+    button.action.danger:hover {
+      background: rgba(232,120,120,.16);
+      border-color: rgba(232,120,120,.45);
+    }
+
+    .small-btn {
+      border: 1px solid var(--line-strong);
+      background: transparent;
+      color: var(--text-2);
+      padding: 6px 10px;
+      border-radius: var(--r-sm);
+      font-size: 11px;
+      letter-spacing: -.005em;
+      box-shadow: none;
+    }
+
+    .small-btn:hover {
+      background: var(--surface-3);
+      border-color: rgba(255,255,255,.18);
+      color: var(--text);
+    }
+
+    .small-btn.danger {
+      border-color: rgba(232,120,120,.22);
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .small-btn.danger:hover {
+      border-color: rgba(232,120,120,.45);
+      background: rgba(232,120,120,.16);
+      color: var(--danger);
+    }
+
+    .small-btn.active {
+      background: var(--accent-soft);
+      border-color: var(--accent-line);
+      color: var(--accent-strong);
+    }
+
+    .item-list,
+    .module-list,
+    .photo-admin-grid,
+    .chat-log,
+    .publish-box {
+      display: grid;
+      gap: 10px;
+    }
+
+    .item-card {
+      padding: 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-xs);
+      transition: border-color .15s, background .15s;
+    }
+
+    .item-card:hover {
+      border-color: var(--line-strong);
+    }
+
+    .item-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .item-head strong {
+      display: block;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -.01em;
+    }
+
+    .item-meta {
+      margin-top: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: .005em;
+    }
+
+    .thumb-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .thumb-row img,
+    .photo-admin-item img {
+      border: 1px solid var(--line-strong);
+      background: var(--surface-3);
+      box-shadow: var(--shadow-xs);
+    }
+
+    .thumb-row img {
+      width: 74px;
+      height: 74px;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+
+    .photo-admin-grid {
+      margin-top: 12px;
+    }
+
+    .photo-admin-item {
+      display: grid;
+      grid-template-columns: 82px 1fr;
+      gap: 12px;
+      padding: 10px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+    }
+
+    .photo-admin-item img {
+      width: 82px;
+      height: 82px;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+
+    .photo-admin-meta {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .cover-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      border: 1px solid var(--accent-line);
+      font-size: 9.5px;
+      font-weight: 700;
+      width: fit-content;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .module-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: var(--r-md);
+      transition: border-color .15s;
+    }
+
+    .module-item:hover { border-color: var(--line-strong); }
+
+    .chat-log {
+      max-height: 320px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .chat-msg {
+      padding: 12px 14px;
+      border-radius: var(--r-lg);
+      line-height: 1.65;
+      white-space: pre-wrap;
+      font-size: 13px;
+    }
+
+    .chat-msg.user {
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-line);
+      color: var(--accent-strong);
+      margin-left: 32px;
+    }
+
+    .chat-msg.assistant {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      color: var(--text-2);
+      margin-right: 32px;
+    }
+
+    .url-box {
+      background: var(--input-bg);
+      color: var(--accent-strong);
+      padding: 12px 14px;
+      border-radius: var(--r-md);
+      border: 1px solid var(--line-strong);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      word-break: break-all;
+      letter-spacing: -.005em;
+    }
+
+    .preview {
+      grid-template-rows: auto auto 1fr;
+      background:
+        radial-gradient(1200px 600px at 100% 0%, rgba(201,168,117,.04), transparent 60%),
+        var(--surface);
+    }
+
+    .preview-header {
+      background: linear-gradient(180deg, rgba(255,255,255,.018) 0%, rgba(255,255,255,0) 100%);
+    }
+
+    .preview-toolbar {
+      justify-content: space-between;
+    }
+
+    .preview-frame-wrap {
+      padding: 18px;
+      min-height: 0;
+      display: flex;
+      align-items: stretch;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      min-height: 420px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--r-xl);
+      background: #fff;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .empty-preview {
+      flex: 1;
+      min-height: 420px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 24px;
+      background:
+        radial-gradient(600px 240px at 50% 0%, rgba(201,168,117,.06), transparent 70%),
+        var(--surface-2);
+      border: 1px dashed var(--accent-line);
+      border-radius: var(--r-xl);
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 13px;
+    }
+
+    .empty-preview-icon {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 14px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-line);
+      color: var(--accent-strong);
+      font-size: 22px;
+      box-shadow: 0 0 28px rgba(201,168,117,.18);
+    }
+
+    .empty-preview-title {
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -.01em;
+      margin-bottom: 6px;
+    }
+
+    .ok { color: var(--success); }
+    .warn { color: var(--warning); }
+    .error { color: var(--danger); }
+
+    /* === AI panel === */
+    .tab-body:has(.ai-panel.active) { padding: 0; overflow: hidden; background: var(--surface); }
+
+    .tab-panel.active.ai-panel {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 520px;
+      background: var(--surface);
+    }
+
+    .ai-welcome {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 56px 32px 32px;
+      gap: 14px;
+    }
+    .ai-welcome.hidden { display: none; }
+
+    .ai-welcome-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-line);
+      color: var(--accent-strong);
+      font-size: 22px;
+      margin-bottom: 6px;
+      box-shadow: 0 0 32px rgba(201,168,117,.18);
+    }
+
+    .ai-welcome-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0;
+      letter-spacing: -.035em;
+    }
+    .ai-welcome-desc {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0;
+      max-width: 340px;
+      line-height: 1.7;
+    }
+
+    .ai-suggestion-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 12px;
+    }
+    .ai-chip {
+      border: 1px solid var(--line-strong);
+      background: var(--surface-2);
+      color: var(--text-2);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: -.005em;
+      cursor: pointer;
+      transition: .18s;
+    }
+    .ai-chip:hover {
+      background: var(--accent-soft);
+      border-color: var(--accent-line);
+      color: var(--accent-strong);
+    }
+
+    .ai-messages {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 18px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .ai-messages.visible { display: flex; }
+
+    .ai-input-wrap {
+      border-top: 1px solid var(--line);
+      padding: 14px 18px 16px;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .ai-input-bar {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      background: var(--input-bg);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--r-lg);
+      padding: 10px 10px 10px 14px;
+      transition: border-color .18s, box-shadow .18s;
+    }
+    .ai-input-bar:focus-within {
+      border-color: var(--accent);
+      box-shadow: var(--glow-accent);
+    }
+    .ai-input-bar textarea {
+      flex: 1;
+      border: 0;
+      background: transparent;
+      resize: none;
+      padding: 4px 0;
+      box-shadow: none;
+      min-height: 22px;
+      max-height: 140px;
+      overflow-y: auto;
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+    .ai-input-bar textarea:focus {
+      outline: none;
+      border: 0;
+      box-shadow: none;
+      background: transparent;
+    }
+    .ai-send-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 0;
+      background: var(--accent);
+      color: var(--bg);
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: .15s;
+      box-shadow: 0 4px 16px rgba(201,168,117,.30);
+    }
+    .ai-send-btn:hover {
+      background: var(--accent-strong);
+      box-shadow: 0 6px 22px rgba(201,168,117,.42);
+    }
+    .ai-send-btn:disabled {
+      opacity: .42;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    .ai-input-footer {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 1120px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .preview { min-height: 520px; }
+    }
+
+    @media (max-width: 720px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .footer-bar,
+      .preview-toolbar { flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <section class="panel editor">
+      <div class="editor-header">
+        <h1>企业个人主页工作台</h1>
+        <p>通过 AI 对话、模板和模块组合，生成更接近 Yammer 风格的商务型个人门户。</p>
+      </div>
+
+      <div class="status-bar">
+        <div class="pill" id="statusTemplate">模板: simple</div>
+        <div class="pill" id="statusModules">模块: 0</div>
+        <div class="pill" id="statusServer">发布状态: 未启动</div>
+        <div class="pill" id="statusDirty">未保存: 否</div>
+      </div>
+
+      <div class="tab-host">
+        <div class="tabs" id="tabs"></div>
+        <div class="tab-body">
+          <div class="tab-panel ai-panel" data-tab="ai">
+            <div class="ai-welcome" id="aiWelcome">
+              <div class="ai-welcome-icon">✦</div>
+              <h2 class="ai-welcome-title">AI 智能建站助手</h2>
+              <p class="ai-welcome-desc">用一句话描述你想要的主页风格、内容结构与气质，AI 即可为你生成完整配置。</p>
+              <div class="ai-suggestion-chips">
+                <button class="ai-chip" onclick="HomepageEditor.fillExample(0)">Yammer 商务风格</button>
+                <button class="ai-chip" onclick="HomepageEditor.fillExample(1)">设计师作品集</button>
+                <button class="ai-chip" onclick="HomepageEditor.fillExample(2)">技术专家门户</button>
+              </div>
+            </div>
+            <div class="ai-messages" id="chatLog"></div>
+            <div class="ai-input-wrap">
+              <div class="ai-input-bar">
+                <textarea id="aiPrompt" rows="1" placeholder="描述你想要的主页风格、内容结构… (Ctrl+Enter 发送)"></textarea>
+                <button class="ai-send-btn" id="btnSendAi" title="发送 (Ctrl+Enter)">↑</button>
+              </div>
+              <div class="ai-input-footer">
+                <button class="small-btn" id="btnAiExample">示例提示词</button>
+                <span class="hint" style="font-size:11px;">Ctrl + Enter 发送 · AI 会直接修改主页配置</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-tab="profile">
+            <div class="section-card">
+              <h3>基础资料</h3>
+              <div class="grid-2">
+                <div>
+                  <label for="displayName">显示名称</label>
+                  <input id="displayName" placeholder="例如：陈乐 / Alex Chen" />
+                </div>
+                <div>
+                  <label for="tagline">一句话签名</label>
+                  <input id="tagline" placeholder="例如：设计、影像与日常观察" />
+                </div>
+              </div>
+              <div style="margin-top:12px;">
+                <label for="bio">个人简介</label>
+                <textarea id="bio" placeholder="介绍你的工作、兴趣、正在做的事情。"></textarea>
+              </div>
+              <div class="grid-2" style="margin-top:12px; align-items:end;">
+                <div>
+                  <label for="templateId">模板</label>
+                  <select id="templateId">
+                    <option value="simple">简洁</option>
+                    <option value="lively">明亮</option>
+                    <option value="business">商务（推荐）</option>
+                  </select>
+                </div>
+                <div>
+                  <label>头像</label>
+                  <div class="btn-row">
+                    <button class="action secondary" id="btnPickAvatar">选择头像</button>
+                    <span class="hint" id="avatarHint">未选择头像</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section-card">
+              <h3>社交链接</h3>
+              <div class="grid-2">
+                <div>
+                  <label for="socialPlatform">平台</label>
+                  <input id="socialPlatform" placeholder="GitHub / 微信 / 微博 / Bilibili" />
+                </div>
+                <div>
+                  <label for="socialDisplayText">显示文字</label>
+                  <input id="socialDisplayText" placeholder="例如：查看我的 GitHub" />
+                </div>
+              </div>
+              <div style="margin-top:12px;">
+                <label for="socialUrl">链接</label>
+                <input id="socialUrl" placeholder="https://..." />
+              </div>
+              <div class="btn-row" style="margin-top:10px;">
+                <button class="action secondary" id="btnAddSocial">添加链接</button>
+              </div>
+              <div class="item-list" id="socialList" style="margin-top:12px;"></div>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-tab="albums">
+            <div class="section-card">
+              <h3>创建相册</h3>
+              <div class="grid-2">
+                <div>
+                  <label for="albumTitle">相册名称</label>
+                  <input id="albumTitle" placeholder="例如：2026 春日旅行" />
+                </div>
+                <div>
+                  <label for="albumDescription">相册描述</label>
+                  <input id="albumDescription" placeholder="例如：大理、丽江和泸沽湖" />
+                </div>
+              </div>
+              <div class="btn-row" style="margin-top:10px;">
+                <button class="action secondary" id="btnAddAlbum">新建相册</button>
+              </div>
+            </div>
+            <div class="item-list" id="albumList"></div>
+          </div>
+
+          <div class="tab-panel" data-tab="videos">
+            <div class="section-card">
+              <h3>添加视频</h3>
+              <div class="grid-2">
+                <div>
+                  <label for="videoTitle">标题</label>
+                  <input id="videoTitle" placeholder="例如：我的产品设计 vlog" />
+                </div>
+                <div>
+                  <label for="videoDescription">简介</label>
+                  <input id="videoDescription" placeholder="一句话说明这个视频" />
+                </div>
+              </div>
+              <div class="btn-row" style="margin-top:10px;">
+                <button class="action secondary" id="btnAddVideo">创建视频条目</button>
+              </div>
+            </div>
+            <div class="item-list" id="videoList"></div>
+          </div>
+
+          <div class="tab-panel" data-tab="files">
+            <div class="section-card">
+              <h3>共享文件</h3>
+              <div class="grid-2">
+                <div>
+                  <label for="fileDisplayName">显示名称</label>
+                  <input id="fileDisplayName" placeholder="例如：产品经理简历.pdf" />
+                </div>
+                <div>
+                  <label for="fileDescription">描述</label>
+                  <input id="fileDescription" placeholder="例如：可供下载的公开资料" />
+                </div>
+              </div>
+              <div class="btn-row" style="margin-top:10px;">
+                <button class="action secondary" id="btnUploadFile">选择并上传文件</button>
+              </div>
+            </div>
+            <div class="item-list" id="fileList"></div>
+          </div>
+
+          <div class="tab-panel" data-tab="layout">
+            <div class="section-card">
+              <h3>模块布局</h3>
+              <p class="hint">可开启/关闭模块，并调整模块顺序。数值越小，越靠前。</p>
+              <div class="module-list" id="moduleList"></div>
+            </div>
+            <div class="section-card">
+              <h3>自定义文本模块</h3>
+              <div class="grid-2">
+                <div>
+                  <label for="textBlockTitle">标题</label>
+                  <input id="textBlockTitle" placeholder="例如：关于我" />
+                </div>
+                <div>
+                  <label for="textBlockIndex">目标文本模块序号</label>
+                  <input id="textBlockIndex" type="number" min="1" value="1" />
+                </div>
+              </div>
+              <div style="margin-top:12px;">
+                <label for="textBlockContent">内容</label>
+                <textarea id="textBlockContent" placeholder="用于介绍经历、故事、公告或置顶内容。"></textarea>
+              </div>
+              <div class="btn-row" style="margin-top:10px;">
+                <button class="action secondary" id="btnApplyTextBlock">写入文本模块</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-panel" data-tab="publish">
+            <div class="section-card publish-box">
+              <h3>局域网发布</h3>
+              <div class="grid-2">
+                <div>
+                  <label for="serverPort">端口</label>
+                  <input id="serverPort" type="number" min="1024" max="65535" value="8765" />
+                </div>
+                <div>
+                  <label>说明</label>
+                  <div class="hint">默认绑定到本机所有网卡，同一局域网内的手机 / 平板 / 电脑可直接访问，无需管理员权限或额外配置。</div>
+                </div>
+              </div>
+              <div class="btn-row">
+                <button class="action success" id="btnStartServer">启动发布</button>
+                <button class="action danger" id="btnStopServer">停止发布</button>
+                <button class="action secondary" id="btnOpenPublished">在浏览器打开</button>
+              </div>
+              <div>
+                <div class="hint">本机地址</div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <div class="url-box" id="localUrlBox" style="flex:1;">未启动</div>
+                  <button class="small-btn" onclick="HomepageEditor.copyUrl('local')">复制</button>
+                </div>
+              </div>
+              <div>
+                <div class="hint">局域网地址</div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <div class="url-box" id="lanUrlBox" style="flex:1;">未启动</div>
+                  <button class="small-btn" onclick="HomepageEditor.copyUrl('lan')">复制</button>
+                </div>
+              </div>
+              <div class="hint" id="publishHint">启动后，可将局域网地址发给同一网络下的其他设备访问。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bar">
+        <div class="hint" id="saveStatus">等待加载配置…</div>
+        <div class="btn-row">
+          <button class="action secondary" id="btnReloadState">重新加载</button>
+          <button class="action" id="btnSaveAll">保存全部</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel preview">
+      <div class="preview-header">
+        <h2 style="margin:0;font-size:18px;">实时预览</h2>
+        <p class="hint" style="margin:6px 0 0;">发布服务启动后，右侧直接预览真实对外页面，默认采用更偏企业门户的展示样式。</p>
+      </div>
+      <div class="preview-toolbar">
+        <div class="pill" id="previewMode">预览: 未启动</div>
+        <div style="display:flex;gap:5px;align-items:center;">
+          <button class="small-btn active" id="btnDeviceDesktop">桌面</button>
+          <button class="small-btn" id="btnDeviceMobile">手机</button>
+        </div>
+        <button class="action secondary" id="btnRefreshPreview">刷新</button>
+      </div>
+      <div class="preview-frame-wrap" id="previewContainer">
+        <div class="empty-preview" id="emptyPreview">
+          <div>
+            <div class="empty-preview-icon">◇</div>
+            <div class="empty-preview-title">尚未进入发布状态</div>
+            <div>先编辑内容，再在“发布”标签中启动本地服务器，<br>预览页面将自动出现在这里。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      config: {
+        profile: { displayName: '', tagline: '', bio: '', avatarFilename: '', socialLinks: [] },
+        templateId: 'simple',
+        modules: [],
+        albums: [],
+        videos: [],
+        sharedFiles: [],
+        serverPort: 8765,
+        lastPublished: null,
+      },
+      dirty: false,
+      serverRunning: false,
+      localUrl: '',
+      lanUrl: '',
+      isLanMode: false,
+      activeTab: 'ai',
+      pending: {
+        avatar: null,
+        sharedFileMeta: null,
+        albumForPhotos: null,
+        videoForFile: null,
+        videoForThumb: null,
+      },
+      chat: [],
+      previewFrame: null,
+    };
+
+    const tabs = [
+      ['ai',      'AI 助手'],
+      ['profile', '个人资料'],
+      ['albums',  '相册'],
+      ['videos',  '视频'],
+      ['files',   '共享文件'],
+      ['layout',  '布局'],
+      ['publish', '发布'],
+    ];
+
+    const moduleTypeLabels = {
+      ProfileHeader: '个人资料头部',
+      SocialLinks:   '社交链接',
+      Albums:        '相册',
+      Videos:        '视频',
+      SharedFiles:   '共享文件',
+      TextBlock:     '自定义文字',
+    };
+
+    const aiExamples = [
+      '帮我做一个偏 Yammer 风格的企业个人主页，顶部放头像、姓名、岗位和一句话简介。下面放项目成果相册、演讲视频、共享文件和一个“关于我”的文字模块，整体使用商务模板。',
+      '帮我做一个设计师作品集主页，使用明亮模板，包含相册展示设计作品、视频展示动效演示，以及可下载的作品集 PDF。加上 Dribbble 和 Behance 社交链接。',
+      '帮我做一个技术专家个人主页，简洁风格，包含技术栈介绍文字模块、开源项目相册、演讲视频，以及 GitHub 和 LinkedIn 社交链接。',
+    ];
+
+    function autoResizeTextarea(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    }
+
+    function fillExample(index) {
+      const ta = document.getElementById('aiPrompt');
+      ta.value = aiExamples[Math.min(index, aiExamples.length - 1)] || '';
+      ta.focus();
+      autoResizeTextarea(ta);
+    }
+
+    function uid() {
+      return Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+
+    function post(message) {
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(JSON.stringify(message));
+      }
+    }
+
+    function markDirty(flag = true) {
+      state.dirty = flag;
+      updateHeaderStatus();
+      document.getElementById('saveStatus').textContent = flag ? '有未保存改动' : '已保存到本地配置';
+    }
+
+    function updateHeaderStatus() {
+      document.getElementById('statusTemplate').textContent = '模板: ' + state.config.templateId;
+      document.getElementById('statusModules').textContent = '模块: ' + (state.config.modules || []).filter(m => m.enabled).length;
+      document.getElementById('statusServer').textContent = '发布状态: ' + (state.serverRunning ? '运行中' : '未启动');
+      document.getElementById('statusDirty').textContent = '未保存: ' + (state.dirty ? '是' : '否');
+      document.getElementById('previewMode').textContent = '预览: ' + (state.serverRunning ? (state.isLanMode ? '局域网模式' : '仅本机模式') : '未启动');
+    }
+
+    function ensureDefaultModules() {
+      if (!Array.isArray(state.config.modules) || state.config.modules.length === 0) {
+        state.config.modules = [
+          { id: uid(), type: 'ProfileHeader', order: 0, enabled: true, configJson: '{}' },
+          { id: uid(), type: 'SocialLinks', order: 1, enabled: true, configJson: '{}' },
+          { id: uid(), type: 'Albums', order: 2, enabled: true, configJson: '{}' },
+          { id: uid(), type: 'Videos', order: 3, enabled: true, configJson: '{}' },
+          { id: uid(), type: 'SharedFiles', order: 4, enabled: true, configJson: '{}' },
+          { id: uid(), type: 'TextBlock', order: 5, enabled: false, configJson: JSON.stringify({ title: '关于我', content: '' }) },
+        ];
+      }
+    }
+
+    function renderTabs() {
+      const host = document.getElementById('tabs');
+      host.innerHTML = tabs.map(([id, label]) => {
+        const active = state.activeTab === id ? 'active' : '';
+        return `<button class="tab-btn ${active}" data-tab-btn="${id}">${label}</button>`;
+      }).join('');
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tabBtn));
+      });
+    }
+
+    function switchTab(tabId) {
+      state.activeTab = tabId;
+      renderTabs();
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.dataset.tab === tabId);
+      });
+    }
+
+    function bindProfileForm() {
+      const profile = state.config.profile || {};
+      document.getElementById('displayName').value = profile.displayName || '';
+      document.getElementById('tagline').value = profile.tagline || '';
+      document.getElementById('bio').value = profile.bio || '';
+      document.getElementById('templateId').value = state.config.templateId || 'simple';
+      document.getElementById('serverPort').value = state.config.serverPort || 8765;
+      document.getElementById('avatarHint').textContent = profile.avatarFilename ? ('已保存: ' + profile.avatarFilename) : '未选择头像';
+    }
+
+    function collectProfileForm() {
+      state.config.profile = state.config.profile || { socialLinks: [] };
+      state.config.profile.displayName = document.getElementById('displayName').value.trim();
+      state.config.profile.tagline = document.getElementById('tagline').value.trim();
+      state.config.profile.bio = document.getElementById('bio').value.trim();
+      state.config.templateId = document.getElementById('templateId').value;
+      state.config.serverPort = Number(document.getElementById('serverPort').value || 8765);
+    }
+
+    function renderSocialLinks() {
+      const list = document.getElementById('socialList');
+      const links = state.config.profile.socialLinks || [];
+      list.innerHTML = links.length ? links.map((link, index) => `
+        <div class="item-card">
+          <div class="item-head">
+            <div>
+              <strong>${escapeHtml(link.platform || '未命名平台')}</strong>
+              <div class="item-meta">${escapeHtml(link.displayText || link.url || '')}</div>
+            </div>
+            <div class="item-ops">
+              <button class="small-btn danger" onclick="HomepageEditor.removeSocial(${index})">删除</button>
+            </div>
+          </div>
+          <div class="hint">${escapeHtml(link.url || '')}</div>
+        </div>`).join('') : '<div class="hint">还没有社交链接。</div>';
+    }
+
+    function renderAlbums() {
+      const host = document.getElementById('albumList');
+      const albums = state.config.albums || [];
+      host.innerHTML = albums.length ? albums.map(album => `
+        <div class="item-card">
+          <div class="item-head">
+            <div>
+              <strong>${escapeHtml(album.title || '未命名相册')}</strong>
+              <div class="item-meta">${escapeHtml(album.description || '')}</div>
+            </div>
+            <div class="item-ops">
+              <button class="small-btn" onclick="HomepageEditor.pickAlbumPhotos('${album.id}')">上传照片</button>
+              <button class="small-btn danger" onclick="HomepageEditor.removeAlbum('${album.id}')">删除</button>
+            </div>
+          </div>
+          <div class="hint">照片数量: ${(album.photos || []).length}</div>
+          <div class="thumb-row">${getAlbumDisplayPhotos(album).slice(0, 6).map(photo => `<img src="${buildMediaUrl('albums/' + album.id + '/' + photo.filename)}" alt="${escapeHtml(photo.caption || '')}">`).join('')}</div>
+          ${(album.photos || []).length ? `
+            <div class="photo-admin-grid">
+              ${getAlbumDisplayPhotos(album).map(photo => `
+                <div class="photo-admin-item">
+                  <img src="${buildMediaUrl('albums/' + album.id + '/' + photo.filename)}" alt="${escapeHtml(photo.caption || '')}">
+                  <div class="photo-admin-meta">
+                    ${album.coverPhotoId === photo.id ? '<span class="cover-badge">封面</span>' : ''}
+                    <input value="${escapeHtml(photo.caption || '')}" placeholder="填写照片说明" onchange="HomepageEditor.setPhotoCaption('${album.id}','${photo.id}', this.value)">
+                    <div class="item-ops">
+                      <button class="small-btn" onclick="HomepageEditor.setAlbumCover('${album.id}','${photo.id}')">设为封面</button>
+                      <button class="small-btn danger" onclick="HomepageEditor.removeAlbumPhoto('${album.id}','${photo.id}')">删除照片</button>
+                    </div>
+                  </div>
+                </div>`).join('')}
+            </div>` : ''}
+        </div>`).join('') : '<div class="hint">还没有相册。</div>';
+    }
+
+    function getAlbumDisplayPhotos(album) {
+      const photos = [...(album.photos || [])];
+      if (!album.coverPhotoId) {
+        return photos;
+      }
+      return photos.sort((left, right) => {
+        if (left.id === album.coverPhotoId) return -1;
+        if (right.id === album.coverPhotoId) return 1;
+        return 0;
+      });
+    }
+
+    function renderVideos() {
+      const host = document.getElementById('videoList');
+      const videos = state.config.videos || [];
+      host.innerHTML = videos.length ? videos.map(video => `
+        <div class="item-card">
+          <div class="item-head">
+            <div>
+              <strong>${escapeHtml(video.title || '未命名视频')}</strong>
+              <div class="item-meta">${escapeHtml(video.description || '')}</div>
+            </div>
+            <div class="item-ops">
+              <button class="small-btn" onclick="HomepageEditor.pickVideoFile('${video.id}')">上传视频</button>
+              <button class="small-btn" onclick="HomepageEditor.pickVideoThumb('${video.id}')">上传封面</button>
+              <button class="small-btn danger" onclick="HomepageEditor.removeVideo('${video.id}')">删除</button>
+            </div>
+          </div>
+          <div class="grid-2" style="margin-bottom:10px;">
+            <div>
+              <label>视频标题</label>
+              <input value="${escapeHtml(video.title || '')}" placeholder="填写视频标题" onchange="HomepageEditor.updateVideoField('${video.id}','title', this.value)">
+            </div>
+            <div>
+              <label>视频简介</label>
+              <input value="${escapeHtml(video.description || '')}" placeholder="填写视频简介" onchange="HomepageEditor.updateVideoField('${video.id}','description', this.value)">
+            </div>
+          </div>
+          <div class="hint">${video.filename ? '视频文件已上传: ' + escapeHtml(video.filename) : '尚未上传视频文件'}</div>
+          <div class="hint">${video.thumbnailFilename ? '封面已上传: ' + escapeHtml(video.thumbnailFilename) : '尚未上传封面'}</div>
+        </div>`).join('') : '<div class="hint">还没有视频内容。</div>';
+    }
+
+    function renderFiles() {
+      const host = document.getElementById('fileList');
+      const files = state.config.sharedFiles || [];
+      host.innerHTML = files.length ? files.map(file => `
+        <div class="item-card">
+          <div class="item-head">
+            <div>
+              <strong>${escapeHtml(file.displayName || file.filename || '未命名文件')}</strong>
+              <div class="item-meta">${escapeHtml(file.description || '')}</div>
+            </div>
+            <div class="item-ops">
+              <button class="small-btn danger" onclick="HomepageEditor.removeSharedFile('${file.id}')">删除</button>
+            </div>
+          </div>
+          <div class="grid-2" style="margin-bottom:10px;">
+            <div>
+              <label>显示名称</label>
+              <input value="${escapeHtml(file.displayName || '')}" placeholder="下载显示名称" onchange="HomepageEditor.updateSharedFileField('${file.id}','displayName', this.value)">
+            </div>
+            <div>
+              <label>文件描述</label>
+              <input value="${escapeHtml(file.description || '')}" placeholder="对外展示的文件描述" onchange="HomepageEditor.updateSharedFileField('${file.id}','description', this.value)">
+            </div>
+          </div>
+          <div class="hint">${formatBytes(file.fileSize || 0)} · ${escapeHtml(file.filename || '')}</div>
+        </div>`).join('') : '<div class="hint">还没有共享文件。</div>';
+    }
+
+    function renderModules() {
+      const host = document.getElementById('moduleList');
+      const modules = [...(state.config.modules || [])].sort((a, b) => a.order - b.order);
+      host.innerHTML = modules.map(module => `
+        <div class="module-item">
+          <div>
+            <strong>${moduleTypeLabels[module.type] || module.type}</strong>
+            <div class="item-meta">顺序: ${module.order} · ${module.enabled ? '✓ 启用' : '✗ 已关闭'}</div>
+          </div>
+          <div class="ops">
+            <button class="small-btn" onclick="HomepageEditor.moveModule('${module.id}', -1)">↑ 上移</button>
+            <button class="small-btn" onclick="HomepageEditor.moveModule('${module.id}', 1)">↓ 下移</button>
+            <button class="small-btn ${module.enabled ? 'danger' : ''}" onclick="HomepageEditor.toggleModule('${module.id}')">${module.enabled ? '关闭' : '启用'}</button>
+          </div>
+        </div>`).join('');
+    }
+
+    function renderChat() {
+      const log = document.getElementById('chatLog');
+      const welcome = document.getElementById('aiWelcome');
+      const hasMessages = state.chat.length > 0;
+      if (welcome) welcome.classList.toggle('hidden', hasMessages);
+      log.classList.toggle('visible', hasMessages);
+      log.innerHTML = hasMessages ? state.chat.map(item => `
+        <div class="chat-msg ${item.role}">${escapeHtml(item.text)}</div>`).join('') : '';
+      if (hasMessages) log.scrollTop = log.scrollHeight;
+    }
+
+    function renderPublishState() {
+      document.getElementById('localUrlBox').textContent = state.localUrl || '未启动';
+      document.getElementById('lanUrlBox').textContent = state.lanUrl || '未启动';
+
+      const hint = document.getElementById('publishHint');
+      if (!state.serverRunning) {
+        hint.className = 'hint';
+        hint.textContent = '点击“启动发布”后，将局域网地址发给同一 Wi-Fi / 网段下的设备即可访问。';
+      } else if (state.isLanMode) {
+        hint.className = 'hint ok';
+        hint.textContent = '✓ 局域网发布中：同一网段的设备直接打开局域网地址即可访问。若首次启动 Windows 弹出防火墙提示，请选择“允许访问”。';
+      } else {
+        hint.className = 'hint warn';
+        hint.textContent = '⚠ 当前端口仅本机可达（绑定 0.0.0.0 失败，已退回 localhost）。请确认该端口未被其他局域网服务占用，然后换个端口重试。';
+      }
+
+      refreshPreview();
+    }
+
+    function renderAll() {
+      ensureDefaultModules();
+      bindProfileForm();
+      renderSocialLinks();
+      renderAlbums();
+      renderVideos();
+      renderFiles();
+      renderModules();
+      renderChat();
+      renderPublishState();
+      updateHeaderStatus();
+    }
+
+    function saveAll() {
+      collectProfileForm();
+      post({ type: 'save_config', config: state.config });
+      markDirty(false);
+      if (state.serverRunning) {
+        refreshPreview();
+      }
+    }
+
+    function persistNow(message) {
+      collectProfileForm();
+      post({ type: 'save_config', config: state.config });
+      markDirty(false);
+      if (message) {
+        document.getElementById('saveStatus').textContent = message;
+      }
+      if (state.serverRunning) {
+        refreshPreview();
+      }
+    }
+
+    function addSocial() {
+      collectProfileForm();
+      const platform = document.getElementById('socialPlatform').value.trim();
+      const displayText = document.getElementById('socialDisplayText').value.trim();
+      const url = document.getElementById('socialUrl').value.trim();
+      if (!platform || !url) {
+        onError('平台和链接不能为空。');
+        return;
+      }
+      state.config.profile.socialLinks.push({ platform, displayText, url });
+      document.getElementById('socialPlatform').value = '';
+      document.getElementById('socialDisplayText').value = '';
+      document.getElementById('socialUrl').value = '';
+      renderSocialLinks();
+      markDirty();
+      persistNow('社交链接已保存');
+    }
+
+    function addAlbum() {
+      const title = document.getElementById('albumTitle').value.trim();
+      const description = document.getElementById('albumDescription').value.trim();
+      if (!title) {
+        onError('相册名称不能为空。');
+        return;
+      }
+      state.config.albums.push({ id: uid(), title, description, coverPhotoId: null, photos: [], createdAt: new Date().toISOString() });
+      document.getElementById('albumTitle').value = '';
+      document.getElementById('albumDescription').value = '';
+      renderAlbums();
+      markDirty();
+      persistNow('相册已保存');
+    }
+
+    function addVideo() {
+      const title = document.getElementById('videoTitle').value.trim();
+      const description = document.getElementById('videoDescription').value.trim();
+      if (!title) {
+        onError('视频标题不能为空。');
+        return;
+      }
+      state.config.videos.push({
+        id: uid(),
+        filename: '',
+        thumbnailFilename: '',
+        title,
+        description,
+        addedAt: new Date().toISOString(),
+      });
+      document.getElementById('videoTitle').value = '';
+      document.getElementById('videoDescription').value = '';
+      renderVideos();
+      markDirty();
+      persistNow('视频条目已保存');
+    }
+
+    function pickAvatar() {
+      state.pending.avatar = true;
+      post({ type: 'open_file_picker', mediaType: 'avatar' });
+    }
+
+    function pickAlbumPhotos(albumId) {
+      state.pending.albumForPhotos = albumId;
+      post({ type: 'open_file_picker', mediaType: 'photo' });
+    }
+
+    function pickVideoFile(videoId) {
+      state.pending.videoForFile = videoId;
+      post({ type: 'open_file_picker', mediaType: 'video' });
+    }
+
+    function pickVideoThumb(videoId) {
+      state.pending.videoForThumb = videoId;
+      post({ type: 'open_file_picker', mediaType: 'thumbnail' });
+    }
+
+    function uploadSharedFile() {
+      const displayName = document.getElementById('fileDisplayName').value.trim();
+      const description = document.getElementById('fileDescription').value.trim();
+      state.pending.sharedFileMeta = { displayName, description };
+      post({ type: 'open_file_picker', mediaType: 'file' });
+    }
+
+    function startServer() {
+      collectProfileForm();
+      post({ type: 'save_config', config: state.config });
+      post({ type: 'server_start' });
+      markDirty(false);
+    }
+
+    function stopServer() {
+      post({ type: 'server_stop' });
+    }
+
+    function openPublished() {
+      const target = state.lanUrl || state.localUrl;
+      if (!target) {
+        onError('请先启动发布服务。');
+        return;
+      }
+      post({ type: 'open_browser', url: target });
+    }
+
+    function refreshPreview() {
+      const container = document.getElementById('previewContainer');
+      const empty = document.getElementById('emptyPreview');
+      if (!state.serverRunning || !state.localUrl) {
+        if (state.previewFrame) {
+          state.previewFrame.remove();
+          state.previewFrame = null;
+        }
+        empty.style.display = 'grid';
+        return;
+      }
+
+      empty.style.display = 'none';
+      if (!state.previewFrame) {
+        const iframe = document.createElement('iframe');
+        iframe.title = '个人主页预览';
+        state.previewFrame = iframe;
+        container.appendChild(iframe);
+      }
+      state.previewFrame.src = state.localUrl + '/?t=' + Date.now();
+    }
+
+    function setPreviewDevice(device) {
+      document.getElementById('btnDeviceDesktop').classList.toggle('active', device === 'desktop');
+      document.getElementById('btnDeviceMobile').classList.toggle('active', device === 'mobile');
+      if (!state.previewFrame) return;
+      if (device === 'mobile') {
+        state.previewFrame.style.maxWidth = '390px';
+        state.previewFrame.style.margin = '0 auto';
+        state.previewFrame.style.display = 'block';
+      } else {
+        state.previewFrame.style.maxWidth = '';
+        state.previewFrame.style.margin = '';
+      }
+    }
+
+    function copyUrl(type) {
+      const url = type === 'lan' ? state.lanUrl : state.localUrl;
+      if (!url) { onError('请先启动发布服务再复制地址。'); return; }
+      navigator.clipboard.writeText(url).then(() => {
+        document.getElementById('saveStatus').textContent = '✓ 地址已复制到剪贴板';
+      }).catch(() => {
+        onError('复制失败，请手动复制。');
+      });
+    }
+
+    function applyTextBlock() {
+      const title = document.getElementById('textBlockTitle').value.trim();
+      const content = document.getElementById('textBlockContent').value.trim();
+      const index = Math.max(1, Number(document.getElementById('textBlockIndex').value || 1));
+      const textBlocks = state.config.modules.filter(m => m.type === 'TextBlock');
+      if (textBlocks.length < index) {
+        onError('目标文本模块序号不存在。');
+        return;
+      }
+      textBlocks[index - 1].configJson = JSON.stringify({ title, content });
+      textBlocks[index - 1].enabled = true;
+      renderModules();
+      markDirty();
+      persistNow('文本模块已保存');
+    }
+
+    function moveModule(id, delta) {
+      const modules = [...state.config.modules].sort((a, b) => a.order - b.order);
+      const idx = modules.findIndex(m => m.id === id);
+      if (idx < 0) return;
+      const targetIdx = idx + delta;
+      if (targetIdx < 0 || targetIdx >= modules.length) return;
+      const temp = modules[idx].order;
+      modules[idx].order = modules[targetIdx].order;
+      modules[targetIdx].order = temp;
+      state.config.modules = modules;
+      renderModules();
+      markDirty();
+      persistNow('模块顺序已保存');
+    }
+
+    function toggleModule(id) {
+      const module = state.config.modules.find(m => m.id === id);
+      if (!module) return;
+      module.enabled = !module.enabled;
+      renderModules();
+      updateHeaderStatus();
+      markDirty();
+      persistNow('模块状态已保存');
+    }
+
+    function removeAlbum(id) {
+      state.config.albums = state.config.albums.filter(a => a.id !== id);
+      post({ type: 'delete_item', itemType: 'album', id });
+      renderAlbums();
+      markDirty();
+      persistNow('相册已删除并保存');
+    }
+
+    function setAlbumCover(albumId, photoId) {
+      const album = state.config.albums.find(a => a.id === albumId);
+      if (!album) return;
+      album.coverPhotoId = photoId;
+      renderAlbums();
+      markDirty();
+      persistNow('相册封面已保存');
+    }
+
+    function setPhotoCaption(albumId, photoId, value) {
+      const album = state.config.albums.find(a => a.id === albumId);
+      const photo = album?.photos?.find(p => p.id === photoId);
+      if (!photo) return;
+      photo.caption = (value || '').trim();
+      renderAlbums();
+      markDirty();
+      persistNow('照片说明已保存');
+    }
+
+    function removeAlbumPhoto(albumId, photoId) {
+      const album = state.config.albums.find(a => a.id === albumId);
+      if (!album) return;
+      const photo = album.photos.find(p => p.id === photoId);
+      if (!photo) return;
+      album.photos = album.photos.filter(p => p.id !== photoId);
+      if (album.coverPhotoId === photoId) {
+        album.coverPhotoId = album.photos.length ? album.photos[0].id : null;
+      }
+      post({ type: 'delete_item', itemType: 'photo', id: photo.filename, albumId });
+      renderAlbums();
+      markDirty();
+      persistNow('照片已删除并保存');
+    }
+
+    function removeVideo(id) {
+      state.config.videos = state.config.videos.filter(v => v.id !== id);
+      post({ type: 'delete_item', itemType: 'video', id });
+      renderVideos();
+      markDirty();
+      persistNow('视频已删除并保存');
+    }
+
+    function updateVideoField(id, field, value) {
+      const video = state.config.videos.find(v => v.id === id);
+      if (!video) return;
+      if (field !== 'title' && field !== 'description') return;
+      video[field] = (value || '').trim();
+      renderVideos();
+      markDirty();
+      persistNow('视频信息已保存');
+    }
+
+    function removeSharedFile(id) {
+      const found = state.config.sharedFiles.find(f => f.id === id);
+      state.config.sharedFiles = state.config.sharedFiles.filter(f => f.id !== id);
+      if (found) {
+        post({ type: 'delete_item', itemType: 'sharedFile', id: found.filename });
+      }
+      renderFiles();
+      markDirty();
+      persistNow('共享文件已删除并保存');
+    }
+
+    function updateSharedFileField(id, field, value) {
+      const file = state.config.sharedFiles.find(f => f.id === id);
+      if (!file) return;
+      if (field !== 'displayName' && field !== 'description') return;
+      file[field] = (value || '').trim();
+      renderFiles();
+      markDirty();
+      persistNow('共享文件信息已保存');
+    }
+
+    function removeSocial(index) {
+      state.config.profile.socialLinks.splice(index, 1);
+      renderSocialLinks();
+      markDirty();
+      persistNow('社交链接已删除并保存');
+    }
+
+    function onFileSelected(mediaType, sourcePath) {
+      if (!sourcePath) return;
+      if (mediaType === 'avatar' && state.pending.avatar) {
+        state.pending.avatar = false;
+        post({ type: 'upload_media', mediaType: 'avatar', sourcePath });
+        return;
+      }
+      if (mediaType === 'video' && state.pending.videoForFile) {
+        post({ type: 'upload_media', mediaType: 'video', sourcePath, videoId: state.pending.videoForFile });
+        state.pending.videoForFile = null;
+        return;
+      }
+      if (mediaType === 'thumbnail' && state.pending.videoForThumb) {
+        post({ type: 'upload_media', mediaType: 'thumbnail', sourcePath, videoId: state.pending.videoForThumb });
+        state.pending.videoForThumb = null;
+        return;
+      }
+      if (mediaType === 'file' && state.pending.sharedFileMeta) {
+        post({ type: 'upload_media', mediaType: 'file', sourcePath });
+        return;
+      }
+    }
+
+    function onFilesSelected(mediaType, paths) {
+      if (mediaType !== 'photo' || !state.pending.albumForPhotos || !Array.isArray(paths)) return;
+      const albumId = state.pending.albumForPhotos;
+      state.pending.albumForPhotos = null;
+      paths.forEach(path => post({ type: 'upload_media', mediaType: 'photo', sourcePath: path, albumId }));
+    }
+
+    function onUploadComplete(mediaType, storedFilename, albumId, videoId, fileSize) {
+      if (mediaType === 'avatar') {
+        state.config.profile.avatarFilename = storedFilename;
+        document.getElementById('avatarHint').textContent = '已保存: ' + storedFilename;
+      }
+
+      if (mediaType === 'photo') {
+        const album = state.config.albums.find(a => a.id === albumId);
+        if (album) {
+          album.photos.push({ id: uid(), filename: storedFilename, caption: '', dateTaken: null });
+          if (!album.coverPhotoId) {
+            album.coverPhotoId = album.photos[0].id;
+          }
+        }
+      }
+
+      if (mediaType === 'video') {
+        const video = state.config.videos.find(v => v.id === videoId);
+        if (video) video.filename = storedFilename;
+      }
+
+      if (mediaType === 'thumbnail') {
+        const video = state.config.videos.find(v => v.id === videoId);
+        if (video) video.thumbnailFilename = storedFilename;
+      }
+
+      if (mediaType === 'file') {
+        const meta = state.pending.sharedFileMeta || {};
+        state.config.sharedFiles.push({
+          id: uid(),
+          filename: storedFilename,
+          displayName: meta.displayName || storedFilename,
+          description: meta.description || '',
+          fileSize: Number(fileSize || 0),
+          addedAt: new Date().toISOString(),
+        });
+        state.pending.sharedFileMeta = null;
+        document.getElementById('fileDisplayName').value = '';
+        document.getElementById('fileDescription').value = '';
+      }
+
+      renderAll();
+      markDirty();
+      persistNow('媒体变更已保存');
+    }
+
+    function receiveState(config, serverRunning, localUrl, lanUrl, isLanMode) {
+      state.config = config || state.config;
+      state.serverRunning = !!serverRunning;
+      state.localUrl = localUrl || '';
+      state.lanUrl = lanUrl || '';
+      state.isLanMode = !!isLanMode;
+      state.config.profile = state.config.profile || { displayName: '', tagline: '', bio: '', avatarFilename: '', socialLinks: [] };
+      state.config.profile.socialLinks = state.config.profile.socialLinks || [];
+      state.config.albums = state.config.albums || [];
+      state.config.videos = state.config.videos || [];
+      state.config.sharedFiles = state.config.sharedFiles || [];
+      ensureDefaultModules();
+      renderAll();
+      markDirty(false);
+      document.getElementById('saveStatus').textContent = '配置已加载';
+    }
+
+    function onAiStart() {
+      const sendBtn = document.getElementById('btnSendAi');
+      if (sendBtn) sendBtn.disabled = true;
+      state.chat.push({ role: 'assistant', text: 'AI 正在思考并生成主页配置…' });
+      renderChat();
+    }
+
+    function onAiDone(message) {
+      const sendBtn = document.getElementById('btnSendAi');
+      if (sendBtn) sendBtn.disabled = false;
+      const last = state.chat[state.chat.length - 1];
+      if (last && last.role === 'assistant' && last.text.startsWith('AI 正在思考')) {
+        last.text = message || 'AI 已完成。';
+      } else {
+        state.chat.push({ role: 'assistant', text: message || 'AI 已完成。' });
+      }
+      renderChat();
+      persistNow('AI 更新结果已保存');
+    }
+
+    function onAiError(message) {
+      const sendBtn = document.getElementById('btnSendAi');
+      if (sendBtn) sendBtn.disabled = false;
+      state.chat.push({ role: 'assistant', text: 'AI 请求失败: ' + (message || '未知错误') });
+      renderChat();
+    }
+
+    function onServerStatus(running, localUrl, lanUrl, isLanMode, error) {
+      state.serverRunning = !!running;
+      state.localUrl = localUrl || '';
+      state.lanUrl = lanUrl || '';
+      state.isLanMode = !!isLanMode;
+      renderPublishState();
+      updateHeaderStatus();
+      if (error) {
+        onError(error);
+      } else {
+        document.getElementById('saveStatus').textContent = running ? '发布服务已启动' : '发布服务已停止';
+      }
+    }
+
+    function onError(message) {
+      document.getElementById('saveStatus').textContent = message;
+      document.getElementById('saveStatus').className = 'error';
+      setTimeout(() => {
+        document.getElementById('saveStatus').className = 'hint';
+      }, 3000);
+    }
+
+    function buildMediaUrl(relative) {
+      if (state.localUrl) {
+        return state.localUrl + '/media/' + relative;
+      }
+      return '';
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function wireEvents() {
+      document.getElementById('btnSaveAll').addEventListener('click', saveAll);
+      document.getElementById('btnReloadState').addEventListener('click', () => post({ type: 'get_state' }));
+      function doSendAi() {
+        const ta = document.getElementById('aiPrompt');
+        const text = ta.value.trim();
+        if (!text) { onError('\u8bf7\u8f93\u5165\u5bf9 AI \u7684\u63cf\u8ff0\u3002'); return; }
+        state.chat.push({ role: 'user', text });
+        renderChat();
+        post({ type: 'save_config', config: state.config });
+        post({ type: 'ai_chat', message: text });
+        ta.value = '';
+        autoResizeTextarea(ta);
+      }
+      document.getElementById('btnSendAi').addEventListener('click', doSendAi);
+      document.getElementById('btnAiExample').addEventListener('click', () => fillExample(0));
+      const aiTA = document.getElementById('aiPrompt');
+      aiTA.addEventListener('input', () => autoResizeTextarea(aiTA));
+      aiTA.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); doSendAi(); }
+      });
+      document.getElementById('btnAddSocial').addEventListener('click', addSocial);
+      document.getElementById('btnAddAlbum').addEventListener('click', addAlbum);
+      document.getElementById('btnAddVideo').addEventListener('click', addVideo);
+      document.getElementById('btnPickAvatar').addEventListener('click', pickAvatar);
+      document.getElementById('btnUploadFile').addEventListener('click', uploadSharedFile);
+      document.getElementById('btnApplyTextBlock').addEventListener('click', applyTextBlock);
+      document.getElementById('btnStartServer').addEventListener('click', startServer);
+      document.getElementById('btnStopServer').addEventListener('click', stopServer);
+      document.getElementById('btnOpenPublished').addEventListener('click', openPublished);
+      document.getElementById('btnRefreshPreview').addEventListener('click', refreshPreview);
+      document.getElementById('btnDeviceDesktop').addEventListener('click', () => setPreviewDevice('desktop'));
+      document.getElementById('btnDeviceMobile').addEventListener('click', () => setPreviewDevice('mobile'));
+
+      ['displayName', 'tagline', 'bio', 'templateId', 'serverPort'].forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+          collectProfileForm();
+          updateHeaderStatus();
+          markDirty();
+        });
+      });
+    }
+
+    const HomepageEditor = {
+      receiveState,
+      onAiStart,
+      onAiDone,
+      onAiError,
+      onServerStatus,
+      onFileSelected,
+      onFilesSelected,
+      onUploadComplete,
+      onError,
+      removeAlbum,
+      removeVideo,
+      removeSharedFile,
+      removeAlbumPhoto,
+      removeSocial,
+      pickAlbumPhotos,
+      pickVideoFile,
+      pickVideoThumb,
+      moveModule,
+      toggleModule,
+      setAlbumCover,
+      setPhotoCaption,
+      updateVideoField,
+      updateSharedFileField,
+      copyUrl,
+      fillExample,
+    };
+    window.HomepageEditor = HomepageEditor;
+
+    renderTabs();
+    switchTab('ai');
+    wireEvents();
+    post({ type: 'get_state' });
+  </script>
+</body>
+</html>

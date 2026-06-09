@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>DanceMonkey.Agent.Core</RootNamespace>
+    <AssemblyName>DanceMonkey.Agent.Core</AssemblyName>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DanceMonkey.Ppt\DanceMonkey.Ppt.csproj" />
+  </ItemGroup>
+
+</Project>

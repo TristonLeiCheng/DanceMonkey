@@ -1,0 +1,56 @@
+<Window x:Class="DesktopAssistant.Views.QuickLinkAddDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="添加快捷方式" Width="480" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="{StaticResource BrushBackground}">
+    <StackPanel Margin="20">
+        <TextBlock x:Name="DialogTitleBlock" Text="{DynamicResource QuickAccess.AddLinkTitle}"
+                   Style="{StaticResource UiSectionTitle}" Margin="0,0,0,12"/>
+
+        <TextBlock Text="{DynamicResource QuickAccess.LinkCategory}" Style="{StaticResource UiFieldLabel}"/>
+        <Border Background="{StaticResource BrushSurfaceMuted}" BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="1" CornerRadius="8" Padding="4,2" Margin="0,0,0,10">
+            <ComboBox x:Name="CategoryCombo" Style="{StaticResource UiComboBox}"
+                      BorderThickness="0" Background="Transparent"
+                      SelectionChanged="Category_OnChanged">
+                <ComboBoxItem Tag="local"      Content="&#x1F4C1; 本地文件夹" IsSelected="True"/>
+                <ComboBoxItem Tag="network"    Content="&#x1F5A7; 网络共享 / 公共盘 (UNC)"/>
+                <ComboBoxItem Tag="sharepoint" Content="&#x1F517; SharePoint"/>
+                <ComboBoxItem Tag="onedrive"   Content="&#x2601; OneDrive 链接"/>
+                <ComboBoxItem Tag="web"        Content="&#x1F310; 网页链接"/>
+            </ComboBox>
+        </Border>
+
+        <TextBlock Text="{DynamicResource QuickAccess.LinkName}" Style="{StaticResource UiFieldLabel}"/>
+        <TextBox x:Name="NameBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+
+        <TextBlock Text="{DynamicResource QuickAccess.LinkPath}" Style="{StaticResource UiFieldLabel}"/>
+        <Grid Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="PathBox" Style="{StaticResource UiTextBox}"/>
+            <Button x:Name="BrowseBtn" Grid.Column="1" Content="..." Style="{StaticResource UiBtnSecondary}"
+                    Padding="12,6" Margin="6,0,0,0" Click="Browse_OnClick"/>
+        </Grid>
+        <TextBlock x:Name="PathHint" Style="{StaticResource UiHint}" TextWrapping="Wrap" Margin="0,0,0,10"
+                   Text="{DynamicResource QuickAccess.PathHintLocal}"/>
+
+        <TextBlock Text="{DynamicResource QuickAccess.LinkDescription}" Style="{StaticResource UiFieldLabel}"/>
+        <TextBox x:Name="DescBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"
+                 ToolTip="选填备注，显示在磁贴副标题"/>
+
+        <TextBlock Text="{DynamicResource QuickAccess.LinkGroup}" Style="{StaticResource UiFieldLabel}"/>
+        <TextBox x:Name="GroupBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,16"
+                 ToolTip="相同分组的快捷方式会在类别视图中合并为子区段"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="{DynamicResource QuickAccess.Cancel}" Style="{StaticResource UiBtnSecondary}"
+                    Padding="16,7" Margin="0,0,8,0" IsCancel="True"/>
+            <Button Content="{DynamicResource QuickAccess.Confirm}" Style="{StaticResource UiBtnPrimary}"
+                    Padding="16,7" Click="Confirm_OnClick"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

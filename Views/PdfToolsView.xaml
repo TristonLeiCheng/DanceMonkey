@@ -1,0 +1,85 @@
+<UserControl x:Class="DesktopAssistant.Views.PdfToolsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+             Background="Transparent">
+    <Grid Margin="4,0,4,16">
+        <TabControl Padding="0,8,0,0" BorderThickness="0">
+            <TabItem Header="查看">
+                <Grid Margin="0,12,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Button x:Name="BtnOpenPdf" Content="打开 PDF…" Style="{StaticResource UiBtnPrimary}" Padding="16,8"
+                                Click="BtnOpenPdf_OnClick"/>
+                        <TextBlock x:Name="ViewPathHint" Text="未选择文件" VerticalAlignment="Center" Margin="12,0,0,0"
+                                   Foreground="{StaticResource BrushTextSecondary}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <Border Grid.Row="1" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="8"
+                            ClipToBounds="True" MinHeight="360">
+                        <wv2:WebView2 x:Name="PdfWebView"/>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="合并">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,12,0,0" MaxWidth="720">
+                        <TextBlock Text="按下列顺序合并多个 PDF（可调整顺序）" Style="{StaticResource UiHint}" Margin="0,0,0,10"/>
+                        <ListBox x:Name="MergeList" MinHeight="140" MaxHeight="220"
+                                 FontSize="13"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="添加文件…" Style="{StaticResource UiBtnSecondary}" Padding="12,8" Margin="0,0,8,0"
+                                    Click="MergeAdd_OnClick"/>
+                            <Button Content="移除所选" Style="{StaticResource UiBtnSecondary}" Padding="12,8" Margin="0,0,8,0"
+                                    Click="MergeRemove_OnClick"/>
+                            <Button Content="上移" Style="{StaticResource UiBtnSecondary}" Padding="12,8" Margin="0,0,8,0"
+                                    Click="MergeUp_OnClick"/>
+                            <Button Content="下移" Style="{StaticResource UiBtnSecondary}" Padding="12,8"
+                                    Click="MergeDown_OnClick"/>
+                        </StackPanel>
+                        <Button x:Name="BtnMergeRun" Content="合并并保存…" Style="{StaticResource UiBtnPrimary}" Margin="0,16,0,0"
+                                HorizontalAlignment="Left" Padding="20,10" Click="BtnMergeRun_OnClick"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="分割">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,12,0,0" MaxWidth="720">
+                        <Button Content="选择要分割的 PDF…" Style="{StaticResource UiBtnSecondary}" HorizontalAlignment="Left"
+                                Padding="14,8" Click="SplitChoose_OnClick"/>
+                        <TextBlock x:Name="SplitFileHint" Text="未选择文件" Style="{StaticResource UiHint}" Margin="0,8,0,12"/>
+
+                        <TextBlock Text="分割方式" Style="{StaticResource UiFieldLabel}"/>
+                        <StackPanel Margin="0,0,0,12">
+                            <RadioButton x:Name="SplitModeEach" GroupName="SplitMode" Content="每页单独保存为一个 PDF" IsChecked="True"
+                                         Margin="0,4"/>
+                            <RadioButton x:Name="SplitModeRanges" GroupName="SplitMode" Content="按页码范围拆成多个文件"
+                                         Margin="0,4"/>
+                        </StackPanel>
+
+                        <TextBlock Text="页码范围（仅「按范围」时填写，1 起始；示例：1-3,5,8-10）" Style="{StaticResource UiFieldLabel}"/>
+                        <TextBox x:Name="SplitRangesBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,12"
+                                 IsEnabled="False"/>
+
+                        <TextBlock Text="输出文件夹" Style="{StaticResource UiFieldLabel}"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <TextBox x:Name="SplitOutDir" Style="{StaticResource UiTextBox}" MinWidth="400" IsReadOnly="True"/>
+                            <Button Content="浏览…" Style="{StaticResource UiBtnSecondary}" Margin="8,0,0,0" Padding="14,8"
+                                    Click="SplitOutDir_OnClick"/>
+                        </StackPanel>
+
+                        <TextBlock Text="文件名前缀（可选）" Style="{StaticResource UiFieldLabel}"/>
+                        <TextBox x:Name="SplitPrefixBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,16"/>
+
+                        <Button x:Name="BtnSplitRun" Content="开始分割" Style="{StaticResource UiBtnPrimary}" HorizontalAlignment="Left"
+                                Padding="20,10" Click="BtnSplitRun_OnClick"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

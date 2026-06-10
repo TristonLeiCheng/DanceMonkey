@@ -17,6 +17,12 @@ public sealed class AppUpdateService
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    static AppUpdateService()
+    {
+        if (Http.DefaultRequestHeaders.UserAgent.Count == 0)
+            Http.DefaultRequestHeaders.UserAgent.ParseAdd("DanceMonkey-Updater/1.0");
+    }
+
     public async Task<AppUpdateCheckResult> CheckForUpdateAsync(string manifestSource, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(manifestSource))
@@ -34,6 +40,34 @@ public sealed class AppUpdateService
         manifest.PackageUrl = ResolvePackageSource(manifestSource, manifest.PackageUrl);
         manifest.EntryExe = string.IsNullOrWhiteSpace(manifest.EntryExe) ? "DanceMonkey.exe" : manifest.EntryExe.Trim();
 
+        return BuildCheckResult(manifest);
+    }
+
+    public async Task<AppUpdateCheckResult> CheckForUpdateFromGitHubAsync(
+        string repository,
+        string? assetKeyword = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(repository))
+            throw new InvalidOperationException("GitHub 仓库不能为空，请使用 owner/repo 格式。");
+
+        var ownerRepo = ParseRepository(repository);
+        var apiUrl = $"https://api.github.com/repos/{ownerRepo}/releases/latest";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
+        request.Headers.Accept.ParseAdd("application/vnd.github+json");
+
+        using var response = await Http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"无法获取 GitHub 最新发行版（HTTP {(int)response.StatusCode}）。请检查网络或仓库地址。");
+
+        var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var manifest = BuildManifestFromGitHubRelease(json, assetKeyword);
+        return BuildCheckResult(manifest);
+    }
+
+    private static AppUpdateCheckResult BuildCheckResult(AppUpdateManifest manifest)
+    {
         var currentVersionText = AppVersionService.GetCurrentVersionText();
         var currentVersion = AppVersionService.TryParseVersion(currentVersionText);
         var latestVersion = AppVersionService.TryParseVersion(manifest.Version);
@@ -47,9 +81,74 @@ public sealed class AppUpdateService
             IsUpdateAvailable = isUpdateAvailable,
             CurrentVersionText = currentVersionText,
             LatestVersionText = manifest.Version,
-            Message = isUpdateAvailable ? $"发现新版本 v{manifest.Version}。" : $"当前已是最新版本 v{currentVersionText}。",
+            Message = isUpdateAvailable
+                ? $"发现新版本 v{manifest.Version}。"
+                : $"当前已是最新版本 v{currentVersionText}。",
             Manifest = manifest
         };
+    }
+
+    private static AppUpdateManifest BuildManifestFromGitHubRelease(string json, string? assetKeyword)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        var tag = root.TryGetProperty("tag_name", out var tagElement) ? tagElement.GetString() : null;
+        if (string.IsNullOrWhiteSpace(tag))
+            throw new InvalidOperationException("GitHub 发行版缺少 tag_name 字段。");
+
+        var version = tag.TrimStart('v', 'V').Trim();
+
+        var zipAssets = new List<(string Name, string Url)>();
+        if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var asset in assets.EnumerateArray())
+            {
+                var name = asset.TryGetProperty("name", out var nameElement) ? nameElement.GetString() : null;
+                var url = asset.TryGetProperty("browser_download_url", out var urlElement) ? urlElement.GetString() : null;
+                if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(url))
+                    continue;
+                if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    zipAssets.Add((name, url));
+            }
+        }
+
+        if (zipAssets.Count == 0)
+            throw new InvalidOperationException("GitHub 最新发行版中未找到可用的 .zip 升级包。");
+
+        var packageUrl = zipAssets[0].Url;
+        if (!string.IsNullOrWhiteSpace(assetKeyword))
+        {
+            var matched = zipAssets.FirstOrDefault(a => a.Name.Contains(assetKeyword, StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(matched.Url))
+                throw new InvalidOperationException($"GitHub 最新发行版中未找到文件名包含 '{assetKeyword}' 的 .zip 升级包。");
+
+            packageUrl = matched.Url;
+        }
+
+        var notes = root.TryGetProperty("body", out var bodyElement) ? bodyElement.GetString() : null;
+
+        return new AppUpdateManifest
+        {
+            Version = version,
+            PackageUrl = packageUrl,
+            EntryExe = "DanceMonkey.exe",
+            ReleaseNotes = notes
+        };
+    }
+
+    private static string ParseRepository(string repository)
+    {
+        var value = repository.Trim();
+        if (TryCreateHttpUri(value, out var uri) &&
+            uri.Host.Contains("github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            var segments = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length >= 2)
+                return $"{segments[0]}/{segments[1]}";
+        }
+
+        return value.Trim('/');
     }
 
     public async Task<AppUpdateLaunchInfo> DownloadAndStageUpdateAsync(

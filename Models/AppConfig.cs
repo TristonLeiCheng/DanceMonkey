@@ -266,6 +266,14 @@ public sealed class AppConfig
     [JsonPropertyName("updateManifestUrl")]
     public string? UpdateManifestUrl { get; set; }
 
+    /// <summary>GitHub 发行版仓库（owner/repo），用于"检查更新"自动拉取最新 Release。</summary>
+    [JsonPropertyName("updateGitHubRepo")]
+    public string UpdateGitHubRepo { get; set; } = "TristonLeiCheng/DanceMonkey";
+
+    /// <summary>从 GitHub Release 资源中按文件名关键字筛选升级包（.zip）。</summary>
+    [JsonPropertyName("updateAssetKeyword")]
+    public string UpdateAssetKeyword { get; set; } = "win-x64";
+
     // ── 知识库（在线 KB 服务） ──
 
     /// <summary>知识库服务根地址。空时使用默认 http://10.66.30.132:8000。</summary>
@@ -379,6 +387,8 @@ public sealed class AppConfig
         CodexProxyPort = CodexProxyPort,
         CodexProxyTimeoutSeconds = CodexProxyTimeoutSeconds,
         UpdateManifestUrl = UpdateManifestUrl,
+        UpdateGitHubRepo = UpdateGitHubRepo,
+        UpdateAssetKeyword = UpdateAssetKeyword,
         KnowledgeBaseUrl = KnowledgeBaseUrl,
         KnowledgeBaseAutoRoute = KnowledgeBaseAutoRoute,
         KnowledgeBaseTimeoutSeconds = KnowledgeBaseTimeoutSeconds,

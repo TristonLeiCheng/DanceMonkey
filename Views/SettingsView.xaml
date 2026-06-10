@@ -729,13 +729,21 @@
                                 <TextBlock Text="{DynamicResource Settings.About}" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,8"/>
                                 <TextBlock FontWeight="SemiBold" Foreground="{StaticResource BrushTextPrimary}" Text="DanceMonkey" FontSize="13"/>
                                 <TextBlock x:Name="CurrentVersionText" Text="版本 --" Foreground="{StaticResource BrushTextSecondary}" FontSize="12.5"/>
-                                <TextBlock Text="在线升级清单 URL" Style="{StaticResource UiFieldLabel}" Margin="0,12,0,0"/>
+                                <TextBlock Text="GitHub 仓库（owner/repo）" Style="{StaticResource UiFieldLabel}" Margin="0,12,0,0"/>
+                                <TextBox x:Name="UpdateGitHubRepoBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,4"/>
+                                <TextBlock Text="默认从该仓库的最新 Release 自动下载升级包。" Style="{StaticResource UiHint}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                                <TextBlock Text="升级包资源关键字" Style="{StaticResource UiFieldLabel}"/>
+                                <TextBox x:Name="UpdateAssetKeywordBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,4"/>
+                                <TextBlock Text="用于在 Release assets 中匹配 .zip 文件名，例如 win-x64。" Style="{StaticResource UiHint}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                                <TextBlock Text="在线升级清单 URL（可选，填写后优先使用）" Style="{StaticResource UiFieldLabel}"/>
                                 <TextBox x:Name="UpdateManifestUrlBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,8"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                     <Button x:Name="UpdateBtn"
-                                            Content="Update"
+                                            Content="检查并更新"
                                             Style="{StaticResource UiBtnPrimary}"
-                                            MinWidth="96"
+                                            MinWidth="112"
                                             Click="UpdateBtn_OnClick"/>
                                 </StackPanel>
                                 <TextBlock x:Name="UpdateStatusText" Style="{StaticResource UiHint}" TextWrapping="Wrap" Margin="0,0,0,8"/>

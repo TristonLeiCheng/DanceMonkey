@@ -126,6 +126,14 @@ public partial class SettingsView : UserControl
         HealthReminderCheck.IsChecked = config.HealthReminderEnabled;
         WaterIntervalBox.Text = config.WaterReminderMinutes.ToString();
         MovementIntervalBox.Text = config.MovementReminderMinutes.ToString();
+        if (UpdateGitHubRepoBox != null)
+            UpdateGitHubRepoBox.Text = string.IsNullOrWhiteSpace(config.UpdateGitHubRepo)
+                ? "TristonLeiCheng/DanceMonkey"
+                : config.UpdateGitHubRepo;
+        if (UpdateAssetKeywordBox != null)
+            UpdateAssetKeywordBox.Text = string.IsNullOrWhiteSpace(config.UpdateAssetKeyword)
+                ? "win-x64"
+                : config.UpdateAssetKeyword;
         if (UpdateManifestUrlBox != null)
             UpdateManifestUrlBox.Text = config.UpdateManifestUrl ?? "";
         if (CurrentVersionText != null)
@@ -354,6 +362,12 @@ public partial class SettingsView : UserControl
         config.ProxyRefreshMinutes = int.TryParse(ProxyRefreshMinutesBox.Text.Trim(), out var proxyRefresh)
             ? Math.Clamp(proxyRefresh, 1, 60)
             : 3;
+        config.UpdateGitHubRepo = string.IsNullOrWhiteSpace(UpdateGitHubRepoBox.Text)
+            ? "TristonLeiCheng/DanceMonkey"
+            : UpdateGitHubRepoBox.Text.Trim();
+        config.UpdateAssetKeyword = string.IsNullOrWhiteSpace(UpdateAssetKeywordBox.Text)
+            ? "win-x64"
+            : UpdateAssetKeywordBox.Text.Trim();
         config.UpdateManifestUrl = string.IsNullOrWhiteSpace(UpdateManifestUrlBox.Text)
             ? null
             : UpdateManifestUrlBox.Text.Trim();
@@ -630,21 +644,26 @@ public partial class SettingsView : UserControl
     private async void UpdateBtn_OnClick(object sender, RoutedEventArgs e)
     {
         var manifestSource = UpdateManifestUrlBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(manifestSource))
-        {
-            MessageBox.Show("请先配置在线升级清单 URL。", L("Msg.Hint"), MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
+        var repository = string.IsNullOrWhiteSpace(UpdateGitHubRepoBox.Text)
+            ? "TristonLeiCheng/DanceMonkey"
+            : UpdateGitHubRepoBox.Text.Trim();
+        var assetKeyword = string.IsNullOrWhiteSpace(UpdateAssetKeywordBox.Text)
+            ? "win-x64"
+            : UpdateAssetKeywordBox.Text.Trim();
 
         var originalContent = UpdateBtn.Content;
         UpdateBtn.IsEnabled = false;
         UpdateBtn.Content = "Updating...";
-        UpdateStatusText.Text = "正在检查最新版本...";
+        UpdateStatusText.Text = string.IsNullOrWhiteSpace(manifestSource)
+            ? "正在检查 GitHub 最新 Release..."
+            : "正在检查最新版本...";
 
         try
         {
-            var check = await _appUpdateService.CheckForUpdateAsync(manifestSource);
+            var check = string.IsNullOrWhiteSpace(manifestSource)
+                ? await _appUpdateService.CheckForUpdateFromGitHubAsync(repository, assetKeyword)
+                : await _appUpdateService.CheckForUpdateAsync(manifestSource);
+
             if (!check.IsUpdateAvailable || check.Manifest == null)
             {
                 UpdateStatusText.Text = $"已是最新版本（v{check.CurrentVersionText}）。";

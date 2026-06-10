@@ -180,6 +180,8 @@ public sealed class ConfigService
         CodexProxyHost = "127.0.0.1",
         CodexProxyPort = 8000,
         CodexProxyTimeoutSeconds = 300,
-        UpdateManifestUrl = ""
+        UpdateManifestUrl = "",
+        UpdateGitHubRepo = "TristonLeiCheng/DanceMonkey",
+        UpdateAssetKeyword = "win-x64"
     };
 }

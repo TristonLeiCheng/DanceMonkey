@@ -25,6 +25,7 @@ public partial class DanceView : UserControl
     {
         var cfg = DesktopAssistant.App.Config.Load();
         PetModeCheck.IsChecked = cfg.PetModeEnabled;
+        PetPreventSleepCheck.IsChecked = cfg.PetPreventSleepEnabled;
         _selectedAnimal = string.IsNullOrWhiteSpace(cfg.PetAnimal) ? "human" : cfg.PetAnimal;
         UpdateAnimalCardHighlight();
         SelectPetSize(cfg.PetDisplaySize);
@@ -36,6 +37,7 @@ public partial class DanceView : UserControl
     {
         var cfg = DesktopAssistant.App.Config.Load();
         cfg.PetModeEnabled = PetModeCheck.IsChecked == true;
+        cfg.PetPreventSleepEnabled = PetPreventSleepCheck.IsChecked == true;
         cfg.PetAnimal = _selectedAnimal;
         cfg.PetDisplaySize = GetSelectedPetSize();
         if (DesktopAssistant.App.Config.Save(cfg))

@@ -351,7 +351,7 @@
     <sys:String x:Key="SkillManager.Lead">在此管理沙箱工作区下的 Agent 技能。每个技能为独立文件夹内的 SKILL.md，支持 Claude Code 风格 frontmatter（name / description / allowed-tools / activation / triggers）。Agent 会先加载技能目录，并在用户点名或任务匹配 description/triggers 时注入对应技能正文。</sys:String>
     <sys:String x:Key="SkillManager.Library">技能库</sys:String>
     <sys:String x:Key="SkillManager.Refresh">刷新</sys:String>
-    <sys:String x:Key="SkillManager.OpenFolder">在资源管理器中打开</sys:String>
+    <sys:String x:Key="SkillManager.OpenFolder">打开目录</sys:String>
     <sys:String x:Key="SkillManager.AddGroup">添加新技能</sys:String>
     <sys:String x:Key="SkillManager.NewNameLabel">技能名称（用作文件夹名，非法字符会替换为 -）</sys:String>
     <sys:String x:Key="SkillManager.NewDescriptionLabel">触发描述（description，用于自动匹配任务）</sys:String>

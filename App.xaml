@@ -232,6 +232,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="10,7"/>
             <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="MinHeight" Value="36"/>
             <Setter Property="CaretBrush" Value="{StaticResource BrushTextPrimary}"/>
             <Setter Property="SelectionBrush" Value="{StaticResource BrushAccent}"/>
             <Setter Property="Template">
@@ -412,6 +413,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="10,7"/>
             <Setter Property="FontSize" Value="13.5"/>
+            <Setter Property="MinHeight" Value="36"/>
             <Setter Property="CaretBrush" Value="{StaticResource BrushTextPrimary}"/>
             <Setter Property="Template">
                 <Setter.Value>

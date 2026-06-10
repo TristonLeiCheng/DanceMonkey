@@ -23,10 +23,10 @@
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0">
-        <StackPanel Margin="4,0,4,20" MaxWidth="820">
+        <StackPanel Margin="4,0,4,20" MaxWidth="1180" HorizontalAlignment="Stretch">
             <StackPanel Margin="0,0,0,16">
                 <TextBlock Text="桌面宠物" Style="{StaticResource UiPageTitle}"/>
-                <TextBlock Text="右下角桌面宠物（替代悬浮球），开启后阻止系统休眠" Style="{StaticResource UiPageSubtitle}"/>
+                <TextBlock Text="右下角桌面宠物（替代悬浮球），支持外形、大小、互动提醒和防休眠设置" Style="{StaticResource UiPageSubtitle}"/>
             </StackPanel>
 
             <!-- ═══ 桌面宠物卡片 ═══ -->
@@ -39,6 +39,12 @@
                               FontSize="13"
                               Foreground="{StaticResource BrushTextPrimary}"
                               Margin="0,0,0,14"/>
+                    <CheckBox x:Name="PetPreventSleepCheck"
+                              Content="宠物模式开启时阻止计算机空闲休眠 / 关闭显示器"
+                              FontSize="13"
+                              Foreground="{StaticResource BrushTextPrimary}"
+                              Margin="0,0,0,14"
+                              IsChecked="True"/>
 
                     <TextBlock Text="宠物外形" Style="{StaticResource UiFieldLabel}"/>
                     <TextBlock Style="{StaticResource UiHint}" Margin="0,0,0,12">
@@ -193,7 +199,7 @@
                     </WrapPanel>
 
                     <TextBlock TextWrapping="Wrap" Style="{StaticResource UiHint}" Margin="0,0,0,12">
-                        开启宠物模式后，桌面悬浮球会被隐藏，由右下角宠物接管快捷入口（双击打开主窗口、单击互动、右键菜单等）。开启后阻止系统休眠。
+                        开启宠物模式后，桌面悬浮球会被隐藏，由右下角宠物接管快捷入口（双击打开主窗口、单击互动、右键菜单等）。防休眠可按需单独开启或关闭。
                     </TextBlock>
                     <TextBlock Text="宠物大小" Style="{StaticResource UiFieldLabel}" Margin="0,4,0,6"/>
                     <WrapPanel Orientation="Horizontal" Margin="0,0,0,16">

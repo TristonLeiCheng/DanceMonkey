@@ -2,6 +2,22 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="Transparent">
+    <UserControl.Resources>
+        <Style x:Key="SkillBtnPrimary" TargetType="Button" BasedOn="{StaticResource UiBtnPrimary}">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="FontSize" Value="12.5"/>
+        </Style>
+
+        <Style x:Key="SkillBtnSecondary" TargetType="Button" BasedOn="{StaticResource UiBtnSecondary}">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="FontSize" Value="12.5"/>
+        </Style>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -50,15 +66,13 @@
                                Margin="0,0,10,0"/>
                     <Button x:Name="BtnRefresh"
                             MinWidth="80"
-                            Height="32"
                             Margin="0,0,8,0"
-                            Style="{StaticResource UiBtnSecondary}"
+                            Style="{StaticResource SkillBtnSecondary}"
                             Click="BtnRefresh_OnClick"
                             Content="{DynamicResource SkillManager.Refresh}"/>
                     <Button x:Name="BtnOpenFolder"
-                            MinWidth="112"
-                            Height="32"
-                            Style="{StaticResource UiBtnSecondary}"
+                            MinWidth="120"
+                            Style="{StaticResource SkillBtnSecondary}"
                             Click="BtnOpenFolder_OnClick"
                             Content="{DynamicResource SkillManager.OpenFolder}"/>
                 </StackPanel>
@@ -177,17 +191,15 @@
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                             <Button x:Name="BtnDelete"
                                     MinWidth="84"
-                                    Height="32"
                                     IsEnabled="False"
-                                    Style="{StaticResource UiBtnSecondary}"
+                                    Style="{StaticResource SkillBtnSecondary}"
                                     Click="BtnDelete_OnClick"
                                     Content="{DynamicResource SkillManager.Delete}"/>
                             <Button x:Name="BtnSave"
                                     MinWidth="84"
-                                    Height="32"
                                     Margin="8,0,0,0"
                                     IsEnabled="False"
-                                    Style="{StaticResource UiBtnPrimary}"
+                                    Style="{StaticResource SkillBtnPrimary}"
                                     Click="BtnSave_OnClick"
                                     Content="{DynamicResource SkillManager.Save}"/>
                         </StackPanel>
@@ -243,16 +255,14 @@
                                  Padding="7"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button x:Name="BtnTemplate"
-                                    MinWidth="96"
-                                    Height="30"
-                                    Style="{StaticResource UiBtnSecondary}"
+                                    MinWidth="100"
+                                    Style="{StaticResource SkillBtnSecondary}"
                                     Click="BtnTemplate_OnClick"
                                     Content="{DynamicResource SkillManager.InsertTemplate}"/>
                             <Button x:Name="BtnAdd"
-                                    MinWidth="96"
-                                    Height="30"
+                                    MinWidth="100"
                                     Margin="8,0,0,0"
-                                    Style="{StaticResource UiBtnPrimary}"
+                                    Style="{StaticResource SkillBtnPrimary}"
                                     Click="BtnAdd_OnClick"
                                     Content="{DynamicResource SkillManager.Add}"/>
                         </StackPanel>
@@ -288,24 +298,21 @@
                         <Button Grid.Column="2"
                                 x:Name="BtnBrowseImportFile"
                                 MinWidth="72"
-                                Height="30"
-                                Style="{StaticResource UiBtnSecondary}"
+                                Style="{StaticResource SkillBtnSecondary}"
                                 Click="BtnBrowseImportFile_OnClick"
                                 Content="{DynamicResource SkillManager.BrowseFile}"/>
                         <Button Grid.Column="4"
                                 x:Name="BtnBrowseImportFolder"
                                 MinWidth="72"
-                                Height="30"
-                                Style="{StaticResource UiBtnSecondary}"
+                                Style="{StaticResource SkillBtnSecondary}"
                                 Click="BtnBrowseImportFolder_OnClick"
                                 Content="{DynamicResource SkillManager.BrowseFolder}"/>
                     </Grid>
                     <Button x:Name="BtnImport"
                             MinWidth="96"
-                            Height="30"
                             HorizontalAlignment="Right"
                             Margin="0,8,0,0"
-                            Style="{StaticResource UiBtnPrimary}"
+                            Style="{StaticResource SkillBtnPrimary}"
                             Click="BtnImport_OnClick"
                             Content="{DynamicResource SkillManager.Import}"/>
                 </StackPanel>

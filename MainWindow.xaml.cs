@@ -235,7 +235,7 @@ public partial class MainWindow : Window
     public void SyncPetMode()
     {
         var cfg = App.Config.Load();
-        SleepPreventionService.SetEnabled(cfg.PetModeEnabled);
+        SleepPreventionService.SetEnabled(cfg.PetModeEnabled && cfg.PetPreventSleepEnabled);
         SyncTrayPetMenuState();
         if (cfg.PetModeEnabled)
         {
@@ -642,11 +642,6 @@ public partial class MainWindow : Window
         return AppPage.Notes;
     }
 
-    private void BtnOpenSettings_OnClick(object sender, RoutedEventArgs e)
-    {
-        SwitchPage(AppPage.Settings);
-    }
-
     // ═══════════════ Sidebar Collapse / Expand ═══════════════
 
     private void BtnSidebarToggle_OnClick(object sender, RoutedEventArgs e)
@@ -768,7 +763,6 @@ public partial class MainWindow : Window
             AppPage.Settings => L("Nav.Settings"),
             _ => AppBranding.DisplayName
         };
-        BtnOpenSettings.Visibility = page == AppPage.Settings ? Visibility.Collapsed : Visibility.Visible;
         NotesToolbarPanel.Visibility = page == AppPage.Notes ? Visibility.Visible : Visibility.Collapsed;
     }
 

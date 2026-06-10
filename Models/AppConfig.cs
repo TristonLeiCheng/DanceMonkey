@@ -95,6 +95,10 @@ public sealed class AppConfig
     [JsonPropertyName("petDisplaySize")]
     public int PetDisplaySize { get; set; } = 68;
 
+    /// <summary>桌面宠物开启时是否阻止计算机空闲休眠，默认开启。</summary>
+    [JsonPropertyName("petPreventSleepEnabled")]
+    public bool PetPreventSleepEnabled { get; set; } = true;
+
     /// <summary>全局对话快捷键（默认 Ctrl+Shift+Q）。格式如 "Ctrl+Shift+Q"。</summary>
     [JsonPropertyName("globalChatHotkey")]
     public string GlobalChatHotkey { get; set; } = "Ctrl+Shift+Q";
@@ -399,6 +403,7 @@ public sealed class AppConfig
         PetModeEnabled = PetModeEnabled,
         PetMoodDecayEnabled = PetMoodDecayEnabled,
         PetAnimal = PetAnimal,
-        PetDisplaySize = PetDisplaySize
+        PetDisplaySize = PetDisplaySize,
+        PetPreventSleepEnabled = PetPreventSleepEnabled
     };
 }

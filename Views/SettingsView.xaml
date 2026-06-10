@@ -492,6 +492,58 @@
 
                         <Border Style="{StaticResource SettingsCard}">
                             <StackPanel>
+                                <TextBlock Text="{DynamicResource Settings.PromptSnippets}" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,4"/>
+                                <TextBlock Text="{DynamicResource Settings.PromptSnippetsHint}" Style="{StaticResource UiHint}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                <ListView x:Name="PromptSnippetsList"
+                                          Height="140"
+                                          Margin="0,0,0,8"
+                                          BorderBrush="{StaticResource BrushBorderSubtle}"
+                                          BorderThickness="1"
+                                          Background="{StaticResource BrushSurfaceMuted}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="{DynamicResource Settings.SnippetTitle}" Width="160" DisplayMemberBinding="{Binding Title}"/>
+                                            <GridViewColumn Header="{DynamicResource Settings.SnippetSystemPrompt}" Width="580" DisplayMemberBinding="{Binding Preview}"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="1.1*"/>
+                                        <ColumnDefinition Width="10"/>
+                                        <ColumnDefinition Width="2.4*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="{DynamicResource Settings.SnippetTitle}" Style="{StaticResource UiFieldLabel}"/>
+                                        <TextBox x:Name="PromptSnippetTitleBox" Style="{StaticResource UiTextBox}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="{DynamicResource Settings.SnippetSystemPrompt}" Style="{StaticResource UiFieldLabel}"/>
+                                        <TextBox x:Name="PromptSnippetBodyBox"
+                                                 Style="{StaticResource UiTextBox}"
+                                                 TextWrapping="Wrap"
+                                                 AcceptsReturn="True"
+                                                 MinHeight="64"
+                                                 VerticalScrollBarVisibility="Auto"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="{DynamicResource Settings.AddSnippet}" Style="{StaticResource UiBtnPrimary}" MinWidth="90" Margin="0,0,8,0" Click="AddPromptSnippet_OnClick"/>
+                                    <Button Content="{DynamicResource Settings.RemoveSelected}" Style="{StaticResource UiBtnSecondary}" MinWidth="90" Click="RemovePromptSnippet_OnClick"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem x:Name="FolderSyncTab" Header="文件夹同步">
+                <ScrollViewer Style="{StaticResource SettingsTabScrollViewer}">
+                    <StackPanel>
+                        <Border Style="{StaticResource SettingsCard}">
+                            <StackPanel>
                                 <TextBlock Text="文件夹同步" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,4"/>
                                 <TextBlock Text="用于本地文件夹与企业共享盘/局域网盘之间同步。主从单向会从主文件夹复制到从文件夹；完全同步会按较新文件互相复制，冲突时保留冲突副本。"
                                            Style="{StaticResource UiHint}" Margin="0,0,0,8" TextWrapping="Wrap"/>
@@ -651,52 +703,6 @@
                                          FontFamily="Consolas"
                                          FontSize="12"
                                          Style="{StaticResource UiTextBox}"/>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Style="{StaticResource SettingsCard}">
-                            <StackPanel>
-                                <TextBlock Text="{DynamicResource Settings.PromptSnippets}" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,4"/>
-                                <TextBlock Text="{DynamicResource Settings.PromptSnippetsHint}" Style="{StaticResource UiHint}" Margin="0,0,0,8" TextWrapping="Wrap"/>
-                                <ListView x:Name="PromptSnippetsList"
-                                          Height="140"
-                                          Margin="0,0,0,8"
-                                          BorderBrush="{StaticResource BrushBorderSubtle}"
-                                          BorderThickness="1"
-                                          Background="{StaticResource BrushSurfaceMuted}">
-                                    <ListView.View>
-                                        <GridView>
-                                            <GridViewColumn Header="{DynamicResource Settings.SnippetTitle}" Width="160" DisplayMemberBinding="{Binding Title}"/>
-                                            <GridViewColumn Header="{DynamicResource Settings.SnippetSystemPrompt}" Width="580" DisplayMemberBinding="{Binding Preview}"/>
-                                        </GridView>
-                                    </ListView.View>
-                                </ListView>
-
-                                <Grid Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="1.1*"/>
-                                        <ColumnDefinition Width="10"/>
-                                        <ColumnDefinition Width="2.4*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="{DynamicResource Settings.SnippetTitle}" Style="{StaticResource UiFieldLabel}"/>
-                                        <TextBox x:Name="PromptSnippetTitleBox" Style="{StaticResource UiTextBox}"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="2">
-                                        <TextBlock Text="{DynamicResource Settings.SnippetSystemPrompt}" Style="{StaticResource UiFieldLabel}"/>
-                                        <TextBox x:Name="PromptSnippetBodyBox"
-                                                 Style="{StaticResource UiTextBox}"
-                                                 TextWrapping="Wrap"
-                                                 AcceptsReturn="True"
-                                                 MinHeight="64"
-                                                 VerticalScrollBarVisibility="Auto"/>
-                                    </StackPanel>
-                                </Grid>
-
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Content="{DynamicResource Settings.AddSnippet}" Style="{StaticResource UiBtnPrimary}" MinWidth="90" Margin="0,0,8,0" Click="AddPromptSnippet_OnClick"/>
-                                    <Button Content="{DynamicResource Settings.RemoveSelected}" Style="{StaticResource UiBtnSecondary}" MinWidth="90" Click="RemovePromptSnippet_OnClick"/>
-                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </StackPanel>

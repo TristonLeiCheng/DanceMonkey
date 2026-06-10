@@ -4,7 +4,7 @@ using System.Threading;
 namespace DesktopAssistant.Services;
 
 /// <summary>
-/// 在宠物模式下通过 SetThreadExecutionState 同时阻止：
+/// 在宠物模式的防休眠开关开启时，通过 SetThreadExecutionState 同时阻止：
 /// <list type="bullet">
 ///   <item>系统因空闲进入睡眠 / 休眠（ES_SYSTEM_REQUIRED）</item>
 ///   <item>显示器因空闲关闭（ES_DISPLAY_REQUIRED）——关键：显示器关闭会触发锁屏</item>

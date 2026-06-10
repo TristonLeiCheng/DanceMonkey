@@ -185,7 +185,7 @@ public partial class SettingsView : UserControl
 
     public void PrefillFolderSyncProfile(string masterPath, string? name = null)
     {
-        SettingsTabs.SelectedItem = NotesQuickAccessTab;
+        SettingsTabs.SelectedItem = FolderSyncTab;
         FolderSyncProfilesList.SelectedItem = null;
         SyncNameBox.Text = string.IsNullOrWhiteSpace(name) ? "文件夹同步" : name.Trim() + " 同步";
         SyncMasterPathBox.Text = masterPath;

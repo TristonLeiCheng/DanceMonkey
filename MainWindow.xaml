@@ -528,14 +528,6 @@
                                 </Button.ContextMenu>
                             </Button>
                         </StackPanel>
-                        <Button x:Name="BtnOpenSettings"
-                                Content="{DynamicResource TitleBar.Settings}"
-                                Style="{StaticResource UiBtnSecondary}"
-                                Padding="14,7"
-                                MinWidth="0"
-                                FontSize="12"
-                                VerticalAlignment="Center"
-                                Click="BtnOpenSettings_OnClick"/>
                     </StackPanel>
 
                     <!-- Content host — flat, no outer card border -->

@@ -110,6 +110,11 @@ public partial class MainWindow : Window
             () => App.Config.Load(),
             cfg => App.Config.Save(cfg));
         _settingsView.SettingsSaved += OnSettingsSaved;
+        _quickAccessView.CreateFolderSyncRequested += (path, name) =>
+        {
+            ShowAndSwitch(AppPage.Settings);
+            _settingsView.PrefillFolderSyncProfile(path, name);
+        };
 
         _clipboardTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.2) };
         _clipboardTimer.Tick += (_, _) =>

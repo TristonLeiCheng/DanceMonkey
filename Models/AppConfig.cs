@@ -40,6 +40,9 @@ public sealed class AppConfig
     [JsonPropertyName("quickLinks")]
     public List<QuickLinkItem> QuickLinks { get; set; } = new();
 
+    [JsonPropertyName("folderSyncProfiles")]
+    public List<FolderSyncProfile> FolderSyncProfiles { get; set; } = new();
+
     [JsonPropertyName("promptSnippets")]
     public List<PromptSnippetItem> PromptSnippets { get; set; } = new();
 
@@ -334,6 +337,7 @@ public sealed class AppConfig
         FloatingIconX = FloatingIconX,
         FloatingIconY = FloatingIconY,
         QuickLinks = QuickLinks.Select(l => new QuickLinkItem { Name = l.Name, Path = l.Path, Category = l.Category }).ToList(),
+        FolderSyncProfiles = FolderSyncProfiles.Select(p => p.Clone()).ToList(),
         PromptSnippets = PromptSnippets.Select(s => new PromptSnippetItem
             { Title = s.Title, SystemPrompt = s.SystemPrompt }).ToList(),
         NotesRootPath = NotesRootPath,

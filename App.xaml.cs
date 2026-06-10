@@ -13,6 +13,8 @@ public partial class App : Application
 
     public static CodexProxyDesktopService CodexProxy { get; } = new();
 
+    public static FolderSyncSchedulerService FolderSyncScheduler { get; } = new(Config);
+
     private static readonly string CrashLogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "DanceMonkey",
@@ -78,6 +80,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        FolderSyncScheduler.Dispose();
         CodexProxy.Dispose();
         base.OnExit(e);
     }

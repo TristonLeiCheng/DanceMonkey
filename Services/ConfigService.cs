@@ -54,6 +54,7 @@ public sealed class ConfigService
                 return DefaultConfig();
             cfg.EnsureModelProfiles();
             cfg.QuickLinks ??= new List<QuickLinkItem>();
+            cfg.FolderSyncProfiles ??= new List<FolderSyncProfile>();
             bool linksChanged = MergeDefaultLinks(cfg.QuickLinks);
             cfg.PromptSnippets ??= new List<PromptSnippetItem>();
             // 旧版 config 无此字段时反序列化为 0；与「关闭」区分：仅当 JSON 中不存在该键时采用默认 5 分钟
@@ -145,6 +146,7 @@ public sealed class ConfigService
         FloatingIconX = null,
         FloatingIconY = null,
         QuickLinks = DefaultQuickLinks.Build(), // full defaults for brand-new install
+        FolderSyncProfiles = new List<FolderSyncProfile>(),
         PromptSnippets = new List<PromptSnippetItem>(),
         NotesRootPath = null,
         GraphTenantId = "common",

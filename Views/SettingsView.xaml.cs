@@ -12,8 +12,11 @@ public partial class SettingsView : UserControl
     public event EventHandler? SettingsSaved;
 
     private readonly ObservableCollection<QuickLinkItem> _quickLinks = new();
+    private readonly ObservableCollection<FolderSyncProfile> _folderSyncProfiles = new();
+    private readonly ObservableCollection<FolderSyncPreviewItem> _folderSyncPreviewItems = new();
     private readonly ObservableCollection<PromptSnippetItem> _promptSnippets = new();
     private readonly ObservableCollection<ModelProfileItem> _modelProfiles = new();
+    private readonly FolderSyncService _folderSyncService = new();
     private readonly AppUpdateService _appUpdateService = new();
     private bool _initialized;
 
@@ -44,6 +47,8 @@ public partial class SettingsView : UserControl
         ModelCombo.DisplayMemberPath = nameof(ModelProfileItem.DisplayName);
         ModelProfilesList.ItemsSource = _modelProfiles;
         QuickLinksList.ItemsSource = _quickLinks;
+        FolderSyncProfilesList.ItemsSource = _folderSyncProfiles;
+        FolderSyncPreviewList.ItemsSource = _folderSyncPreviewItems;
         PromptSnippetsList.ItemsSource = _promptSnippets;
         Loaded += SettingsView_OnLoaded;
     }
@@ -146,7 +151,21 @@ public partial class SettingsView : UserControl
 
         _quickLinks.Clear();
         foreach (var l in config.QuickLinks)
-            _quickLinks.Add(new QuickLinkItem { Name = l.Name, Path = l.Path });
+            _quickLinks.Add(new QuickLinkItem
+            {
+                Name = l.Name,
+                Path = l.Path,
+                Category = l.Category,
+                Description = l.Description,
+                Group = l.Group,
+                ClickCount = l.ClickCount,
+                LastClicked = l.LastClicked,
+                Pinned = l.Pinned
+            });
+
+        _folderSyncProfiles.Clear();
+        foreach (var profile in config.FolderSyncProfiles ?? new List<FolderSyncProfile>())
+            _folderSyncProfiles.Add(profile.Clone());
 
         _promptSnippets.Clear();
         foreach (var s in config.PromptSnippets)
@@ -163,6 +182,26 @@ public partial class SettingsView : UserControl
     }
 
     public void ReloadSkillManagerForSandboxChange() => SkillManagerPanel.ReloadForSandboxChange();
+
+    public void PrefillFolderSyncProfile(string masterPath, string? name = null)
+    {
+        SettingsTabs.SelectedItem = NotesQuickAccessTab;
+        FolderSyncProfilesList.SelectedItem = null;
+        SyncNameBox.Text = string.IsNullOrWhiteSpace(name) ? "文件夹同步" : name.Trim() + " 同步";
+        SyncMasterPathBox.Text = masterPath;
+        SyncSlavePathBox.Text = "";
+        SyncEnabledCheck.IsChecked = true;
+        SyncAutoEnabledCheck.IsChecked = false;
+        SyncAutoIntervalBox.Text = "30";
+        SyncTrashRetentionBox.Text = "30";
+        SyncDeleteExtraCheck.IsChecked = false;
+        SyncExcludeBox.Text = "*.tmp;~$*;.DS_Store;Thumbs.db";
+        SelectSyncMode(FolderSyncModes.MasterToSlave);
+        SelectSyncConflictPolicy(FolderSyncConflictPolicies.KeepConflictCopy);
+        ClearSyncPreviewDetails();
+        ClearSyncLogPreview();
+        FolderSyncStatusText.Text = "已从快速访问预填主文件夹，请选择部门共享盘/局域网盘作为从文件夹后添加任务。";
+    }
 
     private void ReloadModelProfiles(AppConfig config)
     {
@@ -467,7 +506,18 @@ public partial class SettingsView : UserControl
             return;
         }
 
-        config.QuickLinks = _quickLinks.Select(l => new QuickLinkItem { Name = l.Name, Path = l.Path }).ToList();
+        config.QuickLinks = _quickLinks.Select(l => new QuickLinkItem
+        {
+            Name = l.Name,
+            Path = l.Path,
+            Category = l.Category,
+            Description = l.Description,
+            Group = l.Group,
+            ClickCount = l.ClickCount,
+            LastClicked = l.LastClicked,
+            Pinned = l.Pinned
+        }).ToList();
+        config.FolderSyncProfiles = _folderSyncProfiles.Select(p => p.Clone()).ToList();
         config.PromptSnippets = _promptSnippets
             .Select(s => new PromptSnippetItem { Title = s.Title, SystemPrompt = s.SystemPrompt }).ToList();
 
@@ -520,6 +570,13 @@ public partial class SettingsView : UserControl
         }
 
         var category = (QuickLinkCategoryCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "local";
+        if (category is "local" or "network" && !System.IO.Directory.Exists(path))
+        {
+            MessageBox.Show($"文件夹不存在或当前账号无权访问：{path}", L("Msg.Hint"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         _quickLinks.Add(new QuickLinkItem { Name = name, Path = path, Category = category });
         QuickLinkNameBox.Text = "";
         QuickLinkPathBox.Text = "";
@@ -566,6 +623,376 @@ public partial class SettingsView : UserControl
         }
 
         QuickAccessPaths.OpenInExplorer(item.Path);
+    }
+
+    private void FolderSyncProfilesList_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (FolderSyncProfilesList.SelectedItem is not FolderSyncProfile profile)
+            return;
+
+        SyncNameBox.Text = profile.Name;
+        SyncMasterPathBox.Text = profile.MasterPath;
+        SyncSlavePathBox.Text = profile.SlavePath;
+        SyncEnabledCheck.IsChecked = profile.Enabled;
+        SyncAutoEnabledCheck.IsChecked = profile.AutoSyncEnabled;
+        SyncAutoIntervalBox.Text = Math.Clamp(profile.AutoSyncIntervalMinutes, 5, 1440).ToString();
+        SyncTrashRetentionBox.Text = Math.Clamp(profile.TrashRetentionDays, 1, 3650).ToString();
+        SyncDeleteExtraCheck.IsChecked = profile.DeleteExtraFiles;
+        SyncExcludeBox.Text = string.IsNullOrWhiteSpace(profile.ExcludePatterns)
+            ? "*.tmp;~$*;.DS_Store;Thumbs.db"
+            : profile.ExcludePatterns;
+        SelectSyncMode(profile.Mode);
+        SelectSyncConflictPolicy(profile.ConflictPolicy);
+        ClearSyncPreviewDetails();
+        LoadRecentSyncLog(profile, showMissing: false);
+        FolderSyncStatusText.Text = BuildSyncProfileStatus(profile);
+    }
+
+    private void BrowseSyncMaster_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (TryBrowseFolder("选择主文件夹（本地电脑常用文件夹）", out var path))
+            SyncMasterPathBox.Text = path;
+    }
+
+    private void BrowseSyncSlave_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (TryBrowseFolder("选择从文件夹（部门共享盘/局域网盘）", out var path))
+            SyncSlavePathBox.Text = path;
+    }
+
+    private void AddOrUpdateSyncProfile_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (!TryBuildSyncProfileFromUi(out var profile))
+            return;
+
+        if (FolderSyncProfilesList.SelectedItem is FolderSyncProfile selected)
+        {
+            selected.Name = profile.Name;
+            selected.MasterPath = profile.MasterPath;
+            selected.SlavePath = profile.SlavePath;
+            selected.Mode = profile.Mode;
+            selected.Enabled = profile.Enabled;
+            selected.AutoSyncEnabled = profile.AutoSyncEnabled;
+            selected.AutoSyncIntervalMinutes = profile.AutoSyncIntervalMinutes;
+            selected.DeleteExtraFiles = profile.DeleteExtraFiles;
+            selected.TrashRetentionDays = profile.TrashRetentionDays;
+            selected.ConflictPolicy = profile.ConflictPolicy;
+            selected.ExcludePatterns = profile.ExcludePatterns;
+            FolderSyncProfilesList.Items.Refresh();
+            FolderSyncStatusText.Text = BuildSyncProfileStatus(selected);
+        }
+        else
+        {
+            _folderSyncProfiles.Add(profile);
+            FolderSyncProfilesList.SelectedItem = profile;
+        }
+    }
+
+    private void RemoveSyncProfile_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (FolderSyncProfilesList.SelectedItem is FolderSyncProfile profile)
+        {
+            _folderSyncProfiles.Remove(profile);
+            ClearSyncProfileEditor();
+        }
+    }
+
+    private void PreviewSyncProfile_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (FolderSyncProfilesList.SelectedItem is not FolderSyncProfile profile)
+        {
+            MessageBox.Show("请先选择一个同步任务。", L("Msg.Hint"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            var preview = _folderSyncService.Preview(profile);
+            ShowSyncPreviewDetails(preview);
+            FolderSyncStatusText.Text = BuildSyncPreviewStatus(preview);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            ClearSyncPreviewDetails();
+            FolderSyncStatusText.Text = ex.Message;
+            MessageBox.Show(ex.Message, L("Msg.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async void RunSyncProfile_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (FolderSyncProfilesList.SelectedItem is not FolderSyncProfile profile)
+        {
+            MessageBox.Show("请先选择一个同步任务。", L("Msg.Hint"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!profile.Enabled)
+        {
+            MessageBox.Show("该同步任务未启用。", L("Msg.Hint"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        FolderSyncProgressWindow? progressWindow = null;
+        try
+        {
+            var preview = _folderSyncService.Preview(profile);
+            ShowSyncPreviewDetails(preview);
+            var confirm = MessageBox.Show(
+                $"将执行同步：{preview.Summary}\n\n冲突策略：{profile.ConflictPolicyDisplayName}\n\n是否继续？",
+                AppBranding.DisplayName,
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (confirm != MessageBoxResult.Yes)
+                return;
+
+            progressWindow = new FolderSyncProgressWindow(profile.Name, preview)
+            {
+                Owner = Window.GetWindow(this)
+            };
+            var progress = new Progress<FolderSyncProgress>(progressWindow.UpdateProgress);
+            progressWindow.Show();
+
+            var result = await Task.Run(() => _folderSyncService.Run(profile, progress, progressWindow.CancellationToken));
+            progressWindow.MarkCompleted(result);
+            profile.LastRunAt = DateTime.Now;
+            profile.LastStatus = result.ErrorCount == 0 ? result.Summary : result.Summary + $"；{result.ErrorCount} 个错误";
+            FolderSyncProfilesList.Items.Refresh();
+            FolderSyncStatusText.Text = result.Errors.Count == 0
+                ? profile.LastStatus
+                : profile.LastStatus + Environment.NewLine + string.Join(Environment.NewLine, result.Errors.Take(5));
+            SaveFolderSyncProfilesToConfig();
+            LoadRecentSyncLog(profile, showMissing: false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        {
+            progressWindow?.MarkFailed(ex.Message);
+            ClearSyncPreviewDetails();
+            profile.LastRunAt = DateTime.Now;
+            profile.LastStatus = "失败：" + ex.Message;
+            FolderSyncProfilesList.Items.Refresh();
+            FolderSyncStatusText.Text = profile.LastStatus;
+            MessageBox.Show(ex.Message, L("Msg.Error"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ShowSyncPreviewDetails(FolderSyncPreview preview)
+    {
+        _folderSyncPreviewItems.Clear();
+        foreach (var item in preview.Items.Take(500))
+            _folderSyncPreviewItems.Add(item);
+
+        FolderSyncPreviewList.Visibility = preview.Items.Count == 0
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private string BuildSyncPreviewStatus(FolderSyncPreview preview)
+    {
+        var lines = new List<string> { preview.Summary };
+        if (preview.Items.Count > _folderSyncPreviewItems.Count)
+            lines.Add($"预览明细较多，仅显示前 {_folderSyncPreviewItems.Count} 项。");
+        lines.AddRange(preview.Messages.Take(5));
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private void ClearSyncPreviewDetails()
+    {
+        _folderSyncPreviewItems.Clear();
+        FolderSyncPreviewList.Visibility = Visibility.Collapsed;
+    }
+
+    private void LoadRecentSyncLog(FolderSyncProfile profile, bool showMissing)
+    {
+        string text;
+        try
+        {
+            text = _folderSyncService.ReadRecentLog(profile);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ClearSyncLogPreview();
+            FolderSyncStatusText.Text = "读取同步日志失败：" + ex.Message;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            ClearSyncLogPreview();
+            if (showMissing)
+                MessageBox.Show("该任务还没有同步日志。", L("Msg.Hint"), MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        FolderSyncLogBox.Text = text;
+        FolderSyncLogBox.Visibility = Visibility.Visible;
+    }
+
+    private void ClearSyncLogPreview()
+    {
+        FolderSyncLogBox.Text = "";
+        FolderSyncLogBox.Visibility = Visibility.Collapsed;
+    }
+
+    private bool TryBuildSyncProfileFromUi(out FolderSyncProfile profile)
+    {
+        profile = new FolderSyncProfile();
+        var masterPath = SyncMasterPathBox.Text.Trim();
+        var slavePath = SyncSlavePathBox.Text.Trim();
+        var name = SyncNameBox.Text.Trim();
+
+        if (string.IsNullOrWhiteSpace(masterPath) || string.IsNullOrWhiteSpace(slavePath))
+        {
+            MessageBox.Show("请填写主文件夹和从文件夹。", L("Msg.Hint"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+
+        if (!System.IO.Directory.Exists(masterPath))
+        {
+            MessageBox.Show($"主文件夹不存在或无权访问：{masterPath}", L("Msg.Hint"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+            name = $"{System.IO.Path.GetFileName(masterPath.TrimEnd('\\'))} → {System.IO.Path.GetFileName(slavePath.TrimEnd('\\'))}";
+
+        profile = new FolderSyncProfile
+        {
+            Id = FolderSyncProfilesList.SelectedItem is FolderSyncProfile selected ? selected.Id : Guid.NewGuid().ToString("N"),
+            Name = name,
+            MasterPath = masterPath,
+            SlavePath = slavePath,
+            Mode = GetSelectedSyncMode(),
+            Enabled = SyncEnabledCheck.IsChecked == true,
+            AutoSyncEnabled = SyncAutoEnabledCheck.IsChecked == true,
+            AutoSyncIntervalMinutes = int.TryParse(SyncAutoIntervalBox.Text.Trim(), out var interval)
+                ? Math.Clamp(interval, 5, 1440)
+                : 30,
+            DeleteExtraFiles = SyncDeleteExtraCheck.IsChecked == true,
+            TrashRetentionDays = int.TryParse(SyncTrashRetentionBox.Text.Trim(), out var trashRetention)
+                ? Math.Clamp(trashRetention, 1, 3650)
+                : 30,
+            ConflictPolicy = GetSelectedSyncConflictPolicy(),
+            ExcludePatterns = string.IsNullOrWhiteSpace(SyncExcludeBox.Text)
+                ? "*.tmp;~$*;.DS_Store;Thumbs.db"
+                : SyncExcludeBox.Text.Trim()
+        };
+        return true;
+    }
+
+    private string GetSelectedSyncMode() =>
+        (SyncModeCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? FolderSyncModes.MasterToSlave;
+
+    private string GetSelectedSyncConflictPolicy() =>
+        (SyncConflictPolicyCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? FolderSyncConflictPolicies.KeepConflictCopy;
+
+    private void SelectSyncMode(string? mode)
+    {
+        foreach (ComboBoxItem item in SyncModeCombo.Items)
+        {
+            if (string.Equals(item.Tag as string, mode, StringComparison.OrdinalIgnoreCase))
+            {
+                item.IsSelected = true;
+                return;
+            }
+        }
+        SyncModeCombo.SelectedIndex = 0;
+    }
+
+    private void SelectSyncConflictPolicy(string? policy)
+    {
+        foreach (ComboBoxItem item in SyncConflictPolicyCombo.Items)
+        {
+            if (string.Equals(item.Tag as string, policy, StringComparison.OrdinalIgnoreCase))
+            {
+                item.IsSelected = true;
+                return;
+            }
+        }
+        SyncConflictPolicyCombo.SelectedIndex = 0;
+    }
+
+    private static bool TryBrowseFolder(string description, out string path)
+    {
+        using var dlg = new Forms.FolderBrowserDialog
+        {
+            Description = description,
+            ShowNewFolderButton = true
+        };
+
+        if (dlg.ShowDialog() == Forms.DialogResult.OK)
+        {
+            path = dlg.SelectedPath;
+            return true;
+        }
+
+        path = "";
+        return false;
+    }
+
+    private void ClearSyncProfileEditor()
+    {
+        SyncNameBox.Text = "";
+        SyncMasterPathBox.Text = "";
+        SyncSlavePathBox.Text = "";
+        SyncEnabledCheck.IsChecked = true;
+        SyncAutoEnabledCheck.IsChecked = false;
+        SyncAutoIntervalBox.Text = "30";
+        SyncTrashRetentionBox.Text = "30";
+        SyncDeleteExtraCheck.IsChecked = false;
+        SyncExcludeBox.Text = "*.tmp;~$*;.DS_Store;Thumbs.db";
+        SyncModeCombo.SelectedIndex = 0;
+        SelectSyncConflictPolicy(FolderSyncConflictPolicies.KeepConflictCopy);
+        ClearSyncPreviewDetails();
+        ClearSyncLogPreview();
+        FolderSyncStatusText.Text = "";
+    }
+
+    private static string BuildSyncProfileStatus(FolderSyncProfile profile)
+    {
+        var lastRun = profile.LastRunAt.HasValue
+            ? $"上次同步：{profile.LastRunAt:yyyy-MM-dd HH:mm}。"
+            : "尚未同步。";
+        return string.IsNullOrWhiteSpace(profile.LastStatus)
+            ? lastRun
+            : lastRun + " " + profile.LastStatus;
+    }
+
+    private void SaveFolderSyncProfilesToConfig()
+    {
+        var config = DesktopAssistant.App.Config.Load();
+        config.FolderSyncProfiles = _folderSyncProfiles.Select(p => p.Clone()).ToList();
+        DesktopAssistant.App.Config.Save(config);
+    }
+
+    private void OpenSyncLog_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (FolderSyncProfilesList.SelectedItem is not FolderSyncProfile profile)
+        {
+            MessageBox.Show("请先选择一个同步任务。", L("Msg.Hint"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var path = _folderSyncService.GetLogPath(profile);
+        if (!System.IO.File.Exists(path))
+        {
+            MessageBox.Show("该任务还没有同步日志。", L("Msg.Hint"), MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        QuickAccessPaths.OpenInExplorer(path);
+    }
+
+    private void RefreshSyncLog_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (FolderSyncProfilesList.SelectedItem is not FolderSyncProfile profile)
+        {
+            MessageBox.Show("请先选择一个同步任务。", L("Msg.Hint"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        LoadRecentSyncLog(profile, showMissing: true);
     }
 
     private async void TestBtn_OnClick(object sender, RoutedEventArgs e)

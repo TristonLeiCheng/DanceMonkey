@@ -11,6 +11,8 @@ namespace DesktopAssistant.Views;
 
 public partial class QuickAccessView : UserControl
 {
+    public event Action<string, string>? CreateFolderSyncRequested;
+
     // ===================================================
     //  Inner entry model (unifies auto-detected + custom)
     // ===================================================
@@ -448,30 +450,43 @@ public partial class QuickAccessView : UserControl
 
         btn.Content = outer;
 
-        if (entry.IsCustom)
+        if (entry.IsCustom || entry.Category is "local" or "network" or "onedrive")
         {
             var ctx = new ContextMenu();
 
-            var editItem = new MenuItem { Header = L("QuickAccess.CtxEdit") };
-            editItem.Click += (_, _) => EditEntry(entry);
-            ctx.Items.Add(editItem);
-
-            var pinItem = new MenuItem
+            if (entry.Category is "local" or "network" or "onedrive")
             {
-                Header = entry.Pinned ? L("QuickAccess.CtxUnpin") : L("QuickAccess.CtxPin")
-            };
-            pinItem.Click += (_, _) => TogglePin(entry);
-            ctx.Items.Add(pinItem);
+                var syncItem = new MenuItem { Header = "创建文件夹同步任务" };
+                syncItem.Click += (_, _) => CreateFolderSyncRequested?.Invoke(entry.Path, entry.Name);
+                ctx.Items.Add(syncItem);
+            }
 
-            ctx.Items.Add(new Separator());
-
-            var deleteItem = new MenuItem
+            if (entry.IsCustom)
             {
-                Header     = L("QuickAccess.CtxDelete"),
-                Foreground = MediaBrushes.Crimson
-            };
-            deleteItem.Click += (_, _) => DeleteEntry(entry);
-            ctx.Items.Add(deleteItem);
+                if (ctx.Items.Count > 0)
+                    ctx.Items.Add(new Separator());
+
+                var editItem = new MenuItem { Header = L("QuickAccess.CtxEdit") };
+                editItem.Click += (_, _) => EditEntry(entry);
+                ctx.Items.Add(editItem);
+
+                var pinItem = new MenuItem
+                {
+                    Header = entry.Pinned ? L("QuickAccess.CtxUnpin") : L("QuickAccess.CtxPin")
+                };
+                pinItem.Click += (_, _) => TogglePin(entry);
+                ctx.Items.Add(pinItem);
+
+                ctx.Items.Add(new Separator());
+
+                var deleteItem = new MenuItem
+                {
+                    Header     = L("QuickAccess.CtxDelete"),
+                    Foreground = MediaBrushes.Crimson
+                };
+                deleteItem.Click += (_, _) => DeleteEntry(entry);
+                ctx.Items.Add(deleteItem);
+            }
 
             btn.ContextMenu = ctx;
         }

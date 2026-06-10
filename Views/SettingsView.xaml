@@ -5,26 +5,31 @@
              Background="Transparent">
     <UserControl.Resources>
         <Style x:Key="SettingsTabItem" TargetType="TabItem">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
             <Setter Property="Foreground" Value="{StaticResource BrushTextSecondary}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="MinWidth" Value="88"/>
-            <Setter Property="Height" Value="34"/>
-            <Setter Property="Padding" Value="14,6"/>
-            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="MinWidth" Value="84"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="14,5"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
                         <Border x:Name="Root"
-                                 Background="{StaticResource BrushSurface}"
-                                BorderBrush="{StaticResource BrushBorderSubtle}"
+                                 Background="Transparent"
+                                 BorderBrush="{StaticResource BrushBorderSubtle}"
                                  BorderThickness="1"
-                                CornerRadius="10"
-                                 Padding="{TemplateBinding Padding}">
+                                 CornerRadius="9"
+                                 Padding="{TemplateBinding Padding}"
+                                 SnapsToDevicePixels="True">
                             <ContentPresenter ContentSource="Header"
                                               HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"
+                                              TextElement.FontWeight="{TemplateBinding FontWeight}"
                                               RecognizesAccessKey="True"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -34,9 +39,9 @@
                                 <Setter Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushAccentMuted}"/>
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushAccentGradient}"/>
                                 <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
-                                <Setter Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushTextOnAccent}"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
@@ -53,6 +58,13 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="ItemContainerStyle" Value="{StaticResource SettingsTabItem}"/>
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabControl">
@@ -61,20 +73,19 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <Border Grid.Row="0"
-                                    Background="{StaticResource BrushSurface}"
-                                    BorderBrush="{StaticResource BrushBorderSubtle}"
-                                    BorderThickness="1"
-                                    CornerRadius="12"
-                                    Padding="8"
-                                    Margin="0,0,0,8">
+                             <Border Grid.Row="0"
+                                     Background="{StaticResource BrushSurface}"
+                                     BorderBrush="{StaticResource BrushBorderSubtle}"
+                                     BorderThickness="1"
+                                     CornerRadius="12"
+                                     Padding="7"
+                                     Margin="0,0,0,8">
                                 <ScrollViewer HorizontalScrollBarVisibility="Auto"
                                               VerticalScrollBarVisibility="Disabled"
+                                              Focusable="False"
+                                              ClipToBounds="True"
                                               CanContentScroll="False">
-                                    <TabPanel IsItemsHost="True"
-                                              KeyboardNavigation.TabIndex="1"
-                                              Panel.ZIndex="1"
-                                              Background="Transparent"/>
+                                    <ItemsPresenter KeyboardNavigation.TabIndex="1"/>
                                 </ScrollViewer>
                             </Border>
                             <ContentPresenter Grid.Row="1"
@@ -406,7 +417,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="笔记与快捷入口">
+            <TabItem x:Name="NotesQuickAccessTab" Header="笔记与快捷入口">
                 <ScrollViewer Style="{StaticResource SettingsTabScrollViewer}">
                     <StackPanel>
                         <Border Style="{StaticResource SettingsCard}">
@@ -476,6 +487,170 @@
                                     <Button Content="{DynamicResource Settings.RemoveSelected}" Style="{StaticResource UiBtnSecondary}" MinWidth="90" Margin="0,0,8,0" Click="RemoveQuickLink_OnClick"/>
                                     <Button Content="{DynamicResource Settings.OpenInExplorer}" Style="{StaticResource UiBtnSecondary}" MinWidth="136" Click="OpenQuickLink_OnClick"/>
                                 </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource SettingsCard}">
+                            <StackPanel>
+                                <TextBlock Text="文件夹同步" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,4"/>
+                                <TextBlock Text="用于本地文件夹与企业共享盘/局域网盘之间同步。主从单向会从主文件夹复制到从文件夹；完全同步会按较新文件互相复制，冲突时保留冲突副本。"
+                                           Style="{StaticResource UiHint}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+                                <ListView x:Name="FolderSyncProfilesList"
+                                          Height="128"
+                                          Margin="0,0,0,8"
+                                          SelectionChanged="FolderSyncProfilesList_OnSelectionChanged"
+                                          BorderBrush="{StaticResource BrushBorderSubtle}"
+                                          BorderThickness="1"
+                                          Background="{StaticResource BrushSurfaceMuted}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="名称" Width="120" DisplayMemberBinding="{Binding Name}"/>
+                                            <GridViewColumn Header="模式" Width="90" DisplayMemberBinding="{Binding ModeDisplayName}"/>
+                                            <GridViewColumn Header="主文件夹" Width="260" DisplayMemberBinding="{Binding MasterPath}"/>
+                                            <GridViewColumn Header="从文件夹" Width="260" DisplayMemberBinding="{Binding SlavePath}"/>
+                                            <GridViewColumn Header="状态" Width="190" DisplayMemberBinding="{Binding LastStatus}"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="1.2*"/>
+                                        <ColumnDefinition Width="10"/>
+                                        <ColumnDefinition Width="1.1*"/>
+                                        <ColumnDefinition Width="10"/>
+                                        <ColumnDefinition Width="1.2*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="同步名称" Style="{StaticResource UiFieldLabel}"/>
+                                        <TextBox x:Name="SyncNameBox" Style="{StaticResource UiTextBox}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="同步模式" Style="{StaticResource UiFieldLabel}"/>
+                                        <ComboBox x:Name="SyncModeCombo" Style="{StaticResource UiComboBox}">
+                                            <ComboBoxItem Tag="masterToSlave" Content="主从单向" IsSelected="True"/>
+                                            <ComboBoxItem Tag="twoWay" Content="完全同步"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Bottom">
+                                        <CheckBox x:Name="SyncEnabledCheck" Content="启用" IsChecked="True"
+                                                  Style="{StaticResource SettingsCheckBox}" Margin="0,0,12,2"/>
+                                        <CheckBox x:Name="SyncAutoEnabledCheck" Content="自动同步"
+                                                  Style="{StaticResource SettingsCheckBox}" Margin="0,0,12,2"/>
+                                        <CheckBox x:Name="SyncDeleteExtraCheck" Content="单向删除从端多余文件"
+                                                  Style="{StaticResource SettingsCheckBox}" Margin="0,0,0,2"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="主文件夹（本地电脑常用文件夹）" Style="{StaticResource UiFieldLabel}"/>
+                                        <TextBox x:Name="SyncMasterPathBox" Style="{StaticResource UiTextBox}"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="{DynamicResource Settings.BrowseFolder}"
+                                            Style="{StaticResource UiBtnSecondary}" Padding="12,6"
+                                            Margin="8,20,0,0" Click="BrowseSyncMaster_OnClick"/>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="从文件夹（部门共享盘/局域网盘）" Style="{StaticResource UiFieldLabel}"/>
+                                        <TextBox x:Name="SyncSlavePathBox" Style="{StaticResource UiTextBox}"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="{DynamicResource Settings.BrowseFolder}"
+                                            Style="{StaticResource UiBtnSecondary}" Padding="12,6"
+                                            Margin="8,20,0,0" Click="BrowseSyncSlave_OnClick"/>
+                                </Grid>
+
+                                <TextBlock Text="排除规则（分号分隔，支持 * 和 ?）" Style="{StaticResource UiFieldLabel}"/>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="150"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="150"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="SyncExcludeBox" Style="{StaticResource UiTextBox}"
+                                             Text="*.tmp;~$*;.DS_Store;Thumbs.db"/>
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="自动同步间隔（分钟）" Style="{StaticResource UiFieldLabel}"/>
+                                        <TextBox x:Name="SyncAutoIntervalBox" Style="{StaticResource UiTextBox}" Text="30"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="4">
+                                        <TextBlock Text="回收保留天数" Style="{StaticResource UiFieldLabel}"/>
+                                        <TextBox x:Name="SyncTrashRetentionBox" Style="{StaticResource UiTextBox}" Text="30"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="260"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="完全同步冲突策略" Style="{StaticResource UiFieldLabel}"/>
+                                        <ComboBox x:Name="SyncConflictPolicyCombo" Style="{StaticResource UiComboBox}">
+                                            <ComboBoxItem Tag="keepConflictCopy" Content="保留冲突副本（推荐）" IsSelected="True"/>
+                                            <ComboBoxItem Tag="preferMaster" Content="主文件夹版本覆盖从文件夹"/>
+                                            <ComboBoxItem Tag="preferSlave" Content="从文件夹版本覆盖主文件夹"/>
+                                            <ComboBoxItem Tag="skip" Content="跳过冲突文件"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2"
+                                               Text="仅在完全同步中主从两端都修改同一文件时生效。推荐保留冲突副本，避免误覆盖部门共享盘文件。"
+                                               Style="{StaticResource UiHint}"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Bottom"/>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="添加/更新任务" Style="{StaticResource UiBtnPrimary}" MinWidth="108" Margin="0,0,8,0" Click="AddOrUpdateSyncProfile_OnClick"/>
+                                    <Button Content="{DynamicResource Settings.RemoveSelected}" Style="{StaticResource UiBtnSecondary}" MinWidth="90" Margin="0,0,8,0" Click="RemoveSyncProfile_OnClick"/>
+                                    <Button Content="预览同步" Style="{StaticResource UiBtnSecondary}" MinWidth="90" Margin="0,0,8,0" Click="PreviewSyncProfile_OnClick"/>
+                                    <Button Content="立即同步" Style="{StaticResource UiBtnSuccess}" MinWidth="90" Margin="0,0,8,0" Click="RunSyncProfile_OnClick"/>
+                                    <Button Content="刷新日志" Style="{StaticResource UiBtnSecondary}" MinWidth="90" Margin="0,0,8,0" Click="RefreshSyncLog_OnClick"/>
+                                    <Button Content="打开日志" Style="{StaticResource UiBtnSecondary}" MinWidth="90" Click="OpenSyncLog_OnClick"/>
+                                </StackPanel>
+                                <TextBlock x:Name="FolderSyncStatusText" Style="{StaticResource UiHint}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                                <ListView x:Name="FolderSyncPreviewList"
+                                          Height="190"
+                                          Margin="0,8,0,0"
+                                          Visibility="Collapsed"
+                                          BorderBrush="{StaticResource BrushBorderSubtle}"
+                                          BorderThickness="1"
+                                          Background="{StaticResource BrushSurfaceMuted}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="操作" Width="120" DisplayMemberBinding="{Binding Operation}"/>
+                                            <GridViewColumn Header="标记" Width="56" DisplayMemberBinding="{Binding ConflictDisplay}"/>
+                                            <GridViewColumn Header="文件" Width="280" DisplayMemberBinding="{Binding RelativePath}"/>
+                                            <GridViewColumn Header="大小" Width="82" DisplayMemberBinding="{Binding SizeDisplay}"/>
+                                            <GridViewColumn Header="原因" Width="360" DisplayMemberBinding="{Binding Reason}"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                                <TextBox x:Name="FolderSyncLogBox"
+                                         Height="120"
+                                         Margin="0,8,0,0"
+                                         Visibility="Collapsed"
+                                         IsReadOnly="True"
+                                         TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         FontFamily="Consolas"
+                                         FontSize="12"
+                                         Style="{StaticResource UiTextBox}"/>
                             </StackPanel>
                         </Border>
 

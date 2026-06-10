@@ -194,24 +194,29 @@ public sealed class AppUpdateService
     {
         ArgumentNullException.ThrowIfNull(launchInfo);
 
-        var arguments = string.Join(" ",
-            "-NoProfile",
-            "-ExecutionPolicy", "Bypass",
-            "-WindowStyle", "Hidden",
-            "-File", QuoteArgument(launchInfo.ScriptPath),
-            "-SourceDir", QuoteArgument(launchInfo.SourceDirectory),
-            "-InstallDir", QuoteArgument(launchInfo.InstallDirectory),
-            "-ExeName", QuoteArgument(launchInfo.ExeName),
-            "-CurrentPid", Environment.ProcessId.ToString());
-
         var startInfo = new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments = arguments,
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = Path.GetDirectoryName(launchInfo.ScriptPath) ?? AppContext.BaseDirectory
         };
+
+        startInfo.ArgumentList.Add("-NoProfile");
+        startInfo.ArgumentList.Add("-ExecutionPolicy");
+        startInfo.ArgumentList.Add("Bypass");
+        startInfo.ArgumentList.Add("-WindowStyle");
+        startInfo.ArgumentList.Add("Hidden");
+        startInfo.ArgumentList.Add("-File");
+        startInfo.ArgumentList.Add(launchInfo.ScriptPath);
+        startInfo.ArgumentList.Add("-SourceDir");
+        startInfo.ArgumentList.Add(launchInfo.SourceDirectory);
+        startInfo.ArgumentList.Add("-InstallDir");
+        startInfo.ArgumentList.Add(launchInfo.InstallDirectory);
+        startInfo.ArgumentList.Add("-ExeName");
+        startInfo.ArgumentList.Add(launchInfo.ExeName);
+        startInfo.ArgumentList.Add("-CurrentPid");
+        startInfo.ArgumentList.Add(Environment.ProcessId.ToString());
 
         _ = Process.Start(startInfo) ?? throw new InvalidOperationException("无法启动更新进程。");
     }
@@ -319,8 +324,6 @@ public sealed class AppUpdateService
             builder.Append(invalidChars.Contains(ch) ? '_' : ch);
         return builder.ToString();
     }
-
-    private static string QuoteArgument(string value) => $"\"{value.Replace("\"", "\\\"")}\"";
 
     private static string BuildUpdaterScript() =>
         "param(\n" +

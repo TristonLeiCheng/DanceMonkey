@@ -8,16 +8,17 @@ public static class AppVersionService
     public static string GetCurrentVersionText()
     {
         var assembly = Assembly.GetEntryAssembly() ?? typeof(AppVersionService).Assembly;
-        var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        if (!string.IsNullOrWhiteSpace(informational))
-            return NormalizeVersionText(informational);
-
         var version = assembly.GetName().Version;
-        if (version == null)
-            return "0.0.0";
+        if (version != null)
+        {
+            var build = version.Build >= 0 ? version.Build : 0;
+            return $"{version.Major}.{version.Minor}.{build}";
+        }
 
-        var build = version.Build >= 0 ? version.Build : 0;
-        return $"{version.Major}.{version.Minor}.{build}";
+        var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        return string.IsNullOrWhiteSpace(informational)
+            ? "0.0.0"
+            : NormalizeVersionText(informational);
     }
 
     public static string GetSidebarVersionLabel() => $"v{GetCurrentVersionText()} · .NET 8";

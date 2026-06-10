@@ -179,7 +179,7 @@ public sealed class AppUpdateService
         ZipFile.ExtractToDirectory(packagePath, extractRoot);
 
         var payloadRoot = ResolvePayloadRoot(extractRoot, manifest.EntryExe);
-        File.WriteAllText(scriptPath, BuildUpdaterScript(), new UTF8Encoding(false));
+        File.WriteAllText(scriptPath, BuildUpdaterScript(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
         return new AppUpdateLaunchInfo
         {

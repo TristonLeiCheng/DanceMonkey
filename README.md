@@ -72,6 +72,7 @@ The sidebar groups **Workbench** and other entries; alignment follows `AppPage` 
 - **Todo (Zen Task)** — **WebView2** + `Assets/zentask.html` board; data under **`Journal/*.json`**, two-way `WebMessage` with `TodoView`. **Reminders**, **Dock quick-add** task.  
 - **Quick access** — User-defined **shortcuts to folders** (local / cloud / shares).  
 - **Skills** — Manage **Agent Skills** under the configured **sandbox** (e.g. `.dancemonkey/skills`), consistent with the CLI.
+- **Scheduled reminders** — Sidebar **Reminders** page: water / sedentary / custom schedules; **six desktop popup styles** (glass, circular, Dynamic Island, toast, banner, compact pill) or **pet bubble**; import/export JSON; screen-capture frosted glass backgrounds.
 
 **Other** — Translate, Email (Microsoft Graph), network monitor, cleanup, PDF tools, file tools, **Dance mode** (animation + **stay-awake**), meeting assistant, file manager / sandbox, **Settings**, **Password vault** (local encrypted), tray / floating / Dock (screens, global chat, proxy shortcuts, etc.).
 
@@ -85,6 +86,7 @@ The sidebar groups **Workbench** and other entries; alignment follows `AppPage` 
 - **待办 (Zen Task)** — **WebView2** + `zentask.html` 看板，数据在笔记根下 **`Journal\*.json`**，与 `TodoView` 互发 `WebMessage`；**提醒**、**Dock 快速加任务**。  
 - **快速访问** — 配置常用**文件夹/路径**。  
 - **Skills** — 在**沙箱**中管理 **Agent Skills**（如 `.dancemonkey/skills`），与 CLI 一致。
+- **定时提醒** — 侧栏 **「定时提醒」**：喝水 / 久坐 / 自定义；**六种桌面弹窗**（磨砂卡片、圆形、灵动岛、Toast、横幅、紧凑胶囊）或**宠物气泡**；JSON 导入/导出；截屏磨砂背景。
 
 **其他** — 翻译、邮件（Graph）、网络、清理、PDF、文件工具、**Dance 模式**、会议助手、文件管理/沙箱、**设置**、**密码库**、托盘/悬浮球/Dock（截图、全局对话、代理等）。
 
@@ -124,6 +126,30 @@ The sidebar groups **Workbench** and other entries; alignment follows `AppPage` 
 
 ---
 
+## Scheduled reminders (v1.3+)
+
+**English**
+
+- **Sidebar → Reminders** — Manage built-in **water** and **sedentary** reminders plus **custom** ones.
+- **Recurrence** — Interval, active-use interval, daily / weekly / monthly times, or one-shot.
+- **Notify via** — **Desktop popup** (pick a global default or per-reminder override) or **pet bubble** when the desktop pet is enabled.
+- **Popup styles** — Glass card, circular, **Dynamic Island** (top capsule, tap to expand), toast (bottom-right), top banner, compact pill.
+- **Frosted background** — Optional screen-capture blur for desktop popups (toggle on the Reminders page).
+- **Import / export** — `reminders.json` merge or replace; built-in definitions are protected on replace.
+- **Todo reminders** stay separate under **Settings → Reminder center** (Zen Task module).
+
+**中文**
+
+- **侧栏 → 定时提醒** — 管理内置**喝水**、**久坐**及**自定义**提醒。
+- **重复规则** — 间隔、连续使用、每日 / 每周 / 每月时刻，或一次性。
+- **通知方式** — **桌面弹窗**（全局默认或单条覆盖样式）或**宠物气泡**（需开启桌面宠物）。
+- **弹窗样式** — 磨砂卡片、圆形、**灵动岛**（顶部胶囊，点击展开）、Toast（右下）、顶部横幅、紧凑胶囊。
+- **磨砂背景** — 桌面弹窗可选截屏模糊（在定时提醒页勾选）。
+- **导入 / 导出** — `reminders.json` 合并或替换导入；替换时保留内置项。
+- **待办提醒**仍在 **设置 → 提醒中心**（Zen 待办模块），与定时提醒独立。
+
+---
+
 ## AI (app-wide)
 
 **English**
@@ -132,7 +158,7 @@ The sidebar groups **Workbench** and other entries; alignment follows `AppPage` 
 - **Global chat** (`GlobalChatWindow`, default **Ctrl+Shift+Q**) — AI / **translate** / **file search** modes; can save to **`AI/Conversations/`** and attach screenshot context.  
 - **Screenshot** flow — result window: **AI analysis** / **OCR**; temp files may live under `%TEMP%` for one-shot AI/OCR from region toolbar.  
 - **Meeting assistant** — STT, segments, optional summary; see **Settings** and `MeetingAssistantView`.  
-- **Dance + health** — Optional **reminders** (water, sit/stand) and **proxy** options in **Settings**.  
+- **Health / scheduled reminders** — Water, sedentary, and custom schedules on the **Reminders** page; todo reminders in **Settings**.  
 
 **中文**
 
@@ -140,7 +166,7 @@ The sidebar groups **Workbench** and other entries; alignment follows `AppPage` 
 - **全局对话**（默认 `Ctrl+Shift+Q`）— AI、**翻译**、**本地文件搜索** 等；可存到笔记库 **`AI\Conversations\`**，并关联截图。  
 - **截图流程** — 结果窗的 **AI 分析** / **OCR**；框选工具条上的 **AI/OCR** 可能使用 **临时文件**（`%TEMP%`）。  
 - **会议助手** — 语音转写、分段、可选摘要等，见**设置**与 `MeetingAssistantView`。  
-- **Dance / 健康 / 代理** — 见**设置**（提醒、强代理等）。
+- **健康 / 定时提醒** — 喝水、久坐与自定义提醒在 **「定时提醒」** 页；待办提醒在 **设置** 中。
 
 ---
 
@@ -190,17 +216,19 @@ dotnet build DanceMonkey.Cli\DanceMonkey.Cli.csproj -c Debug
 
 生产环境可使用根目录 **`publish.bat`** 进行 **Release**、**win-x64**、**自包含单文件** 等发布（参数以脚本内为准）。
 
-在线升级：`publish.bat` 还会额外生成 `publish/win-x64/artifacts/update-manifest.json` 与对应版本 ZIP 包。将这两个文件部署到同一 URL 目录后，在应用的设置页 About 区填入该 manifest 地址，用户点击 `Update` 就会自动检查、下载、替换当前程序并重启。
+在线升级：`publish.bat` 还会额外生成 `publish/win-x64/artifacts/update-manifest.json` 与对应版本 ZIP 包。将这两个文件部署到同一 URL 目录后，在应用的设置页 About 区填入该 manifest 地址，用户点击 `Update` 就会自动检查、下载、替换当前程序并重启。也可在 **GitHub Releases**（`TristonLeiCheng/DanceMonkey`）获取最新 `DanceMonkey-win-x64-*.zip`。
 
 升级清单示例：
 
 ```json
 {
-	"version": "1.2.0",
-	"packageUrl": "DanceMonkey-win-x64-1.2.0.zip",
+	"version": "1.3.0",
+	"packageUrl": "DanceMonkey-win-x64-1.3.0.zip",
 	"entryExe": "DanceMonkey.exe"
 }
 ```
+
+版本说明见 [`docs/releases/`](docs/releases/)（如 [v1.3.0](docs/releases/v1.3.0.md)）。
 
 ---
 

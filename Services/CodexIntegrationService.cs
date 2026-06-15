@@ -53,6 +53,7 @@ public static class CodexIntegrationService
             }
 
             ApplyUserEnvironmentVariable("OPENAI_API_KEY", codexApiKey, messages);
+            ApplyUserEnvironmentVariable("OPENAI_BASE_URL", baseUrl, messages);
             ApplyNoProxyBypass(messages);
 
             WriteAuthJson(codexApiKey, messages);
@@ -60,7 +61,8 @@ public static class CodexIntegrationService
 
             messages.Add($"config.toml: {ConfigTomlPath}");
             messages.Add($"auth.json: {AuthJsonPath}");
-            messages.Add("请完全退出并重新打开 Codex，新的环境变量才会生效。");
+            messages.Add("已强制 Codex 使用 API Key 登录（forced_login_method = \"api\"），并清除 ChatGPT 会话缓存。");
+            messages.Add("请完全退出 Codex / VS Code 后重新打开；从桌面图标启动的 IDE 需注销或重启 Windows 才能读到新的用户环境变量。");
             return new ApplyResult(true, messages);
         }
         catch (Exception ex)
@@ -130,10 +132,11 @@ public static class CodexIntegrationService
 
     private static void WriteAuthJson(string apiKey, List<string> messages)
     {
+        // 仅保留 API Key，移除 ChatGPT OAuth 的 access/refresh token，避免仍弹出登录页。
         var payload = new Dictionary<string, string> { ["OPENAI_API_KEY"] = apiKey };
         var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(AuthJsonPath, json + Environment.NewLine, Encoding.UTF8);
-        messages.Add("已写入 auth.json");
+        messages.Add("已写入 auth.json（仅 OPENAI_API_KEY，已清除 ChatGPT 会话字段）");
     }
 
     private static void WriteConfigToml(string baseUrl, string model, string? reasoningEffort, List<string> messages)
@@ -161,6 +164,9 @@ public static class CodexIntegrationService
         var sb = new StringBuilder();
         sb.AppendLine(MarkerStart);
         sb.AppendLine("preferred_auth_method = \"apikey\"");
+        sb.AppendLine("forced_login_method = \"api\"");
+        sb.AppendLine("cli_auth_credentials_store = \"file\"");
+        sb.AppendLine("disable_response_storage = true");
         sb.AppendLine($"model = \"{EscapeTomlString(model)}\"");
         if (!string.IsNullOrWhiteSpace(reasoningEffort))
             sb.AppendLine($"model_reasoning_effort = \"{EscapeTomlString(reasoningEffort)}\"");

@@ -55,6 +55,44 @@ public partial class CodexProxyView : UserControl
         AppendLog("已复制 Codex Base URL: " + baseUrl);
     }
 
+    private void ApplyCodexConfigBtn_OnClick(object sender, RoutedEventArgs e)
+    {
+        var config = SaveConfigFromInputs();
+        if (config == null)
+            return;
+
+        if (!config.CodexAutoConfigure)
+        {
+            MessageBox.Show(
+                "请先勾选「启动 DM Proxy 时自动配置 Codex」。",
+                "Codex 配置",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var result = CodexIntegrationService.Apply(config);
+        LogCodexSetup(result);
+        if (result.Success)
+        {
+            MessageBox.Show(
+                string.Join(Environment.NewLine, result.Messages),
+                "Codex 配置已写入",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        else
+        {
+            MessageBox.Show(
+                result.Error ?? "写入失败",
+                "Codex 配置",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+
+        RefreshStatus(config);
+    }
+
     private async Task StartProxyAsync(bool showMessage)
     {
         if (_busy)

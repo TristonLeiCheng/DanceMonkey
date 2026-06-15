@@ -830,68 +830,34 @@
 
                         <Border Style="{StaticResource SettingsCard}">
                             <StackPanel>
-                                <TextBlock Text="提醒中心" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,4"/>
-                                <TextBlock Text="统一管理待办提醒、喝水提醒与久坐提醒。待办提醒属于任务模块；喝水和久坐属于健康提醒模块。"
+                                <TextBlock Text="{DynamicResource Settings.ReminderCenter}" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,4"/>
+                                <TextBlock Text="{DynamicResource Settings.ReminderCenterHint}"
                                            Style="{StaticResource UiHint}" Margin="0,0,0,10" TextWrapping="Wrap"/>
 
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="12"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Border Grid.Column="0"
-                                            Background="{StaticResource BrushSurfaceMuted}"
-                                            BorderBrush="{StaticResource BrushBorderSubtle}"
-                                            BorderThickness="1"
-                                            CornerRadius="10"
-                                            Padding="12,10">
-                                        <StackPanel>
-                                            <TextBlock Text="待办提醒" Style="{StaticResource UiFieldLabel}"/>
-                                            <CheckBox x:Name="TodoReminderCheck"
-                                                      Content="启用待办事项桌面提醒"
-                                                      Style="{StaticResource SettingsCheckBox}"/>
-                                            <TextBlock Text="提醒间隔（分钟）" Style="{StaticResource UiFieldLabel}"/>
-                                            <TextBox x:Name="TodoReminderIntervalBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,2" Width="90" HorizontalAlignment="Left"/>
-                                            <TextBlock Text="仅检查未完成的待办；推荐 15-120 分钟。"
-                                                       Style="{StaticResource UiHint}" TextWrapping="Wrap"/>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <Border Grid.Column="2"
-                                            Background="{StaticResource BrushSurfaceMuted}"
-                                            BorderBrush="{StaticResource BrushBorderSubtle}"
-                                            BorderThickness="1"
-                                            CornerRadius="10"
-                                            Padding="12,10">
-                                        <StackPanel>
-                                            <TextBlock Text="健康提醒" Style="{StaticResource UiFieldLabel}"/>
-                                            <CheckBox x:Name="HealthReminderCheck"
-                                                      Content="启用健康提醒（喝水 + 久坐）"
-                                                      Style="{StaticResource SettingsCheckBox}"/>
-                                            <Grid Margin="0,0,0,4">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="10"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0">
-                                                    <TextBlock Text="喝水提醒间隔（分钟）" Style="{StaticResource UiFieldLabel}"/>
-                                                    <TextBox x:Name="WaterIntervalBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,2"/>
-                                                    <TextBlock Text="达到间隔后提醒补水。建议 30-90 分钟。"
-                                                               Style="{StaticResource UiHint}" TextWrapping="Wrap"/>
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="2">
-                                                    <TextBlock Text="久坐提醒阈值（分钟）" Style="{StaticResource UiFieldLabel}"/>
-                                                    <TextBox x:Name="MovementIntervalBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,2"/>
-                                                    <TextBlock Text="连续使用电脑达到阈值后提醒起身活动。建议 45-90 分钟。"
-                                                               Style="{StaticResource UiHint}" TextWrapping="Wrap"/>
-                                                </StackPanel>
-                                            </Grid>
-                                        </StackPanel>
-                                    </Border>
-                                </Grid>
+                                <Border Background="{StaticResource BrushSurfaceMuted}"
+                                        BorderBrush="{StaticResource BrushBorderSubtle}"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Padding="12,10"
+                                        MaxWidth="420"
+                                        HorizontalAlignment="Left">
+                                    <StackPanel>
+                                        <TextBlock Text="{DynamicResource Settings.TodoReminder}" Style="{StaticResource UiFieldLabel}"/>
+                                        <CheckBox x:Name="TodoReminderCheck"
+                                                  Content="{DynamicResource Settings.TodoReminderEnabled}"
+                                                  Style="{StaticResource SettingsCheckBox}"/>
+                                        <TextBlock Text="{DynamicResource Settings.TodoReminderInterval}" Style="{StaticResource UiFieldLabel}"/>
+                                        <TextBox x:Name="TodoReminderIntervalBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,2" Width="90" HorizontalAlignment="Left"/>
+                                        <TextBlock Text="{DynamicResource Settings.TodoReminderHint}"
+                                                   Style="{StaticResource UiHint}" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                        <Button x:Name="OpenScheduledRemindersBtn"
+                                                Content="{DynamicResource Settings.OpenScheduledReminders}"
+                                                Style="{StaticResource UiBtnSecondary}"
+                                                HorizontalAlignment="Left"
+                                                Padding="14,8"
+                                                Click="OpenScheduledReminders_OnClick"/>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
                     </StackPanel>

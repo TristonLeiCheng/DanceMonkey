@@ -311,6 +311,12 @@
                                         <TextBlock Text="{DynamicResource Nav.Todo}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
+                                <Button x:Name="NavReminders" Tag="ScheduledReminders" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="⏰" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{DynamicResource Nav.ScheduledReminders}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                                 <Button x:Name="NavQuickAccess" Tag="QuickAccess" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="⚡" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>

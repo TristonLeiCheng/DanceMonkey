@@ -1,0 +1,43 @@
+<UserControl x:Class="DesktopAssistant.Views.ScheduledRemindersView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="Transparent" Padding="2,0,2,12">
+            <StackPanel>
+                <Grid Margin="0,0,0,10">
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource Reminder.PageTitle}" Style="{StaticResource UiPageTitle}"/>
+                        <TextBlock Text="{DynamicResource Reminder.PageSubtitle}" Style="{StaticResource UiPageSubtitle}" Margin="0,4,0,0"/>
+                    </StackPanel>
+                    <Button Content="{DynamicResource Reminder.Add}" Style="{StaticResource UiBtnPrimary}"
+                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Padding="16,8" Click="Add_OnClick"/>
+                </Grid>
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <Button Content="{DynamicResource Reminder.Export}" Style="{StaticResource UiBtnSecondary}"
+                            Padding="12,6" Margin="0,0,8,0" Click="Export_OnClick"/>
+                    <Button Content="{DynamicResource Reminder.ImportMerge}" Style="{StaticResource UiBtnSecondary}"
+                            Padding="12,6" Margin="0,0,8,0" Click="ImportMerge_OnClick"/>
+                    <Button Content="{DynamicResource Reminder.ImportReplace}" Style="{StaticResource UiBtnSecondary}"
+                            Padding="12,6" Margin="0,0,8,0" Click="ImportReplace_OnClick"/>
+                    <CheckBox x:Name="AcrylicCheck" Content="{DynamicResource Reminder.AcrylicEnabled}"
+                              VerticalAlignment="Center" Margin="8,0,0,0"
+                              Checked="AcrylicCheck_OnChanged" Unchecked="AcrylicCheck_OnChanged"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <TextBlock Text="{DynamicResource Reminder.DefaultPopupStyle}" Style="{StaticResource UiFieldLabel}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="DefaultPopupStyleCombo" Style="{StaticResource UiComboBox}"
+                              MinWidth="180" SelectionChanged="DefaultPopupStyle_OnChanged"/>
+                </StackPanel>
+                <TextBlock Text="{DynamicResource Reminder.ImportHint}" Style="{StaticResource UiHint}" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="ReminderListPanel"/>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

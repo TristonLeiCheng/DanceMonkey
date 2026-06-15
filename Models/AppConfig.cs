@@ -217,6 +217,14 @@ public sealed class AppConfig
     [JsonPropertyName("movementReminderMinutes")]
     public int MovementReminderMinutes { get; set; } = 60;
 
+    /// <summary>提醒弹窗是否启用截屏磨砂背景。</summary>
+    [JsonPropertyName("reminderPopupAcrylic")]
+    public bool ReminderPopupAcrylic { get; set; } = true;
+
+    /// <summary>桌面弹窗默认视觉样式。</summary>
+    [JsonPropertyName("defaultReminderPopupStyle")]
+    public ReminderPopupStyle DefaultReminderPopupStyle { get; set; } = ReminderPopupStyle.GlassCard;
+
     /// <summary>密码库自动锁定：无操作满此分钟数后锁定（0 = 关闭）。</summary>
     [JsonPropertyName("passwordVaultAutoLockMinutes")]
     public int PasswordVaultAutoLockMinutes { get; set; } = 5;
@@ -381,6 +389,8 @@ public sealed class AppConfig
         TodoReminderMinutes = TodoReminderMinutes,
         WaterReminderMinutes = WaterReminderMinutes,
         MovementReminderMinutes = MovementReminderMinutes,
+        ReminderPopupAcrylic = ReminderPopupAcrylic,
+        DefaultReminderPopupStyle = DefaultReminderPopupStyle,
         PasswordVaultAutoLockMinutes = PasswordVaultAutoLockMinutes,
         ProxyForceEnabled = ProxyForceEnabled,
         ProxyForceMode = ProxyForceMode,

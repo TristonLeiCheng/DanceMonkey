@@ -10,6 +10,7 @@ namespace DesktopAssistant.Views;
 public partial class SettingsView : UserControl
 {
     public event EventHandler? SettingsSaved;
+    public event Action? OpenScheduledRemindersRequested;
 
     private readonly ObservableCollection<QuickLinkItem> _quickLinks = new();
     private readonly ObservableCollection<FolderSyncProfile> _folderSyncProfiles = new();
@@ -125,12 +126,9 @@ public partial class SettingsView : UserControl
         // 文件管理沙箱
         SandboxPathBox.Text = config.SandboxPath ?? "";
 
-        // 健康提醒
+        // 提醒
         TodoReminderCheck.IsChecked = config.TodoReminderEnabled;
         TodoReminderIntervalBox.Text = config.TodoReminderMinutes.ToString();
-        HealthReminderCheck.IsChecked = config.HealthReminderEnabled;
-        WaterIntervalBox.Text = config.WaterReminderMinutes.ToString();
-        MovementIntervalBox.Text = config.MovementReminderMinutes.ToString();
         if (UpdateGitHubRepoBox != null)
             UpdateGitHubRepoBox.Text = string.IsNullOrWhiteSpace(config.UpdateGitHubRepo)
                 ? "TristonLeiCheng/DanceMonkey"
@@ -481,15 +479,10 @@ public partial class SettingsView : UserControl
             ? null
             : SandboxPathBox.Text.Trim();
 
-        // 健康提醒
+        // 待办提醒
         config.TodoReminderEnabled = TodoReminderCheck.IsChecked == true;
         if (int.TryParse(TodoReminderIntervalBox.Text.Trim(), out var todoMinutes) && todoMinutes >= 5 && todoMinutes <= 240)
             config.TodoReminderMinutes = todoMinutes;
-        config.HealthReminderEnabled = HealthReminderCheck.IsChecked == true;
-        if (int.TryParse(WaterIntervalBox.Text.Trim(), out var water) && water >= 5 && water <= 240)
-            config.WaterReminderMinutes = water;
-        if (int.TryParse(MovementIntervalBox.Text.Trim(), out var move) && move >= 10 && move <= 240)
-            config.MovementReminderMinutes = move;
 
         config.Language = LanguageCombo.SelectedIndex == 1 ? "en-US" : "zh-CN";
 
@@ -545,6 +538,9 @@ public partial class SettingsView : UserControl
     {
         DesktopAssistant.App.ClipboardHistory.Clear();
     }
+
+    private void OpenScheduledReminders_OnClick(object sender, RoutedEventArgs e) =>
+        OpenScheduledRemindersRequested?.Invoke();
 
     private void ClipboardHistoryList_OnMouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {

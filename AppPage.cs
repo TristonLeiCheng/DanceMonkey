@@ -29,5 +29,7 @@ public enum AppPage
     /// <summary>进程诊断：拖入程序分析进程树与网络连接。</summary>
     ProcessDiagnostics = 19,
     /// <summary>Codex Responses API 本地中转站。</summary>
-    CodexProxy = 20
+    CodexProxy = 20,
+    /// <summary>定时提醒：喝水、久坐及自定义提醒。</summary>
+    ScheduledReminders = 21
 }

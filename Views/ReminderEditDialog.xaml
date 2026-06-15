@@ -1,0 +1,132 @@
+<Window x:Class="DesktopAssistant.Views.ReminderEditDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="编辑提醒"
+        Width="520"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{StaticResource BrushPageBg}">
+    <Border Padding="22" Background="{StaticResource BrushPageBg}">
+        <StackPanel>
+            <TextBlock Text="编辑提醒" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,12"/>
+
+            <TextBlock Text="标题" Style="{StaticResource UiFieldLabel}"/>
+            <TextBox x:Name="TitleBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,8"/>
+
+            <TextBlock Text="描述" Style="{StaticResource UiFieldLabel}"/>
+            <TextBox x:Name="MessageInputBox" Style="{StaticResource UiTextBox}" MinHeight="64"
+                     TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                     Margin="0,0,0,8"/>
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="120"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="图标 (Emoji)" Style="{StaticResource UiFieldLabel}"/>
+                    <TextBox x:Name="IconBox" Style="{StaticResource UiTextBox}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="启用" Style="{StaticResource UiFieldLabel}"/>
+                    <CheckBox x:Name="EnabledCheck" Content="开启" IsChecked="True" Margin="0,6,0,0"/>
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Text="重复类型" Style="{StaticResource UiFieldLabel}"/>
+            <ComboBox x:Name="RepeatKindCombo" Style="{StaticResource UiComboBox}" Margin="0,0,0,8"/>
+
+            <StackPanel x:Name="IntervalPanel" Margin="0,0,0,8">
+                <TextBlock Text="间隔（分钟）" Style="{StaticResource UiFieldLabel}"/>
+                <TextBox x:Name="IntervalBox" Style="{StaticResource UiTextBox}" Width="120" HorizontalAlignment="Left"/>
+            </StackPanel>
+
+            <StackPanel x:Name="DailyPanel" Margin="0,0,0,8" Visibility="Collapsed">
+                <TextBlock Text="每天时刻（逗号分隔，如 09:00, 14:00）" Style="{StaticResource UiFieldLabel}"/>
+                <TextBox x:Name="DailyTimesBox" Style="{StaticResource UiTextBox}"/>
+            </StackPanel>
+
+            <StackPanel x:Name="WeeklyPanel" Margin="0,0,0,8" Visibility="Collapsed">
+                <TextBlock Text="星期" Style="{StaticResource UiFieldLabel}"/>
+                <WrapPanel Margin="0,0,0,6">
+                    <CheckBox x:Name="WeekMon" Content="一" Margin="0,0,10,0"/>
+                    <CheckBox x:Name="WeekTue" Content="二" Margin="0,0,10,0"/>
+                    <CheckBox x:Name="WeekWed" Content="三" Margin="0,0,10,0"/>
+                    <CheckBox x:Name="WeekThu" Content="四" Margin="0,0,10,0"/>
+                    <CheckBox x:Name="WeekFri" Content="五" Margin="0,0,10,0"/>
+                    <CheckBox x:Name="WeekSat" Content="六" Margin="0,0,10,0"/>
+                    <CheckBox x:Name="WeekSun" Content="日"/>
+                </WrapPanel>
+                <TextBlock Text="时刻" Style="{StaticResource UiFieldLabel}"/>
+                <TextBox x:Name="WeeklyTimeBox" Style="{StaticResource UiTextBox}" Width="120" HorizontalAlignment="Left"/>
+            </StackPanel>
+
+            <StackPanel x:Name="OncePanel" Margin="0,0,0,8" Visibility="Collapsed">
+                <TextBlock Text="一次性日期时间" Style="{StaticResource UiFieldLabel}"/>
+                <TextBox x:Name="OnceAtBox" Style="{StaticResource UiTextBox}"
+                         ToolTip="格式：yyyy-MM-dd HH:mm"/>
+            </StackPanel>
+
+            <StackPanel x:Name="MonthlyPanel" Margin="0,0,0,8" Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="120"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="每月第几天" Style="{StaticResource UiFieldLabel}"/>
+                        <TextBox x:Name="MonthlyDayBox" Style="{StaticResource UiTextBox}" Width="80" HorizontalAlignment="Left"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="时刻" Style="{StaticResource UiFieldLabel}"/>
+                        <TextBox x:Name="MonthlyTimeBox" Style="{StaticResource UiTextBox}" Width="120" HorizontalAlignment="Left"/>
+                    </StackPanel>
+                </Grid>
+                <TextBlock Text="无对应日期（如 2 月 30 日）的月份将跳过。"
+                           Style="{StaticResource UiHint}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <CheckBox x:Name="SkipIdleCheck" Content="空闲时跳过（离开电脑时不提醒）"
+                      IsChecked="True" Margin="0,0,0,8"/>
+
+            <TextBlock Text="通知方式" Style="{StaticResource UiFieldLabel}"/>
+            <ComboBox x:Name="NotifyStyleCombo" Style="{StaticResource UiComboBox}" Margin="0,0,0,8"
+                      SelectionChanged="NotifyStyle_OnChanged"/>
+
+            <StackPanel x:Name="PopupStylePanel" Margin="0,0,0,8">
+                <TextBlock Text="弹窗样式" Style="{StaticResource UiFieldLabel}"/>
+                <ComboBox x:Name="PopupStyleCombo" Style="{StaticResource UiComboBox}"/>
+                <TextBlock Text="选择「跟随全局」时使用定时提醒页的默认样式。"
+                           Style="{StaticResource UiHint}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="完成按钮文案" Style="{StaticResource UiFieldLabel}"/>
+                    <TextBox x:Name="DoneLabelBox" Style="{StaticResource UiTextBox}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="稍后（分钟）" Style="{StaticResource UiFieldLabel}"/>
+                    <TextBox x:Name="SnoozeBox" Style="{StaticResource UiTextBox}"/>
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                <Button Content="测试通知" Style="{StaticResource UiBtnSecondary}" MinWidth="96"
+                        Margin="0,0,8,0" Click="Test_OnClick"/>
+                <Button Content="保存" Style="{StaticResource UiBtnPrimary}" MinWidth="96"
+                        Margin="0,0,8,0" IsDefault="True" Click="Save_OnClick"/>
+                <Button Content="取消" Style="{StaticResource UiBtnSecondary}" MinWidth="96"
+                        IsCancel="True" Click="Cancel_OnClick"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

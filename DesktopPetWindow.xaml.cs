@@ -66,6 +66,9 @@ public partial class DesktopPetWindow : Window
     private DateTime _nextTaskReminderAt = DateTime.MaxValue;
     private int _taskReminderIntervalMinutes = -1;
     private string? _lastTaskReminderId;
+    private string? _scheduledReminderId;
+    private Action? _scheduledReminderAck;
+    private Action<int>? _scheduledReminderSnooze;
 
     private static readonly string[] _tapMessages =
     [
@@ -616,6 +619,67 @@ public partial class DesktopPetWindow : Window
 
     private sealed record TaskReminderMessage(string TaskId, string Message);
 
+    public bool TryShowScheduledReminder(ReminderDefinition reminder, ScheduledReminderService service)
+    {
+        if (!IsVisible)
+            return false;
+
+        _scheduledReminderId = reminder.Id;
+        _scheduledReminderAck = () =>
+        {
+            service.Acknowledge(reminder.Id);
+            ClearScheduledReminder();
+        };
+        _scheduledReminderSnooze = minutes =>
+        {
+            service.Snooze(reminder.Id, minutes);
+            ClearScheduledReminder();
+        };
+
+        var mood = ResolveReminderMood(reminder);
+        SetTemporaryMood(mood, TimeSpan.FromMinutes(Math.Max(reminder.SnoozeMinutes, 8)));
+        ShowBubble(BuildScheduledReminderBubbleText(reminder), 15);
+
+        if (mood == PetMood.Exercising)
+            PlayHappyJump();
+        else
+            PlayShake();
+
+        return true;
+    }
+
+    private void ClearScheduledReminder()
+    {
+        _scheduledReminderId = null;
+        _scheduledReminderAck = null;
+        _scheduledReminderSnooze = null;
+    }
+
+    private static PetMood ResolveReminderMood(ReminderDefinition reminder) => reminder.Id switch
+    {
+        ReminderBuiltInIds.Water => PetMood.Eating,
+        ReminderBuiltInIds.Sedentary => PetMood.Exercising,
+        _ => PetMood.Encouraging
+    };
+
+    private static string BuildScheduledReminderBubbleText(ReminderDefinition reminder)
+    {
+        var text = string.IsNullOrWhiteSpace(reminder.Message)
+            ? reminder.Title
+            : $"{reminder.Title}\n{reminder.Message}";
+        return text.Length <= 96 ? text : text[..93] + "…";
+    }
+
+    private bool TryHandleScheduledReminderTap()
+    {
+        if (_scheduledReminderId == null)
+            return false;
+
+        _scheduledReminderAck?.Invoke();
+        ShowBubble("收到！继续保持~", 2.5);
+        return true;
+    }
+
     // ── 交互 ──
 
     private static string NormalizeAnimal(string? animal)
@@ -673,6 +737,9 @@ public partial class DesktopPetWindow : Window
 
     private void OnPetTapped()
     {
+        if (TryHandleScheduledReminderTap())
+            return;
+
         BoostMood();
 
         // 根据情绪选择不同反馈
@@ -700,6 +767,18 @@ public partial class DesktopPetWindow : Window
         SyncToggleMenuState();
 
         var p = PointToScreen(e.GetPosition(this));
+        if (_scheduledReminderId != null && _scheduledReminderSnooze != null)
+        {
+            var menu = new Forms.ContextMenuStrip();
+            menu.Items.Add("✅ 提醒已完成", null, (_, _) => _scheduledReminderAck?.Invoke());
+            menu.Items.Add("⏰ 稍后 10 分钟", null, (_, _) => _scheduledReminderSnooze?.Invoke(10));
+            menu.Items.Add("管理定时提醒", null, (_, _) => _main.ShowAndSwitch(AppPage.ScheduledReminders));
+            menu.Items.Add(new Forms.ToolStripSeparator());
+            menu.Items.Add(L("Tray.Show"), null, (_, _) => _main.ShowFromTray());
+            menu.Show((int)p.X, (int)p.Y);
+            return;
+        }
+
         _contextMenu!.Show((int)p.X, (int)p.Y);
     }
 

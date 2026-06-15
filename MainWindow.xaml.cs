@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using DesktopAssistant.Controllers;
+using DesktopAssistant.Models;
 using DesktopAssistant.Services;
 using DesktopAssistant.Views;
 using Forms = System.Windows.Forms;
@@ -69,7 +70,10 @@ public partial class MainWindow : Window
     private readonly SettingsView _settingsView = new();
     private readonly HomepageView _homepageView = new();
     private readonly ProcessDiagnosticsView _processDiagnosticsView = new();
-    private readonly HealthReminderService _healthReminder = new();
+    private readonly ScheduledRemindersView _scheduledRemindersView;
+    private readonly ReminderStore _reminderStore = new();
+    private readonly ScheduledReminderService _scheduledReminderService;
+    private readonly ReminderNotifier _reminderNotifier = new();
     private readonly ProxyEnforcementService _proxyEnforcement = new();
 
     private readonly Button[] _navButtons;
@@ -86,16 +90,17 @@ public partial class MainWindow : Window
     private TaskbarResourceStripWindow? _taskbarResourceStripWindow;
     private bool _networkTrayOk = true;
     private bool _sidebarCollapsed;
-    private bool _healthReminderPopupOpen;
 
     public MainWindow()
     {
+        _scheduledReminderService = new ScheduledReminderService(_reminderStore);
+        _scheduledRemindersView = new ScheduledRemindersView(_scheduledReminderService, TestReminderPresentation);
         InitializeComponent();
         VersionLabel.Text = AppVersionService.GetSidebarVersionLabel();
 
         _navButtons =
         [
-            NavAiChat, NavNotes, NavPpt, NavTodo, NavQuickAccess, NavHomepage, NavMeeting, NavFileManager, NavFileTools,
+            NavAiChat, NavNotes, NavPpt, NavTodo, NavReminders, NavQuickAccess, NavHomepage, NavMeeting, NavFileManager, NavFileTools,
             NavPdfTools, NavCleanup, NavCodexProxy, NavNetwork, NavPasswordVault, NavProcessDiag, NavDance, NavSettings
         ];
 
@@ -110,6 +115,7 @@ public partial class MainWindow : Window
             () => App.Config.Load(),
             cfg => App.Config.Save(cfg));
         _settingsView.SettingsSaved += OnSettingsSaved;
+        _settingsView.OpenScheduledRemindersRequested += () => ShowAndSwitch(AppPage.ScheduledReminders);
         _quickAccessView.CreateFolderSyncRequested += (path, name) =>
         {
             ShowAndSwitch(AppPage.Settings);
@@ -186,7 +192,7 @@ public partial class MainWindow : Window
                 new Action(() => _floating?.ApplyPlacement()),
                 DispatcherPriority.ApplicationIdle);
 
-            InitHealthReminder();
+            InitScheduledReminders();
             RefreshProxyEnforcement();
         };
 
@@ -207,7 +213,8 @@ public partial class MainWindow : Window
         _aiChatView.ReloadPromptSnippets();
         _aiChatView.ReloadModelSelector();
         _hotkeys.Register(); // re-register in case hotkey changed
-        RefreshHealthReminder();
+        RefreshScheduledReminders();
+        _scheduledRemindersView.Reload();
         _todoView.ReloadReminderSettings();
         RefreshProxyEnforcement();
         _settingsView.ReloadSkillManagerForSandboxChange();
@@ -454,61 +461,49 @@ public partial class MainWindow : Window
         return text.Length <= 63 ? text : text[..63];
     }
 
-    private void InitHealthReminder()
+    private void InitScheduledReminders()
     {
-        _healthReminder.ReminderTriggered += type =>
+        _scheduledReminderService.ReminderDue += reminder =>
         {
             Dispatcher.Invoke(() =>
             {
-                ShowHealthReminderPopup(type);
+                if (_reminderNotifier.IsPresenting)
+                    return;
+
+                _reminderNotifier.Present(
+                    reminder,
+                    _scheduledReminderService,
+                    this,
+                    GetActivePetWindow,
+                    TrySetForegroundWindow);
             });
         };
-        RefreshHealthReminder();
+        RefreshScheduledReminders();
     }
 
-    private void ShowHealthReminderPopup(HealthReminderType type)
+    public void TestReminderPresentation(ReminderDefinition reminder)
     {
-        if (_healthReminderPopupOpen)
-            return;
-
-        _healthReminderPopupOpen = true;
-        try
-        {
-            var win = new HealthReminderWindow(type, _healthReminder)
-            {
-                ShowActivated = true,
-                Topmost = true,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen
-            };
-
-            win.SourceInitialized += (_, _) => TrySetForegroundWindow(win);
-            win.Loaded += (_, _) =>
-            {
-                win.Activate();
-                TrySetForegroundWindow(win);
-            };
-            win.ContentRendered += (_, _) =>
-            {
-                win.Topmost = true;
-                win.Activate();
-                TrySetForegroundWindow(win);
-            };
-
-            win.ShowDialog();
-        }
-        finally
-        {
-            _healthReminderPopupOpen = false;
-        }
+        _reminderNotifier.Present(
+            reminder,
+            _scheduledReminderService,
+            this,
+            GetActivePetWindow,
+            TrySetForegroundWindow);
     }
 
-    private void RefreshHealthReminder()
+    private DesktopPetWindow? GetActivePetWindow()
     {
         var cfg = App.Config.Load();
-        _healthReminder.Enabled = cfg.HealthReminderEnabled;
-        _healthReminder.WaterIntervalMinutes = cfg.WaterReminderMinutes;
-        _healthReminder.SedentaryThresholdMinutes = cfg.MovementReminderMinutes;
-        _healthReminder.Restart();
+        if (!cfg.PetModeEnabled || _petWindow == null)
+            return null;
+        return _petWindow;
+    }
+
+    private void RefreshScheduledReminders()
+    {
+        var cfg = App.Config.Load();
+        _scheduledReminderService.SetEnabled(true);
+        _scheduledReminderService.Reload(cfg);
     }
 
     private void RefreshProxyEnforcement()
@@ -744,6 +739,7 @@ public partial class MainWindow : Window
             AppPage.Notes => L("Nav.Notes"),
             AppPage.Ppt => L("Nav.Ppt"),
             AppPage.Todo => L("Nav.Todo"),
+            AppPage.ScheduledReminders => L("Nav.ScheduledReminders"),
             AppPage.Translate => L("Nav.Translate"),
             AppPage.Email => L("Nav.Email"),
             (AppPage)4 => L("Nav.AiChat"),  // legacy Chat -> AiChat
@@ -774,6 +770,7 @@ public partial class MainWindow : Window
             AppPage.Notes => _notesView,
             AppPage.Ppt => _pptWorkspaceView,
             AppPage.Todo => _todoView,
+            AppPage.ScheduledReminders => _scheduledRemindersView,
             AppPage.Translate => _aiChatView,
             AppPage.Email => _aiChatView,
             (AppPage)4 => _aiChatView,  // legacy Chat -> AiChat
@@ -818,6 +815,8 @@ public partial class MainWindow : Window
             _notesView.ReloadServiceAndList();
         if (page == AppPage.Todo)
             _todoView.Reload();
+        if (page == AppPage.ScheduledReminders)
+            _scheduledRemindersView.Reload();
         if (page == AppPage.Dance)
             _danceView.LoadFromDisk();
         if (page == AppPage.Settings)
@@ -839,7 +838,7 @@ public partial class MainWindow : Window
     /// <summary>进入某页时自动展开对应侧栏分组，避免子项被收起后找不到。</summary>
     private void SyncNavExpandersForPage(AppPage page)
     {
-        if (page is AppPage.AiChat or AppPage.Email or AppPage.Notes or AppPage.Ppt or AppPage.Todo or AppPage.QuickAccess or AppPage.PersonalHomepage)
+        if (page is AppPage.AiChat or AppPage.Email or AppPage.Notes or AppPage.Ppt or AppPage.Todo or AppPage.ScheduledReminders or AppPage.QuickAccess or AppPage.PersonalHomepage)
             NavWorkbenchExpander.IsExpanded = true;
         if (page is AppPage.MeetingAssistant)
             NavFuncExpander.IsExpanded = true;
@@ -858,22 +857,23 @@ public partial class MainWindow : Window
         [AppPage.Notes] = 1,
         [AppPage.Ppt] = 2,
         [AppPage.Todo] = 3,
-        [AppPage.QuickAccess] = 4,
-        [AppPage.PersonalHomepage] = 5,
+        [AppPage.ScheduledReminders] = 4,
+        [AppPage.QuickAccess] = 5,
+        [AppPage.PersonalHomepage] = 6,
         [AppPage.Email] = 0,
-        [AppPage.MeetingAssistant] = 6,
+        [AppPage.MeetingAssistant] = 7,
         [AppPage.Translate] = 0,
-        [AppPage.FileManager] = 7,
-        [AppPage.FileTools] = 8,
-        [AppPage.PdfTools] = 9,
-        [AppPage.Cleanup] = 10,
-        [AppPage.CodexProxy] = 11,
-        [AppPage.NetworkMonitor] = 12,
-        [AppPage.PasswordVault] = 13,
-        [AppPage.ProcessDiagnostics] = 14,
-        [AppPage.Dance] = 15,
-        [AppPage.Settings] = 16,
-        [AppPage.Skills] = 16,
+        [AppPage.FileManager] = 8,
+        [AppPage.FileTools] = 9,
+        [AppPage.PdfTools] = 10,
+        [AppPage.Cleanup] = 11,
+        [AppPage.CodexProxy] = 12,
+        [AppPage.NetworkMonitor] = 13,
+        [AppPage.PasswordVault] = 14,
+        [AppPage.ProcessDiagnostics] = 15,
+        [AppPage.Dance] = 16,
+        [AppPage.Settings] = 17,
+        [AppPage.Skills] = 17,
     };
 
     private void SetActiveNav(AppPage page)

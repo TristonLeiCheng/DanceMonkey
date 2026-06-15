@@ -1,0 +1,74 @@
+<Window x:Class="DesktopAssistant.ReminderCircularPopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display" Opacity="0">
+    <Window.Resources>
+        <LinearGradientBrush x:Key="GlassBg" StartPoint="0,0" EndPoint="0.5,1">
+            <GradientStop Color="#F0F4FAFE" Offset="0"/>
+            <GradientStop Color="#DCE6F2FA" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="GlassTint" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#B0FFFFFF" Offset="0"/>
+            <GradientStop Color="#88EEF2FA" Offset="1"/>
+        </LinearGradientBrush>
+    </Window.Resources>
+
+    <Grid Width="400" Height="400" Margin="24">
+        <Border x:Name="GlassCard" Width="400" Height="400" CornerRadius="200"
+                Background="{StaticResource GlassBg}">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="48" ShadowDepth="8" Opacity="0.32" Color="#1A2540"/>
+            </Border.Effect>
+            <Grid>
+                <Border x:Name="FrostLayer" CornerRadius="200"/>
+                <Border CornerRadius="200" Background="{StaticResource GlassTint}"/>
+                <Border CornerRadius="200" BorderBrush="#80FFFFFF" BorderThickness="1.5" IsHitTestVisible="False"/>
+
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                            Margin="48,36,48,40" MaxWidth="280">
+                    <TextBlock x:Name="IconText" Text="🔔" FontSize="52"
+                               HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                    <TextBlock x:Name="TitleText" Text="提醒" FontSize="19" FontWeight="SemiBold"
+                               Foreground="#1B2433" TextAlignment="Center" TextWrapping="Wrap"
+                               HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBlock x:Name="DescText" Text="" FontSize="13" Foreground="#525C6E"
+                               TextWrapping="Wrap" TextAlignment="Center" LineHeight="20"
+                               MaxHeight="72" TextTrimming="CharacterEllipsis" Margin="0,0,0,18"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button x:Name="DoneBtn" Style="{StaticResource UiBtnPrimary}"
+                                Padding="18,8" MinWidth="110" FontSize="13" Click="Done_OnClick">
+                            <TextBlock x:Name="DoneBtnText" Text="完成"/>
+                        </Button>
+                        <Button x:Name="LaterBtn" Content="稍后" Style="{StaticResource UiBtnSecondary}"
+                                Padding="14,8" MinWidth="72" FontSize="13" Margin="8,0,0,0"
+                                Click="Later_OnClick"/>
+                    </StackPanel>
+                    <TextBlock x:Name="StatsText" FontSize="11" Foreground="#8A93A6"
+                               HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                </StackPanel>
+
+                <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="0,18,22,0" Padding="6,2" FontSize="12" Foreground="#9097A8"
+                        Background="Transparent" BorderThickness="0" Cursor="Hand"
+                        Click="Close_OnClick">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="b" Background="Transparent" CornerRadius="999" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="#18000000"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

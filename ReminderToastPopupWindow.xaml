@@ -1,0 +1,64 @@
+<Window x:Class="DesktopAssistant.ReminderToastPopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStartupLocation="Manual"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display" Opacity="0">
+    <Window.Resources>
+        <LinearGradientBrush x:Key="GlassBg" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#F5F8FCFE" Offset="0"/>
+            <GradientStop Color="#E8EEF6FC" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="GlassTint" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#A5FFFFFF" Offset="0"/>
+            <GradientStop Color="#90F0F4FA" Offset="1"/>
+        </LinearGradientBrush>
+    </Window.Resources>
+
+    <Border x:Name="RootCard" Margin="16" MinWidth="360" MaxWidth="400" CornerRadius="16"
+            Background="{StaticResource GlassBg}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="28" ShadowDepth="5" Opacity="0.28" Color="#1A2540"/>
+        </Border.Effect>
+        <Grid>
+            <Border x:Name="FrostLayer" CornerRadius="16"/>
+            <Border CornerRadius="16" Background="{StaticResource GlassTint}"/>
+            <Border CornerRadius="16" BorderBrush="#70FFFFFF" BorderThickness="1" IsHitTestVisible="False"/>
+
+            <Grid Margin="16,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Width="44" Height="44" CornerRadius="12"
+                        Background="#225C7DFF" Margin="0,0,12,0">
+                    <TextBlock x:Name="IconText" Text="🔔" FontSize="24"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="TitleText" Text="提醒" FontSize="15" FontWeight="SemiBold"
+                               Foreground="#1B2433" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="DescText" Text="" FontSize="12.5" Foreground="#525C6E"
+                               TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis"
+                               Margin="0,3,0,0"/>
+                    <TextBlock x:Name="StatsText" FontSize="11" Foreground="#8A93A6" Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="10,0,0,0">
+                    <Button x:Name="DoneBtn" Style="{StaticResource UiBtnPrimary}"
+                            Padding="14,7" MinWidth="72" FontSize="12" Click="Done_OnClick">
+                        <TextBlock x:Name="DoneBtnText" Text="完成"/>
+                    </Button>
+                    <Button x:Name="LaterBtn" Content="稍后" Style="{StaticResource UiBtnSecondary}"
+                            Padding="12,5" MinWidth="72" FontSize="11" Margin="0,6,0,0"
+                            Click="Later_OnClick"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

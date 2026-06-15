@@ -50,6 +50,7 @@ public sealed class CodexProxyDesktopService : IDisposable
 
     public string StatusMessage { get; private set; } = "未启动";
     public string? LastError { get; private set; }
+    public CodexIntegrationService.ApplyResult? LastCodexSetup { get; private set; }
 
     public async Task StartAsync(AppConfig config)
     {
@@ -134,6 +135,7 @@ public sealed class CodexProxyDesktopService : IDisposable
         }
 
         StatusMessage = $"运行中：{server.ResponsesUrl}";
+        LastCodexSetup = config.CodexAutoConfigure ? CodexIntegrationService.Apply(config) : null;
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 

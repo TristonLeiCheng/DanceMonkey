@@ -32,8 +32,6 @@
     <sys:String x:Key="Nav.Collapse">收起</sys:String>
     <sys:String x:Key="Nav.ExpandSidebar">展开侧栏</sys:String>
     <sys:String x:Key="Nav.CollapseSidebar">收起侧栏</sys:String>
-    <sys:String x:Key="Nav.Homepage">个人主页</sys:String>
-
     <!-- ══════ Title Bar ══════ -->
     <sys:String x:Key="TitleBar.Minimize">最小化</sys:String>
     <sys:String x:Key="TitleBar.Maximize">最大化</sys:String>

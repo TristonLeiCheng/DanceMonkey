@@ -22,8 +22,7 @@ public enum AppPage
     Settings = 15,
     /// <summary>管理沙箱下 Agent Skills（.dancemonkey/skills）。</summary>
     Skills = 16,
-    /// <summary>个人主页：AI 对话建站、相册/视频/共享文件，内置局域网服务器对外发布。</summary>
-    PersonalHomepage = 17,
+    [System.Obsolete("Removed")] PersonalHomepage = 17,
     /// <summary>PPT 工作台：选择来源（笔记/文件/主题）→ 主题与参数 → 大纲预览 → 渲染 .pptx。</summary>
     Ppt = 18,
     /// <summary>进程诊断：拖入程序分析进程树与网络连接。</summary>

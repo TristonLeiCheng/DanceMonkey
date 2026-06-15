@@ -252,8 +252,11 @@ public sealed class CodexResponsesProxyServer : IDisposable
             return messages;
         }
 
+        var pendingFunctionCalls = new List<JsonObject>();
         foreach (var item in items)
-            AddResponsesInputItem(messages, item);
+            AddResponsesInputItem(messages, item, pendingFunctionCalls);
+
+        CoalescePendingFunctionCalls(messages, pendingFunctionCalls);
 
         if (messages.Count == 0)
             messages.Add(new JsonObject { ["role"] = "user", ["content"] = "" });
@@ -261,19 +264,21 @@ public sealed class CodexResponsesProxyServer : IDisposable
         return messages;
     }
 
-    private static void AddResponsesInputItem(JsonArray messages, JsonNode? item)
+    private static void AddResponsesInputItem(JsonArray messages, JsonNode? item, List<JsonObject> pendingFunctionCalls)
     {
         if (item == null)
             return;
 
         if (TryGetString(item, out var textItem))
         {
+            CoalescePendingFunctionCalls(messages, pendingFunctionCalls);
             messages.Add(new JsonObject { ["role"] = "user", ["content"] = textItem });
             return;
         }
 
         if (item is not JsonObject obj)
         {
+            CoalescePendingFunctionCalls(messages, pendingFunctionCalls);
             messages.Add(new JsonObject { ["role"] = "user", ["content"] = item.ToJsonString(JsonOptions) });
             return;
         }
@@ -282,26 +287,38 @@ public sealed class CodexResponsesProxyServer : IDisposable
         if (type == "reasoning")
             return;
 
+        if (type == "function_call")
+        {
+            pendingFunctionCalls.Add(obj);
+            return;
+        }
+
         if (type == "function_call_output")
         {
+            CoalescePendingFunctionCalls(messages, pendingFunctionCalls);
             messages.Add(new JsonObject
             {
                 ["role"] = "tool",
-                ["tool_call_id"] = GetString(obj, "call_id") ?? GetString(obj, "id") ?? $"call_{Guid.NewGuid():N}",
+                ["tool_call_id"] = ResolveToolCallId(obj, preferCallIdOnly: true),
                 ["content"] = ContentNodeToString(obj["output"]),
             });
             return;
         }
 
-        if (type == "function_call")
-        {
-            messages.Add(BuildAssistantToolCallMessage(obj));
-            return;
-        }
+        CoalescePendingFunctionCalls(messages, pendingFunctionCalls);
 
         if (type == "input_text")
         {
             messages.Add(new JsonObject { ["role"] = "user", ["content"] = GetString(obj, "text") ?? "" });
+            return;
+        }
+
+        if (type == "message" &&
+            obj.TryGetPropertyValue("tool_calls", out var embeddedToolCalls) &&
+            embeddedToolCalls is JsonArray toolCalls &&
+            toolCalls.Count > 0)
+        {
+            messages.Add(BuildAssistantToolCallsMessageFromChatToolCalls(toolCalls));
             return;
         }
 
@@ -313,27 +330,69 @@ public sealed class CodexResponsesProxyServer : IDisposable
         });
     }
 
-    private static JsonObject BuildAssistantToolCallMessage(JsonObject functionCall)
+    private static void CoalescePendingFunctionCalls(JsonArray messages, List<JsonObject> pending)
     {
-        var callId = GetString(functionCall, "call_id") ?? GetString(functionCall, "id") ?? $"call_{Guid.NewGuid():N}";
+        if (pending.Count == 0)
+            return;
+
+        messages.Add(BuildAssistantToolCallsMessage(pending));
+        pending.Clear();
+    }
+
+    private static JsonObject BuildAssistantToolCallsMessage(IReadOnlyList<JsonObject> functionCalls)
+    {
+        var toolCalls = new JsonArray();
+        foreach (var functionCall in functionCalls)
+        {
+            var callId = ResolveToolCallId(functionCall, preferCallIdOnly: false);
+            toolCalls.Add(new JsonObject
+            {
+                ["id"] = callId,
+                ["type"] = "function",
+                ["function"] = new JsonObject
+                {
+                    ["name"] = GetString(functionCall, "name") ?? "tool",
+                    ["arguments"] = GetString(functionCall, "arguments") ?? "{}",
+                },
+            });
+        }
+
         return new JsonObject
         {
             ["role"] = "assistant",
             ["content"] = null,
-            ["tool_calls"] = new JsonArray
-            {
-                new JsonObject
-                {
-                    ["id"] = callId,
-                    ["type"] = "function",
-                    ["function"] = new JsonObject
-                    {
-                        ["name"] = GetString(functionCall, "name") ?? "tool",
-                        ["arguments"] = GetString(functionCall, "arguments") ?? "{}",
-                    },
-                }
-            },
+            ["tool_calls"] = toolCalls,
         };
+    }
+
+    private static JsonObject BuildAssistantToolCallsMessageFromChatToolCalls(JsonArray toolCalls)
+    {
+        var normalized = new JsonArray();
+        foreach (var toolCall in toolCalls)
+        {
+            if (toolCall is JsonObject toolCallObj)
+                normalized.Add(toolCallObj.DeepClone());
+        }
+
+        return new JsonObject
+        {
+            ["role"] = "assistant",
+            ["content"] = null,
+            ["tool_calls"] = normalized,
+        };
+    }
+
+    private static string ResolveToolCallId(JsonObject obj, bool preferCallIdOnly)
+    {
+        var callId = GetString(obj, "call_id");
+        if (!string.IsNullOrWhiteSpace(callId))
+            return callId.Trim();
+
+        if (preferCallIdOnly)
+            return GetString(obj, "id") ?? $"call_{Guid.NewGuid():N}";
+
+        var id = GetString(obj, "id");
+        return !string.IsNullOrWhiteSpace(id) ? id.Trim() : $"call_{Guid.NewGuid():N}";
     }
 
     private static JsonNode ResponsesContentToChatContent(JsonNode? content, string role)

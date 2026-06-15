@@ -277,6 +277,18 @@ public sealed class AppConfig
     [JsonPropertyName("codexProxyTimeoutSeconds")]
     public int CodexProxyTimeoutSeconds { get; set; } = 300;
 
+    /// <summary>启动 DM Proxy 时自动写入 Codex config.toml / 环境变量。</summary>
+    [JsonPropertyName("codexAutoConfigure")]
+    public bool CodexAutoConfigure { get; set; } = true;
+
+    /// <summary>写入 Codex config.toml 的 model；为空时回退到 <see cref="Model"/>。</summary>
+    [JsonPropertyName("codexModel")]
+    public string CodexModel { get; set; } = "";
+
+    /// <summary>写入 Codex config.toml 的 model_reasoning_effort（如 low/medium/high）。</summary>
+    [JsonPropertyName("codexModelReasoningEffort")]
+    public string CodexModelReasoningEffort { get; set; } = "medium";
+
     /// <summary>在线升级清单地址。支持 http/https，也支持本地或 UNC 路径。</summary>
     [JsonPropertyName("updateManifestUrl")]
     public string? UpdateManifestUrl { get; set; }
@@ -404,6 +416,9 @@ public sealed class AppConfig
         CodexProxyHost = CodexProxyHost,
         CodexProxyPort = CodexProxyPort,
         CodexProxyTimeoutSeconds = CodexProxyTimeoutSeconds,
+        CodexAutoConfigure = CodexAutoConfigure,
+        CodexModel = CodexModel,
+        CodexModelReasoningEffort = CodexModelReasoningEffort,
         UpdateManifestUrl = UpdateManifestUrl,
         UpdateGitHubRepo = UpdateGitHubRepo,
         UpdateAssetKeyword = UpdateAssetKeyword,

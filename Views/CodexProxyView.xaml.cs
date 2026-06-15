@@ -72,6 +72,7 @@ public partial class CodexProxyView : UserControl
             AppendLog("正在启动 Codex API 中转站...");
             await App.CodexProxy.StartAsync(config);
             AppendLog("已启动: " + App.CodexProxy.ResponsesUrl);
+            LogCodexSetup(App.CodexProxy.LastCodexSetup);
             RefreshStatus();
         }
         catch (Exception ex)
@@ -102,7 +103,31 @@ public partial class CodexProxyView : UserControl
         ApiKeyBox.Password = cfg.ApiKey ?? "";
         ModelBox.Text = string.IsNullOrWhiteSpace(cfg.Model) ? "gpt-4o-mini" : cfg.Model;
         TimeoutBox.Text = (cfg.CodexProxyTimeoutSeconds > 0 ? cfg.CodexProxyTimeoutSeconds : 300).ToString();
+        CodexAutoConfigureCheck.IsChecked = cfg.CodexAutoConfigure;
+        CodexModelBox.Text = string.IsNullOrWhiteSpace(cfg.CodexModel)
+            ? CodexIntegrationService.ResolveCodexModel(cfg)
+            : cfg.CodexModel;
+        SelectReasoningEffort(cfg.CodexModelReasoningEffort);
+        CodexConfigPathText.Text = CodexIntegrationService.ConfigTomlPath;
         RefreshStatus();
+    }
+
+    private void SelectReasoningEffort(string? value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? "" : value.Trim().ToLowerInvariant();
+        foreach (var item in ReasoningEffortCombo.Items.OfType<ComboBoxItem>())
+        {
+            var tag = item.Tag?.ToString() ?? "";
+            item.IsSelected = tag.Equals(normalized, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static string? GetSelectedReasoningEffort(ComboBox combo)
+    {
+        if (combo.SelectedItem is ComboBoxItem item)
+            return item.Tag?.ToString();
+
+        return null;
     }
 
     private void EnsureConfigLoaded()
@@ -137,6 +162,9 @@ public partial class CodexProxyView : UserControl
         cfg.ApiEndpoint = EndpointBox.Text.Trim();
         cfg.ApiKey = ApiKeyBox.Password.Trim();
         cfg.Model = string.IsNullOrWhiteSpace(ModelBox.Text) ? "gpt-4o-mini" : ModelBox.Text.Trim();
+        cfg.CodexAutoConfigure = CodexAutoConfigureCheck.IsChecked == true;
+        cfg.CodexModel = CodexModelBox.Text.Trim();
+        cfg.CodexModelReasoningEffort = GetSelectedReasoningEffort(ReasoningEffortCombo) ?? "";
 
         if (!App.Config.Save(cfg))
         {
@@ -164,7 +192,14 @@ public partial class CodexProxyView : UserControl
         BaseUrlText.Text = baseUrl;
         ResponsesUrlText.Text = responsesUrl;
         UpstreamText.Text = upstream;
-        EnvBox.Text = $"OPENAI_BASE_URL={baseUrl}{Environment.NewLine}OPENAI_API_KEY={(string.IsNullOrWhiteSpace(ApiKeyBox.Password) ? "<your-upstream-api-key>" : "dancemonkey-local")}";
+        var codexApiKey = string.IsNullOrWhiteSpace(ApiKeyBox.Password)
+            ? "<your-upstream-api-key>"
+            : CodexIntegrationService.PlaceholderApiKey;
+        EnvBox.Text =
+            $"OPENAI_BASE_URL={baseUrl}{Environment.NewLine}" +
+            $"OPENAI_API_KEY={codexApiKey}{Environment.NewLine}" +
+            $"NO_PROXY={CodexIntegrationService.MergeProxyBypass(null)}";
+        CodexConfigPathText.Text = CodexIntegrationService.ConfigTomlPath;
         SetButtonsEnabled();
     }
 
@@ -191,6 +226,21 @@ public partial class CodexProxyView : UserControl
     {
         LogBox.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");
         LogBox.ScrollToEnd();
+    }
+
+    private void LogCodexSetup(CodexIntegrationService.ApplyResult? result)
+    {
+        if (result == null)
+            return;
+
+        if (!result.Success)
+        {
+            AppendLog("Codex 自动配置失败: " + result.Error);
+            return;
+        }
+
+        foreach (var message in result.Messages)
+            AppendLog("Codex: " + message);
     }
 
     private void CodexProxy_OnStateChanged(object? sender, EventArgs e)

@@ -68,7 +68,6 @@ public partial class MainWindow : Window
     private readonly FileManagerView _fileManagerView = new();
     private readonly PasswordVaultView _passwordVaultView = new();
     private readonly SettingsView _settingsView = new();
-    private readonly HomepageView _homepageView = new();
     private readonly ProcessDiagnosticsView _processDiagnosticsView = new();
     private readonly ScheduledRemindersView _scheduledRemindersView;
     private readonly ReminderStore _reminderStore = new();
@@ -100,7 +99,7 @@ public partial class MainWindow : Window
 
         _navButtons =
         [
-            NavAiChat, NavNotes, NavPpt, NavTodo, NavReminders, NavQuickAccess, NavHomepage, NavMeeting, NavFileManager, NavFileTools,
+            NavAiChat, NavNotes, NavPpt, NavTodo, NavReminders, NavQuickAccess, NavMeeting, NavFileManager, NavFileTools,
             NavPdfTools, NavCleanup, NavCodexProxy, NavNetwork, NavPasswordVault, NavProcessDiag, NavDance, NavSettings
         ];
 
@@ -632,8 +631,13 @@ public partial class MainWindow : Window
 
     private static AppPage ParseAppPage(object? tag)
     {
-        if (tag is string s && Enum.TryParse<AppPage>(s, ignoreCase: true, out var p))
-            return p;
+        if (tag is string s)
+        {
+            if (s.Equals("PersonalHomepage", StringComparison.OrdinalIgnoreCase))
+                return AppPage.Notes;
+            if (Enum.TryParse<AppPage>(s, ignoreCase: true, out var p))
+                return p;
+        }
         return AppPage.Notes;
     }
 
@@ -754,7 +758,6 @@ public partial class MainWindow : Window
             AppPage.MeetingAssistant => L("Nav.Meeting"),
             AppPage.FileManager => L("Nav.FileManager"),
             AppPage.Skills => L("Nav.Settings"),
-            AppPage.PersonalHomepage => L("Nav.Homepage"),
             AppPage.ProcessDiagnostics => "进程诊断",
             AppPage.Settings => L("Nav.Settings"),
             _ => AppBranding.DisplayName
@@ -785,7 +788,6 @@ public partial class MainWindow : Window
             AppPage.MeetingAssistant => _meetingAssistantView,
             AppPage.FileManager => _fileManagerView,
             AppPage.Skills => _settingsView,
-            AppPage.PersonalHomepage => _homepageView,
             AppPage.ProcessDiagnostics => _processDiagnosticsView,
             AppPage.Settings => _settingsView,
             _ => _notesView
@@ -823,8 +825,6 @@ public partial class MainWindow : Window
             _settingsView.LoadFromDisk();
         if (page == AppPage.PasswordVault)
             _passwordVaultView.OnNavigatedTo();
-        if (page == AppPage.PersonalHomepage)
-            _homepageView.OnNavigatedTo();
         if (page == AppPage.AiChat || page == (AppPage)4)
             _aiChatView.ApplyHandoffIfPending();
         if (page == AppPage.Email)
@@ -838,7 +838,7 @@ public partial class MainWindow : Window
     /// <summary>进入某页时自动展开对应侧栏分组，避免子项被收起后找不到。</summary>
     private void SyncNavExpandersForPage(AppPage page)
     {
-        if (page is AppPage.AiChat or AppPage.Email or AppPage.Notes or AppPage.Ppt or AppPage.Todo or AppPage.ScheduledReminders or AppPage.QuickAccess or AppPage.PersonalHomepage)
+        if (page is AppPage.AiChat or AppPage.Email or AppPage.Notes or AppPage.Ppt or AppPage.Todo or AppPage.ScheduledReminders or AppPage.QuickAccess)
             NavWorkbenchExpander.IsExpanded = true;
         if (page is AppPage.MeetingAssistant)
             NavFuncExpander.IsExpanded = true;
@@ -859,21 +859,20 @@ public partial class MainWindow : Window
         [AppPage.Todo] = 3,
         [AppPage.ScheduledReminders] = 4,
         [AppPage.QuickAccess] = 5,
-        [AppPage.PersonalHomepage] = 6,
         [AppPage.Email] = 0,
-        [AppPage.MeetingAssistant] = 7,
+        [AppPage.MeetingAssistant] = 6,
         [AppPage.Translate] = 0,
-        [AppPage.FileManager] = 8,
-        [AppPage.FileTools] = 9,
-        [AppPage.PdfTools] = 10,
-        [AppPage.Cleanup] = 11,
-        [AppPage.CodexProxy] = 12,
-        [AppPage.NetworkMonitor] = 13,
-        [AppPage.PasswordVault] = 14,
-        [AppPage.ProcessDiagnostics] = 15,
-        [AppPage.Dance] = 16,
-        [AppPage.Settings] = 17,
-        [AppPage.Skills] = 17,
+        [AppPage.FileManager] = 7,
+        [AppPage.FileTools] = 8,
+        [AppPage.PdfTools] = 9,
+        [AppPage.Cleanup] = 10,
+        [AppPage.CodexProxy] = 11,
+        [AppPage.NetworkMonitor] = 12,
+        [AppPage.PasswordVault] = 13,
+        [AppPage.ProcessDiagnostics] = 14,
+        [AppPage.Dance] = 15,
+        [AppPage.Settings] = 16,
+        [AppPage.Skills] = 16,
     };
 
     private void SetActiveNav(AppPage page)

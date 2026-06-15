@@ -32,8 +32,6 @@
     <sys:String x:Key="Nav.Collapse">Collapse</sys:String>
     <sys:String x:Key="Nav.ExpandSidebar">Expand sidebar</sys:String>
     <sys:String x:Key="Nav.CollapseSidebar">Collapse sidebar</sys:String>
-    <sys:String x:Key="Nav.Homepage">Homepage</sys:String>
-
     <!-- ══════ Title Bar ══════ -->
     <sys:String x:Key="TitleBar.Minimize">Minimize</sys:String>
     <sys:String x:Key="TitleBar.Maximize">Maximize</sys:String>

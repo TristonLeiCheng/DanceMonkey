@@ -323,12 +323,6 @@
                                         <TextBlock Text="{DynamicResource Nav.QuickAccess}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavHomepage" Tag="PersonalHomepage" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="🏠" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
-                                        <TextBlock Text="{DynamicResource Nav.Homepage}" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
                             </StackPanel>
                         </Expander>
 

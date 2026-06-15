@@ -101,7 +101,7 @@
                                      FontSize="13.5"
                                      Margin="0,0,0,10"/>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="默认模型" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="代理默认模型" VerticalAlignment="Center" Margin="0,0,12,10"/>
                         <TextBox Grid.Row="4" Grid.Column="1" x:Name="ModelBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
 
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="超时（秒）" VerticalAlignment="Center" Margin="0,0,12,0"/>
@@ -109,6 +109,48 @@
                     </Grid>
 
                     <TextBlock Text="上游地址可填写 /v1 或完整 /v1/chat/completions；API Key 留空时，会使用 Codex 请求里的 Authorization Bearer。"
+                               Style="{StaticResource UiHint}"
+                               Margin="0,12,0,0"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource UiCard}">
+                <StackPanel>
+                    <TextBlock Text="Codex 客户端配置" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,12"/>
+                    <CheckBox x:Name="CodexAutoConfigureCheck"
+                              Content="启动 DM Proxy 时自动配置 Codex（环境变量 + config.toml + auth.json）"
+                              IsChecked="True"
+                              Margin="0,0,0,14"/>
+
+                    <Grid IsEnabled="{Binding IsChecked, ElementName=CodexAutoConfigureCheck}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Codex 模型" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="CodexModelBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="推理强度" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="ReasoningEffortCombo" Style="{StaticResource UiComboBox}" Margin="0,0,0,10">
+                            <ComboBoxItem Content="不设置" Tag="" IsSelected="True"/>
+                            <ComboBoxItem Content="minimal" Tag="minimal"/>
+                            <ComboBoxItem Content="low" Tag="low"/>
+                            <ComboBoxItem Content="medium" Tag="medium"/>
+                            <ComboBoxItem Content="high" Tag="high"/>
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="配置文件" Style="{StaticResource UiHint}" Margin="0,0,12,0"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="CodexConfigPathText" TextWrapping="Wrap"/>
+                    </Grid>
+
+                    <TextBlock Text="自动配置会写入 ~/.codex/config.toml 与 auth.json，并设置用户级 OPENAI_API_KEY、NO_PROXY。修改后需重启 Codex。"
                                Style="{StaticResource UiHint}"
                                Margin="0,12,0,0"
                                TextWrapping="Wrap"/>
@@ -125,7 +167,7 @@
                              TextWrapping="NoWrap"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Disabled"/>
-                    <TextBlock Text="启动后在 Codex 中使用上面的 OPENAI_BASE_URL；如果已在本页配置上游 Key，Codex 侧的 Key 可使用任意非空占位值。"
+                    <TextBlock Text="启用自动配置后无需手动编辑；若已在本页配置上游 Key，Codex 将使用占位 Key dancemonkey-local。"
                                Style="{StaticResource UiHint}"
                                Margin="0,10,0,0"
                                TextWrapping="Wrap"/>

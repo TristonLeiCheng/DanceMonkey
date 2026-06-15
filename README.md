@@ -218,17 +218,19 @@ dotnet build DanceMonkey.Cli\DanceMonkey.Cli.csproj -c Debug
 
 在线升级：`publish.bat` 还会额外生成 `publish/win-x64/artifacts/update-manifest.json` 与对应版本 ZIP 包。将这两个文件部署到同一 URL 目录后，在应用的设置页 About 区填入该 manifest 地址，用户点击 `Update` 就会自动检查、下载、替换当前程序并重启。也可在 **GitHub Releases**（`TristonLeiCheng/DanceMonkey`）获取最新 `DanceMonkey-win-x64-*.zip`。
 
+**安装目录建议**：ZIP 文件名含版本号，但请解压到**无版本号的文件夹**（如 `DanceMonkey`），或双击包内的 **`启动 DanceMonkey.bat`**，程序会复制到固定目录 `%LOCALAPPDATA%\DanceMonkey\app` 并从此处运行。若从带版本号的目录（如 `DanceMonkey-win-x64-1.3.0`）启动，应用内升级时会**自动迁移**到上述固定目录，避免文件夹名与程序版本不一致。
+
 升级清单示例：
 
 ```json
 {
-	"version": "1.3.0",
-	"packageUrl": "DanceMonkey-win-x64-1.3.0.zip",
+	"version": "1.3.1",
+	"packageUrl": "DanceMonkey-win-x64-1.3.1.zip",
 	"entryExe": "DanceMonkey.exe"
 }
 ```
 
-版本说明见 [`docs/releases/`](docs/releases/)（如 [v1.3.0](docs/releases/v1.3.0.md)）。
+版本说明见 [`docs/releases/`](docs/releases/)（如 [v1.3.1](docs/releases/v1.3.1.md)）。
 
 ---
 

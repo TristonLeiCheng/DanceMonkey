@@ -34,5 +34,8 @@ public sealed class AppUpdateLaunchInfo
     public string ScriptPath { get; init; } = "";
     public string SourceDirectory { get; init; } = "";
     public string InstallDirectory { get; init; } = "";
+    /// <summary>升级前程序所在目录；与 <see cref="InstallDirectory"/> 不同时表示需要迁移。</summary>
+    public string PreviousInstallDirectory { get; init; } = "";
     public string ExeName { get; init; } = "DanceMonkey.exe";
+    public bool UpdateStartupEntry { get; init; }
 }

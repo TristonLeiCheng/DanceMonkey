@@ -27,6 +27,14 @@ public static class StartupService
         if (string.IsNullOrEmpty(exe))
             return;
 
+        // 从带版本号的解压目录启用开机启动时，指向固定安装目录，避免后续升级路径不一致。
+        if (enabled && AppInstallPathService.LooksVersionedInstallDirectory(AppInstallPathService.CurrentInstallDirectory))
+        {
+            var canonicalExe = Path.Combine(AppInstallPathService.CanonicalInstallDirectory, Path.GetFileName(exe));
+            if (File.Exists(canonicalExe))
+                exe = canonicalExe;
+        }
+
         using var key = Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
         if (key == null) return;
 

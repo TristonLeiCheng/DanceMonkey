@@ -1095,10 +1095,18 @@ public partial class SettingsView : UserControl
 
             var progress = new Progress<string>(message => UpdateStatusText.Text = message);
             var launchInfo = await _appUpdateService.DownloadAndStageUpdateAsync(check.Manifest, progress);
+
+            var migrating = !AppInstallPathService.PathsEqual(
+                launchInfo.InstallDirectory,
+                launchInfo.PreviousInstallDirectory);
+            var migrateHint = migrating
+                ? $"\n\n将迁移到固定目录：\n{launchInfo.InstallDirectory}"
+                : "";
+
             UpdateStatusText.Text = $"已准备升级到 v{check.LatestVersionText}，正在退出并更新...";
 
             MessageBox.Show(
-                $"已准备升级到 v{check.LatestVersionText}。\n程序将退出、替换为最新版本，并在完成后自动重新启动。",
+                $"已准备升级到 v{check.LatestVersionText}。\n程序将退出、替换为最新版本，并在完成后自动重新启动。{migrateHint}",
                 "开始升级",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);

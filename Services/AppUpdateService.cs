@@ -181,12 +181,17 @@ public sealed class AppUpdateService
         var payloadRoot = ResolvePayloadRoot(extractRoot, manifest.EntryExe);
         File.WriteAllText(scriptPath, BuildUpdaterScript(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
+        var previousInstall = AppInstallPathService.CurrentInstallDirectory;
+        var installDirectory = AppInstallPathService.ResolveUpdateInstallDirectory();
+
         return new AppUpdateLaunchInfo
         {
             ScriptPath = scriptPath,
             SourceDirectory = payloadRoot,
-            InstallDirectory = AppContext.BaseDirectory,
-            ExeName = Path.GetFileName(manifest.EntryExe)
+            InstallDirectory = installDirectory,
+            PreviousInstallDirectory = previousInstall,
+            ExeName = Path.GetFileName(manifest.EntryExe),
+            UpdateStartupEntry = StartupService.IsEnabled()
         };
     }
 
@@ -213,6 +218,10 @@ public sealed class AppUpdateService
         startInfo.ArgumentList.Add(launchInfo.SourceDirectory);
         startInfo.ArgumentList.Add("-InstallDir");
         startInfo.ArgumentList.Add(launchInfo.InstallDirectory);
+        startInfo.ArgumentList.Add("-PreviousInstallDir");
+        startInfo.ArgumentList.Add(launchInfo.PreviousInstallDirectory);
+        startInfo.ArgumentList.Add("-UpdateStartup");
+        startInfo.ArgumentList.Add(launchInfo.UpdateStartupEntry ? "1" : "0");
         startInfo.ArgumentList.Add("-ExeName");
         startInfo.ArgumentList.Add(launchInfo.ExeName);
         startInfo.ArgumentList.Add("-CurrentPid");
@@ -329,24 +338,38 @@ public sealed class AppUpdateService
         "param(\n" +
         "    [string]$SourceDir,\n" +
         "    [string]$InstallDir,\n" +
+        "    [string]$PreviousInstallDir,\n" +
+        "    [string]$UpdateStartup,\n" +
         "    [string]$ExeName,\n" +
         "    [int]$CurrentPid\n" +
         ")\n" +
         "$ErrorActionPreference = 'Stop'\n" +
+        "function Normalize-Dir([string]$p) {\n" +
+        "    if ([string]::IsNullOrWhiteSpace($p)) { return '' }\n" +
+        "  return [System.IO.Path]::GetFullPath($p).TrimEnd('\\','/')\n" +
+        "}\n" +
         "try {\n" +
         "    if ($CurrentPid -gt 0) {\n" +
         "        Wait-Process -Id $CurrentPid -ErrorAction SilentlyContinue\n" +
         "    }\n" +
-        "    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null\n" +
-        "    $copy = Start-Process -FilePath 'robocopy.exe' -ArgumentList @($SourceDir, $InstallDir, '/E', '/R:2', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP') -Wait -PassThru -NoNewWindow\n" +
+        "    $install = Normalize-Dir $InstallDir\n" +
+        "    $previous = Normalize-Dir $PreviousInstallDir\n" +
+        "    New-Item -ItemType Directory -Force -Path $install | Out-Null\n" +
+        "    $copy = Start-Process -FilePath 'robocopy.exe' -ArgumentList @($SourceDir, $install, '/E', '/R:2', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP') -Wait -PassThru -NoNewWindow\n" +
         "    if ($copy.ExitCode -gt 7) {\n" +
         "        throw \"robocopy failed with exit code $($copy.ExitCode).\"\n" +
         "    }\n" +
-        "    $mainExe = Join-Path $InstallDir $ExeName\n" +
+        "    $mainExe = Join-Path $install $ExeName\n" +
         "    if (-not (Test-Path $mainExe)) {\n" +
         "        throw \"Updated executable not found: $mainExe\"\n" +
         "    }\n" +
-        "    Start-Process -FilePath $mainExe -WorkingDirectory $InstallDir | Out-Null\n" +
+        "    if ($UpdateStartup -eq '1') {\n" +
+        "        $runKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'\n" +
+        "        if (Get-ItemProperty -Path $runKey -Name 'DanceMonkey' -ErrorAction SilentlyContinue) {\n" +
+        "            Set-ItemProperty -Path $runKey -Name 'DanceMonkey' -Value ('\"' + $mainExe + '\"')\n" +
+        "        }\n" +
+        "    }\n" +
+        "    Start-Process -FilePath $mainExe -WorkingDirectory $install | Out-Null\n" +
         "}\n" +
         "catch {\n" +
         "    Add-Type -AssemblyName PresentationFramework\n" +

@@ -25,6 +25,12 @@ public partial class App : Application
     public static int Main(string[] args)
     {
         StartupDiagnostics.Initialize(args);
+        if (LocalInstallBootstrap.TryRelaunchFromCanonicalInstall(args))
+        {
+            StartupDiagnostics.Log("LocalInstallBootstrap: relaunched from canonical install dir");
+            return 0;
+        }
+
         try
         {
             var app = new App();

@@ -369,7 +369,30 @@ public sealed class AppUpdateService
         "            Set-ItemProperty -Path $runKey -Name 'DanceMonkey' -Value ('\"' + $mainExe + '\"')\n" +
         "        }\n" +
         "    }\n" +
+        "    if ($previous -and ($previous -ne $install)) {\n" +
+        "        $launcher = Join-Path $previous '启动 DanceMonkey.bat'\n" +
+        "        @\"\r\n" +
+        "@echo off\r\n" +
+        "start \"\" \"$mainExe\"\r\n" +
+        "\"@ | Set-Content -LiteralPath $launcher -Encoding UTF8\r\n" +
+        "        $hint = Join-Path $previous '请使用本机安装目录启动.txt'\r\n" +
+        "        @\"\r\n" +
+        "升级已完成。请从本机固定目录启动 DanceMonkey：\r\n" +
+        "\r\n" +
+        "$mainExe\r\n" +
+        "\r\n" +
+        "也可双击本目录下的「启动 DanceMonkey.bat」。\r\n" +
+        "\"@ | Set-Content -LiteralPath $hint -Encoding UTF8\r\n" +
+        "    }\n" +
         "    Start-Process -FilePath $mainExe -WorkingDirectory $install | Out-Null\n" +
+        "    if ($previous -and ($previous -ne $install)) {\n" +
+        "        Add-Type -AssemblyName PresentationFramework\n" +
+        "        [System.Windows.MessageBox]::Show(\r\n" +
+        "            \"升级完成。程序已安装到：`n`n$install`n`n请今后从此目录或「启动 DanceMonkey.bat」启动。旧解压目录中的 bat 已指向新位置。\",\r\n" +
+        "            'DanceMonkey 更新',\r\n" +
+        "            'OK',\r\n" +
+        "            'Information') | Out-Null\r\n" +
+        "    }\n" +
         "}\n" +
         "catch {\n" +
         "    Add-Type -AssemblyName PresentationFramework\n" +

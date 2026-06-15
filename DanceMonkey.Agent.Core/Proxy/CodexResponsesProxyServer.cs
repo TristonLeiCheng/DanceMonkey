@@ -256,12 +256,10 @@ public sealed class CodexResponsesProxyServer : IDisposable
         foreach (var item in items)
             AddResponsesInputItem(messages, item, pendingFunctionCalls);
 
-        CoalescePendingFunctionCalls(messages, pendingFunctionCalls);
+        // 末尾未配对的 function_call 不应发给上游（会导致 tool_calls 缺少 tool 回复）
+        pendingFunctionCalls.Clear();
 
-        if (messages.Count == 0)
-            messages.Add(new JsonObject { ["role"] = "user", ["content"] = "" });
-
-        return messages;
+        return SanitizeChatToolMessages(messages);
     }
 
     private static void AddResponsesInputItem(JsonArray messages, JsonNode? item, List<JsonObject> pendingFunctionCalls)
@@ -360,9 +358,91 @@ public sealed class CodexResponsesProxyServer : IDisposable
         return new JsonObject
         {
             ["role"] = "assistant",
-            ["content"] = null,
+            ["content"] = "",
             ["tool_calls"] = toolCalls,
         };
+    }
+
+    /// <summary>
+    /// 移除末尾缺少 tool 回复的 assistant tool_calls，避免上游 400。
+    /// </summary>
+    private static JsonArray SanitizeChatToolMessages(JsonArray messages)
+    {
+        var sanitized = new JsonArray();
+        var i = 0;
+        while (i < messages.Count)
+        {
+            if (messages[i] is not JsonObject msg)
+            {
+                i++;
+                continue;
+            }
+
+            if (!TryGetAssistantToolCallIds(msg, out var expectedIds))
+            {
+                sanitized.Add(msg.DeepClone());
+                i++;
+                continue;
+            }
+
+            var toolReplies = new List<JsonObject>();
+            var matched = new HashSet<string>(StringComparer.Ordinal);
+            var j = i + 1;
+            while (j < messages.Count &&
+                   messages[j] is JsonObject followUp &&
+                   string.Equals(GetString(followUp, "role"), "tool", StringComparison.OrdinalIgnoreCase))
+            {
+                var toolCallId = GetString(followUp, "tool_call_id");
+                if (!string.IsNullOrWhiteSpace(toolCallId) && expectedIds.Contains(toolCallId))
+                    matched.Add(toolCallId);
+                toolReplies.Add(followUp);
+                j++;
+                if (matched.Count == expectedIds.Count)
+                    break;
+            }
+
+            if (matched.Count == expectedIds.Count)
+            {
+                sanitized.Add(msg.DeepClone());
+                foreach (var reply in toolReplies)
+                    sanitized.Add(reply.DeepClone());
+                i = j;
+                continue;
+            }
+
+            while (j < messages.Count &&
+                   messages[j] is JsonObject orphan &&
+                   string.Equals(GetString(orphan, "role"), "tool", StringComparison.OrdinalIgnoreCase))
+                j++;
+
+            i = j;
+        }
+
+        if (sanitized.Count == 0)
+            sanitized.Add(new JsonObject { ["role"] = "user", ["content"] = "" });
+
+        return sanitized;
+    }
+
+    private static bool TryGetAssistantToolCallIds(JsonObject msg, out HashSet<string> expectedIds)
+    {
+        expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        if (!string.Equals(GetString(msg, "role"), "assistant", StringComparison.OrdinalIgnoreCase) ||
+            !msg.TryGetPropertyValue("tool_calls", out var toolCallsNode) ||
+            toolCallsNode is not JsonArray toolCalls)
+            return false;
+
+        foreach (var toolCall in toolCalls)
+        {
+            if (toolCall is JsonObject toolCallObj)
+            {
+                var id = GetString(toolCallObj, "id");
+                if (!string.IsNullOrWhiteSpace(id))
+                    expectedIds.Add(id);
+            }
+        }
+
+        return expectedIds.Count > 0;
     }
 
     private static JsonObject BuildAssistantToolCallsMessageFromChatToolCalls(JsonArray toolCalls)
@@ -377,7 +457,7 @@ public sealed class CodexResponsesProxyServer : IDisposable
         return new JsonObject
         {
             ["role"] = "assistant",
-            ["content"] = null,
+            ["content"] = "",
             ["tool_calls"] = normalized,
         };
     }

@@ -150,7 +150,7 @@
                         <TextBlock Grid.Row="2" Grid.Column="1" x:Name="CodexConfigPathText" TextWrapping="Wrap"/>
                     </Grid>
 
-                    <TextBlock Text="自动配置会写入 ~/.codex/config.toml 与 auth.json，并设置用户级 OPENAI_API_KEY、NO_PROXY。修改后需重启 Codex。"
+                    <TextBlock Text="自动配置会写入 ~/.codex/config.toml 与 auth.json，设置 OPENAI_API_KEY、NO_PROXY，并禁用 WebSocket（DM Proxy 仅支持 HTTP）。修改后需重启 Codex。"
                                Style="{StaticResource UiHint}"
                                Margin="0,12,0,0"
                                TextWrapping="Wrap"/>

@@ -171,6 +171,7 @@ public static class CodexIntegrationService
         sb.AppendLine($"base_url = \"{EscapeTomlString(baseUrl)}\"");
         sb.AppendLine("env_key = \"OPENAI_API_KEY\"");
         sb.AppendLine("wire_api = \"responses\"");
+        sb.AppendLine("supports_websockets = false");
         sb.Append(MarkerEnd);
         return sb.ToString();
     }

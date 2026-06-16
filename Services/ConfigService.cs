@@ -185,6 +185,9 @@ public sealed class ConfigService
         CodexAutoConfigure = true,
         CodexModel = "",
         CodexModelReasoningEffort = "medium",
+        CodexModelContextWindow = 1_000_000,
+        CodexModelAutoCompactTokenLimit = 900_000,
+        CodexModelReasoningSummary = "detailed",
         UpdateManifestUrl = "",
         UpdateGitHubRepo = "TristonLeiCheng/DanceMonkey",
         UpdateAssetKeyword = "win-x64"

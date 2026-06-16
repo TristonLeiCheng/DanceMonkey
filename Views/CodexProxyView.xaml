@@ -119,17 +119,24 @@
                 <StackPanel>
                     <TextBlock Text="Codex 客户端配置" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,12"/>
                     <CheckBox x:Name="CodexAutoConfigureCheck"
-                              Content="启动 DM Proxy 时自动配置 Codex（环境变量 + config.toml + auth.json）"
+                              Content="启动 DM Proxy 时自动配置 Codex（config.toml + NO_PROXY）"
                               IsChecked="True"
                               Margin="0,0,0,10"/>
-                    <Button x:Name="ApplyCodexConfigBtn"
-                            Content="立即写入 Codex 配置"
-                            Style="{StaticResource UiBtnSecondary}"
-                            HorizontalAlignment="Left"
-                            Margin="0,0,0,14"
-                            Click="ApplyCodexConfigBtn_OnClick"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                        <Button x:Name="ApplyCodexConfigBtn"
+                                Content="立即写入 Codex 配置"
+                                Style="{StaticResource UiBtnSecondary}"
+                                MinWidth="148"
+                                Margin="0,0,10,0"
+                                Click="ApplyCodexConfigBtn_OnClick"/>
+                        <Button x:Name="ApplyNoProxyBtn"
+                                Content="设置 NO_PROXY"
+                                Style="{StaticResource UiBtnSecondary}"
+                                MinWidth="118"
+                                Click="ApplyNoProxyBtn_OnClick"/>
+                    </StackPanel>
 
-                    <Grid IsEnabled="{Binding IsChecked, ElementName=CodexAutoConfigureCheck}">
+                    <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="150"/>
                             <ColumnDefinition Width="*"/>
@@ -138,25 +145,46 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Codex 模型" VerticalAlignment="Center" Margin="0,0,12,10"/>
-                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="CodexModelBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CodexModelCombo"
+                                  Style="{StaticResource UiComboBox}"
+                                  IsEditable="True"
+                                  Margin="0,0,0,10"/>
 
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="推理强度" VerticalAlignment="Center" Margin="0,0,12,10"/>
                         <ComboBox Grid.Row="1" Grid.Column="1" x:Name="ReasoningEffortCombo" Style="{StaticResource UiComboBox}" Margin="0,0,0,10">
-                            <ComboBoxItem Content="不设置" Tag="" IsSelected="True"/>
+                            <ComboBoxItem Content="不设置" Tag=""/>
                             <ComboBoxItem Content="minimal" Tag="minimal"/>
                             <ComboBoxItem Content="low" Tag="low"/>
-                            <ComboBoxItem Content="medium" Tag="medium"/>
+                            <ComboBoxItem Content="medium" Tag="medium" IsSelected="True"/>
                             <ComboBoxItem Content="high" Tag="high"/>
+                            <ComboBoxItem Content="xhigh" Tag="xhigh"/>
                         </ComboBox>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="配置文件" Style="{StaticResource UiHint}" Margin="0,0,12,0"/>
-                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="CodexConfigPathText" TextWrapping="Wrap"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="上下文窗口" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="ContextWindowBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="自动压缩阈值" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="CompactLimitBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="推理摘要" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <ComboBox Grid.Row="4" Grid.Column="1" x:Name="ReasoningSummaryCombo" Style="{StaticResource UiComboBox}" Margin="0,0,0,10">
+                            <ComboBoxItem Content="不设置" Tag=""/>
+                            <ComboBoxItem Content="auto" Tag="auto"/>
+                            <ComboBoxItem Content="concise" Tag="concise"/>
+                            <ComboBoxItem Content="detailed" Tag="detailed" IsSelected="True"/>
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="配置文件" Style="{StaticResource UiHint}" Margin="0,0,12,0"/>
+                        <TextBlock Grid.Row="5" Grid.Column="1" x:Name="CodexConfigPathText" TextWrapping="Wrap"/>
                     </Grid>
 
-                    <TextBlock Text="自动配置会强制 Codex 使用 API Key（非 ChatGPT 登录），写入 OPENAI_API_KEY / OPENAI_BASE_URL、NO_PROXY，并禁用 WebSocket。若仍看到登录页，请在 Codex 扩展里 Sign out 后完全重启 VS Code。"
+                    <TextBlock Text="「设置 NO_PROXY」等价于 setx NO_PROXY &quot;localhost,127.0.0.1&quot;，用于绕过企业代理访问本机 DM Proxy。启动代理时会同时写入 config.toml 与 NO_PROXY。"
                                Style="{StaticResource UiHint}"
                                Margin="0,12,0,0"
                                TextWrapping="Wrap"/>
@@ -173,7 +201,7 @@
                              TextWrapping="NoWrap"
                              HorizontalScrollBarVisibility="Auto"
                              VerticalScrollBarVisibility="Disabled"/>
-                    <TextBlock Text="启用自动配置后，Codex 应直接进入 API 模式；若本页已填上游 Key，Codex 使用占位 Key dancemonkey-local，真实 Key 由 DM Proxy 转发。"
+                    <TextBlock Text="Codex 通过 model_provider = api 连接本地 DM Proxy（requires_openai_auth = false）；上游 Key 仍在本页「上游 API Key」中配置。"
                                Style="{StaticResource UiHint}"
                                Margin="0,10,0,0"
                                TextWrapping="Wrap"/>

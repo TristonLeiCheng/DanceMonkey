@@ -285,9 +285,21 @@ public sealed class AppConfig
     [JsonPropertyName("codexModel")]
     public string CodexModel { get; set; } = "";
 
-    /// <summary>写入 Codex config.toml 的 model_reasoning_effort（如 low/medium/high）。</summary>
+    /// <summary>写入 Codex config.toml 的 model_reasoning_effort（如 xhigh/medium）。</summary>
     [JsonPropertyName("codexModelReasoningEffort")]
     public string CodexModelReasoningEffort { get; set; } = "medium";
+
+    /// <summary>写入 Codex config.toml 的 model_context_window。</summary>
+    [JsonPropertyName("codexModelContextWindow")]
+    public int CodexModelContextWindow { get; set; } = 1_000_000;
+
+    /// <summary>写入 Codex config.toml 的 model_auto_compact_token_limit。</summary>
+    [JsonPropertyName("codexModelAutoCompactTokenLimit")]
+    public int CodexModelAutoCompactTokenLimit { get; set; } = 900_000;
+
+    /// <summary>写入 Codex config.toml 的 model_reasoning_summary（如 detailed）。</summary>
+    [JsonPropertyName("codexModelReasoningSummary")]
+    public string CodexModelReasoningSummary { get; set; } = "detailed";
 
     /// <summary>在线升级清单地址。支持 http/https，也支持本地或 UNC 路径。</summary>
     [JsonPropertyName("updateManifestUrl")]
@@ -419,6 +431,9 @@ public sealed class AppConfig
         CodexAutoConfigure = CodexAutoConfigure,
         CodexModel = CodexModel,
         CodexModelReasoningEffort = CodexModelReasoningEffort,
+        CodexModelContextWindow = CodexModelContextWindow,
+        CodexModelAutoCompactTokenLimit = CodexModelAutoCompactTokenLimit,
+        CodexModelReasoningSummary = CodexModelReasoningSummary,
         UpdateManifestUrl = UpdateManifestUrl,
         UpdateGitHubRepo = UpdateGitHubRepo,
         UpdateAssetKeyword = UpdateAssetKeyword,

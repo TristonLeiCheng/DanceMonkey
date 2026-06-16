@@ -1,22 +1,33 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using DesktopAssistant.Models;
 
 namespace DesktopAssistant.Services;
 
 /// <summary>
-/// 启动 DM Proxy 时自动配置 Codex：用户环境变量、auth.json、config.toml。
+/// 启动 DM Proxy 时自动配置 Codex：NO_PROXY 环境变量与 config.toml。
 /// </summary>
 public static class CodexIntegrationService
 {
-    public const string PlaceholderApiKey = "dancemonkey-local";
-    public const string ProviderId = "dm_proxy";
+    public const string ProviderId = "api";
+    public const string ProviderName = "DMproxy";
+    public const string NoProxyValue = "localhost,127.0.0.1";
+    public const string DefaultCodexModel = "gpt-5.5";
+    public const string DefaultReasoningEffort = "medium";
+
+    public static readonly IReadOnlyList<string> PresetCodexModels =
+    [
+        "gpt-5.5",
+        "claude-opus-4.6",
+        "claude-opus-4.7",
+        "claude-opus-4.8",
+        "claude-sonnet-4.6",
+        "claude-sonnet-4.7",
+        "claude-sonnet-4.8",
+    ];
 
     private const string MarkerStart = "# --- DanceMonkey DM Proxy (auto-managed) ---";
     private const string MarkerEnd = "# --- End DanceMonkey DM Proxy ---";
-
-    private static readonly string[] LocalProxyBypassHosts = ["127.0.0.1", "localhost"];
 
     public sealed record ApplyResult(bool Success, IReadOnlyList<string> Messages, string? Error = null);
 
@@ -26,43 +37,43 @@ public static class CodexIntegrationService
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
 
     public static string ConfigTomlPath => Path.Combine(CodexHomeDirectory, "config.toml");
-    public static string AuthJsonPath => Path.Combine(CodexHomeDirectory, "auth.json");
 
     public static ApplyResult Apply(AppConfig config)
     {
         if (!config.CodexAutoConfigure)
             return new ApplyResult(true, ["已跳过 Codex 自动配置（未启用）。"]);
 
+        return WriteCodexConfig(config);
+    }
+
+    public static ApplyResult WriteCodexConfig(AppConfig config)
+    {
         var messages = new List<string>();
         try
         {
             Directory.CreateDirectory(CodexHomeDirectory);
-
-            var baseUrl = CodexProxyDesktopService.BuildBaseUrl(config);
-            var codexModel = ResolveCodexModel(config);
-            var reasoning = NormalizeReasoningEffort(config.CodexModelReasoningEffort);
-            var upstreamKeyConfigured = !string.IsNullOrWhiteSpace(config.ApiKey);
-            var codexApiKey = upstreamKeyConfigured ? PlaceholderApiKey : (config.ApiKey ?? "").Trim();
-
-            if (string.IsNullOrWhiteSpace(codexApiKey))
-            {
-                return new ApplyResult(
-                    false,
-                    messages,
-                    "未配置上游 API Key，且无法为 Codex 生成 OPENAI_API_KEY。请在本页填写上游 Key，或关闭自动配置后手动设置。");
-            }
-
-            ApplyUserEnvironmentVariable("OPENAI_API_KEY", codexApiKey, messages);
-            ApplyUserEnvironmentVariable("OPENAI_BASE_URL", baseUrl, messages);
-            ApplyNoProxyBypass(messages);
-
-            WriteAuthJson(codexApiKey, messages);
-            WriteConfigToml(baseUrl, codexModel, reasoning, messages);
+            WriteConfigToml(config, messages);
+            ApplyNoProxyUserEnv(messages);
 
             messages.Add($"config.toml: {ConfigTomlPath}");
-            messages.Add($"auth.json: {AuthJsonPath}");
-            messages.Add("已强制 Codex 使用 API Key 登录（forced_login_method = \"api\"），并清除 ChatGPT 会话缓存。");
-            messages.Add("请完全退出 Codex / VS Code 后重新打开；从桌面图标启动的 IDE 需注销或重启 Windows 才能读到新的用户环境变量。");
+            messages.Add("请完全退出并重新打开 Codex；新环境变量需重启应用后生效。");
+            return new ApplyResult(true, messages);
+        }
+        catch (Exception ex)
+        {
+            return new ApplyResult(false, messages, ex.Message);
+        }
+    }
+
+    /// <summary>等价于 setx NO_PROXY "localhost,127.0.0.1"</summary>
+    public static ApplyResult ApplyNoProxyManual()
+    {
+        var messages = new List<string>();
+        try
+        {
+            ApplyNoProxyUserEnv(messages);
+            messages.Add("等价命令: setx NO_PROXY \"localhost,127.0.0.1\"");
+            messages.Add("请完全退出并重新打开 Codex / VS Code 后生效。");
             return new ApplyResult(true, messages);
         }
         catch (Exception ex)
@@ -79,69 +90,21 @@ public static class CodexIntegrationService
         if (!string.IsNullOrWhiteSpace(config.Model))
             return config.Model.Trim();
 
-        return "gpt-4o-mini";
+        return DefaultCodexModel;
     }
 
-    private static string? NormalizeReasoningEffort(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        var normalized = value.Trim().ToLowerInvariant();
-        return normalized is "low" or "medium" or "high" or "minimal" or "none"
-            ? normalized
-            : null;
-    }
-
-    private static void ApplyUserEnvironmentVariable(string name, string value, List<string> messages)
-    {
-        Environment.SetEnvironmentVariable(name, value, EnvironmentVariableTarget.User);
-        messages.Add($"已设置用户环境变量 {name}");
-    }
-
-    private static void ApplyNoProxyBypass(List<string> messages)
+    private static void ApplyNoProxyUserEnv(List<string> messages)
     {
         foreach (var name in new[] { "NO_PROXY", "no_proxy" })
         {
-            var merged = MergeProxyBypass(Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User));
-            Environment.SetEnvironmentVariable(name, merged, EnvironmentVariableTarget.User);
-            messages.Add($"已更新用户环境变量 {name}={merged}");
+            Environment.SetEnvironmentVariable(name, NoProxyValue, EnvironmentVariableTarget.User);
+            messages.Add($"已设置用户环境变量 {name}={NoProxyValue}");
         }
     }
 
-    internal static string MergeProxyBypass(string? existing)
+    private static void WriteConfigToml(AppConfig config, List<string> messages)
     {
-        var items = new List<string>();
-        if (!string.IsNullOrWhiteSpace(existing))
-        {
-            foreach (var part in existing.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (!items.Contains(part, StringComparer.OrdinalIgnoreCase))
-                    items.Add(part);
-            }
-        }
-
-        foreach (var host in LocalProxyBypassHosts)
-        {
-            if (!items.Contains(host, StringComparer.OrdinalIgnoreCase))
-                items.Add(host);
-        }
-
-        return string.Join(";", items);
-    }
-
-    private static void WriteAuthJson(string apiKey, List<string> messages)
-    {
-        // 仅保留 API Key，移除 ChatGPT OAuth 的 access/refresh token，避免仍弹出登录页。
-        var payload = new Dictionary<string, string> { ["OPENAI_API_KEY"] = apiKey };
-        var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(AuthJsonPath, json + Environment.NewLine, Encoding.UTF8);
-        messages.Add("已写入 auth.json（仅 OPENAI_API_KEY，已清除 ChatGPT 会话字段）");
-    }
-
-    private static void WriteConfigToml(string baseUrl, string model, string? reasoningEffort, List<string> messages)
-    {
-        var managedBlock = BuildManagedBlock(baseUrl, model, reasoningEffort);
+        var managedBlock = BuildManagedBlock(config);
         string content;
 
         if (File.Exists(ConfigTomlPath))
@@ -159,27 +122,54 @@ public static class CodexIntegrationService
         File.WriteAllText(ConfigTomlPath, content, Encoding.UTF8);
     }
 
-    private static string BuildManagedBlock(string baseUrl, string model, string? reasoningEffort)
+    private static string BuildManagedBlock(AppConfig config)
     {
+        var baseUrl = CodexProxyDesktopService.BuildBaseUrl(config);
+        var model = ResolveCodexModel(config);
+        var reasoning = NormalizeReasoningEffort(config.CodexModelReasoningEffort);
+        var reasoningSummary = NormalizeReasoningSummary(config.CodexModelReasoningSummary);
+        var contextWindow = config.CodexModelContextWindow is > 0 ? config.CodexModelContextWindow : 1_000_000;
+        var compactLimit = config.CodexModelAutoCompactTokenLimit is > 0
+            ? config.CodexModelAutoCompactTokenLimit
+            : 900_000;
+
         var sb = new StringBuilder();
         sb.AppendLine(MarkerStart);
-        sb.AppendLine("preferred_auth_method = \"apikey\"");
-        sb.AppendLine("forced_login_method = \"api\"");
-        sb.AppendLine("cli_auth_credentials_store = \"file\"");
-        sb.AppendLine("disable_response_storage = true");
         sb.AppendLine($"model = \"{EscapeTomlString(model)}\"");
-        if (!string.IsNullOrWhiteSpace(reasoningEffort))
-            sb.AppendLine($"model_reasoning_effort = \"{EscapeTomlString(reasoningEffort)}\"");
+        if (!string.IsNullOrWhiteSpace(reasoning))
+            sb.AppendLine($"model_reasoning_effort = \"{EscapeTomlString(reasoning)}\"");
+        sb.AppendLine($"model_context_window = {contextWindow}");
+        sb.AppendLine($"model_auto_compact_token_limit = {compactLimit}");
+        if (!string.IsNullOrWhiteSpace(reasoningSummary))
+            sb.AppendLine($"model_reasoning_summary = \"{EscapeTomlString(reasoningSummary)}\"");
         sb.AppendLine($"model_provider = \"{ProviderId}\"");
         sb.AppendLine();
         sb.AppendLine($"[model_providers.{ProviderId}]");
-        sb.AppendLine("name = \"DM Proxy\"");
+        sb.AppendLine($"name = \"{ProviderName}\"");
         sb.AppendLine($"base_url = \"{EscapeTomlString(baseUrl)}\"");
-        sb.AppendLine("env_key = \"OPENAI_API_KEY\"");
         sb.AppendLine("wire_api = \"responses\"");
-        sb.AppendLine("supports_websockets = false");
+        sb.AppendLine("requires_openai_auth = false");
         sb.Append(MarkerEnd);
         return sb.ToString();
+    }
+
+    private static string? NormalizeReasoningEffort(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized is "minimal" or "none" or "low" or "medium" or "high" or "xhigh"
+            ? normalized
+            : value.Trim();
+    }
+
+    private static string? NormalizeReasoningSummary(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return value.Trim();
     }
 
     private static string ReplaceManagedBlock(string existing, string managedBlock)

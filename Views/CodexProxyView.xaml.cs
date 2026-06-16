@@ -13,7 +13,15 @@ public partial class CodexProxyView : UserControl
     public CodexProxyView()
     {
         InitializeComponent();
+        PopulateCodexModelCombo();
         App.CodexProxy.StateChanged += CodexProxy_OnStateChanged;
+    }
+
+    private void PopulateCodexModelCombo()
+    {
+        CodexModelCombo.Items.Clear();
+        foreach (var model in CodexIntegrationService.PresetCodexModels)
+            CodexModelCombo.Items.Add(new ComboBoxItem { Content = model, Tag = model });
     }
 
     private void CodexProxyView_OnLoaded(object sender, RoutedEventArgs e)
@@ -61,17 +69,7 @@ public partial class CodexProxyView : UserControl
         if (config == null)
             return;
 
-        if (!config.CodexAutoConfigure)
-        {
-            MessageBox.Show(
-                "请先勾选「启动 DM Proxy 时自动配置 Codex」。",
-                "Codex 配置",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-            return;
-        }
-
-        var result = CodexIntegrationService.Apply(config);
+        var result = CodexIntegrationService.WriteCodexConfig(config);
         LogCodexSetup(result);
         if (result.Success)
         {
@@ -91,6 +89,30 @@ public partial class CodexProxyView : UserControl
         }
 
         RefreshStatus(config);
+    }
+
+    private void ApplyNoProxyBtn_OnClick(object sender, RoutedEventArgs e)
+    {
+        var result = CodexIntegrationService.ApplyNoProxyManual();
+        LogCodexSetup(result);
+        if (result.Success)
+        {
+            MessageBox.Show(
+                string.Join(Environment.NewLine, result.Messages),
+                "NO_PROXY 已设置",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        else
+        {
+            MessageBox.Show(
+                result.Error ?? "设置失败",
+                "NO_PROXY",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+
+        RefreshStatus();
     }
 
     private async Task StartProxyAsync(bool showMessage)
@@ -139,15 +161,59 @@ public partial class CodexProxyView : UserControl
         PortBox.Text = (cfg.CodexProxyPort is >= 1 and <= 65535 ? cfg.CodexProxyPort : 8000).ToString();
         EndpointBox.Text = cfg.ApiEndpoint ?? "";
         ApiKeyBox.Password = cfg.ApiKey ?? "";
-        ModelBox.Text = string.IsNullOrWhiteSpace(cfg.Model) ? "gpt-4o-mini" : cfg.Model;
+        ModelBox.Text = string.IsNullOrWhiteSpace(cfg.Model) ? CodexIntegrationService.DefaultCodexModel : cfg.Model;
         TimeoutBox.Text = (cfg.CodexProxyTimeoutSeconds > 0 ? cfg.CodexProxyTimeoutSeconds : 300).ToString();
         CodexAutoConfigureCheck.IsChecked = cfg.CodexAutoConfigure;
-        CodexModelBox.Text = string.IsNullOrWhiteSpace(cfg.CodexModel)
+        SelectCodexModel(string.IsNullOrWhiteSpace(cfg.CodexModel)
             ? CodexIntegrationService.ResolveCodexModel(cfg)
-            : cfg.CodexModel;
-        SelectReasoningEffort(cfg.CodexModelReasoningEffort);
+            : cfg.CodexModel);
+        SelectReasoningEffort(string.IsNullOrWhiteSpace(cfg.CodexModelReasoningEffort)
+            ? CodexIntegrationService.DefaultReasoningEffort
+            : cfg.CodexModelReasoningEffort);
+        SelectReasoningSummary(cfg.CodexModelReasoningSummary);
+        ContextWindowBox.Text = (cfg.CodexModelContextWindow > 0 ? cfg.CodexModelContextWindow : 1_000_000).ToString();
+        CompactLimitBox.Text = (cfg.CodexModelAutoCompactTokenLimit > 0 ? cfg.CodexModelAutoCompactTokenLimit : 900_000).ToString();
         CodexConfigPathText.Text = CodexIntegrationService.ConfigTomlPath;
         RefreshStatus();
+    }
+
+    private void SelectCodexModel(string? value)
+    {
+        var model = string.IsNullOrWhiteSpace(value)
+            ? CodexIntegrationService.DefaultCodexModel
+            : value.Trim();
+
+        var matched = false;
+        foreach (var item in CodexModelCombo.Items.OfType<ComboBoxItem>())
+        {
+            var tag = item.Tag?.ToString() ?? item.Content?.ToString() ?? "";
+            if (tag.Equals(model, StringComparison.OrdinalIgnoreCase))
+            {
+                CodexModelCombo.SelectedItem = item;
+                matched = true;
+                break;
+            }
+        }
+
+        if (!matched)
+        {
+            CodexModelCombo.SelectedItem = null;
+            CodexModelCombo.Text = model;
+        }
+    }
+
+    private static string GetCodexModelInput(ComboBox combo)
+    {
+        if (combo.SelectedItem is ComboBoxItem item)
+        {
+            var fromTag = item.Tag?.ToString();
+            if (!string.IsNullOrWhiteSpace(fromTag))
+                return fromTag.Trim();
+
+            return item.Content?.ToString()?.Trim() ?? "";
+        }
+
+        return combo.Text.Trim();
     }
 
     private void SelectReasoningEffort(string? value)
@@ -160,7 +226,17 @@ public partial class CodexProxyView : UserControl
         }
     }
 
-    private static string? GetSelectedReasoningEffort(ComboBox combo)
+    private void SelectReasoningSummary(string? value)
+    {
+        var normalized = string.IsNullOrWhiteSpace(value) ? "" : value.Trim().ToLowerInvariant();
+        foreach (var item in ReasoningSummaryCombo.Items.OfType<ComboBoxItem>())
+        {
+            var tag = item.Tag?.ToString() ?? "";
+            item.IsSelected = tag.Equals(normalized, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static string? GetSelectedComboTag(ComboBox combo)
     {
         if (combo.SelectedItem is ComboBoxItem item)
             return item.Tag?.ToString();
@@ -199,10 +275,28 @@ public partial class CodexProxyView : UserControl
         cfg.CodexProxyTimeoutSeconds = timeoutSeconds;
         cfg.ApiEndpoint = EndpointBox.Text.Trim();
         cfg.ApiKey = ApiKeyBox.Password.Trim();
-        cfg.Model = string.IsNullOrWhiteSpace(ModelBox.Text) ? "gpt-4o-mini" : ModelBox.Text.Trim();
+        cfg.Model = string.IsNullOrWhiteSpace(ModelBox.Text) ? CodexIntegrationService.DefaultCodexModel : ModelBox.Text.Trim();
         cfg.CodexAutoConfigure = CodexAutoConfigureCheck.IsChecked == true;
-        cfg.CodexModel = CodexModelBox.Text.Trim();
-        cfg.CodexModelReasoningEffort = GetSelectedReasoningEffort(ReasoningEffortCombo) ?? "";
+        cfg.CodexModel = GetCodexModelInput(CodexModelCombo);
+        if (string.IsNullOrWhiteSpace(cfg.CodexModel))
+            cfg.CodexModel = CodexIntegrationService.DefaultCodexModel;
+        cfg.CodexModelReasoningEffort = GetSelectedComboTag(ReasoningEffortCombo) ?? "";
+        cfg.CodexModelReasoningSummary = GetSelectedComboTag(ReasoningSummaryCombo) ?? "";
+
+        if (!int.TryParse(ContextWindowBox.Text.Trim(), out var contextWindow) || contextWindow < 1)
+        {
+            MessageBox.Show("请输入有效的上下文窗口（正整数）。", "Codex 配置", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return null;
+        }
+
+        if (!int.TryParse(CompactLimitBox.Text.Trim(), out var compactLimit) || compactLimit < 1)
+        {
+            MessageBox.Show("请输入有效的自动压缩阈值（正整数）。", "Codex 配置", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return null;
+        }
+
+        cfg.CodexModelContextWindow = contextWindow;
+        cfg.CodexModelAutoCompactTokenLimit = compactLimit;
 
         if (!App.Config.Save(cfg))
         {
@@ -230,13 +324,12 @@ public partial class CodexProxyView : UserControl
         BaseUrlText.Text = baseUrl;
         ResponsesUrlText.Text = responsesUrl;
         UpstreamText.Text = upstream;
-        var codexApiKey = string.IsNullOrWhiteSpace(ApiKeyBox.Password)
-            ? "<your-upstream-api-key>"
-            : CodexIntegrationService.PlaceholderApiKey;
+        var codexModel = CodexIntegrationService.ResolveCodexModel(config);
         EnvBox.Text =
-            $"OPENAI_BASE_URL={baseUrl}{Environment.NewLine}" +
-            $"OPENAI_API_KEY={codexApiKey}{Environment.NewLine}" +
-            $"NO_PROXY={CodexIntegrationService.MergeProxyBypass(null)}";
+            $"NO_PROXY={CodexIntegrationService.NoProxyValue}{Environment.NewLine}" +
+            $"model_provider={CodexIntegrationService.ProviderId}{Environment.NewLine}" +
+            $"base_url={baseUrl}{Environment.NewLine}" +
+            $"model={codexModel}";
         CodexConfigPathText.Text = CodexIntegrationService.ConfigTomlPath;
         SetButtonsEnabled();
     }

@@ -13,15 +13,15 @@ public partial class CodexProxyView : UserControl
     public CodexProxyView()
     {
         InitializeComponent();
-        PopulateCodexModelCombo();
+        PopulateModelCombo();
         App.CodexProxy.StateChanged += CodexProxy_OnStateChanged;
     }
 
-    private void PopulateCodexModelCombo()
+    private void PopulateModelCombo()
     {
-        CodexModelCombo.Items.Clear();
+        ModelCombo.Items.Clear();
         foreach (var model in CodexIntegrationService.PresetCodexModels)
-            CodexModelCombo.Items.Add(new ComboBoxItem { Content = model, Tag = model });
+            ModelCombo.Items.Add(new ComboBoxItem { Content = model, Tag = model });
     }
 
     private void CodexProxyView_OnLoaded(object sender, RoutedEventArgs e)
@@ -115,6 +115,38 @@ public partial class CodexProxyView : UserControl
         RefreshStatus();
     }
 
+    private void RestoreCodexConfigBtn_OnClick(object sender, RoutedEventArgs e)
+    {
+        var confirm = MessageBox.Show(
+            "将移除 config.toml 中由 DanceMonkey 注入的 DM Proxy 配置块。\n不会自动恢复之前被注释的旧配置。\n\n是否继续？",
+            "恢复 Codex 默认",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes)
+            return;
+
+        var result = CodexIntegrationService.RestoreCodexConfigDefault();
+        LogCodexSetup(result);
+        if (result.Success)
+        {
+            MessageBox.Show(
+                string.Join(Environment.NewLine, result.Messages),
+                "已恢复 Codex 默认",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        else
+        {
+            MessageBox.Show(
+                result.Error ?? "恢复失败",
+                "恢复 Codex 默认",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+
+        RefreshStatus();
+    }
+
     private async Task StartProxyAsync(bool showMessage)
     {
         if (_busy)
@@ -161,12 +193,9 @@ public partial class CodexProxyView : UserControl
         PortBox.Text = (cfg.CodexProxyPort is >= 1 and <= 65535 ? cfg.CodexProxyPort : 8000).ToString();
         EndpointBox.Text = cfg.ApiEndpoint ?? "";
         ApiKeyBox.Password = cfg.ApiKey ?? "";
-        ModelBox.Text = string.IsNullOrWhiteSpace(cfg.Model) ? CodexIntegrationService.DefaultCodexModel : cfg.Model;
         TimeoutBox.Text = (cfg.CodexProxyTimeoutSeconds > 0 ? cfg.CodexProxyTimeoutSeconds : 300).ToString();
         CodexAutoConfigureCheck.IsChecked = cfg.CodexAutoConfigure;
-        SelectCodexModel(string.IsNullOrWhiteSpace(cfg.CodexModel)
-            ? CodexIntegrationService.ResolveCodexModel(cfg)
-            : cfg.CodexModel);
+        SelectModel(ResolveModelFromConfig(cfg));
         SelectReasoningEffort(string.IsNullOrWhiteSpace(cfg.CodexModelReasoningEffort)
             ? CodexIntegrationService.DefaultReasoningEffort
             : cfg.CodexModelReasoningEffort);
@@ -177,19 +206,22 @@ public partial class CodexProxyView : UserControl
         RefreshStatus();
     }
 
-    private void SelectCodexModel(string? value)
+    private static string ResolveModelFromConfig(AppConfig cfg) =>
+        CodexIntegrationService.ResolveCodexModel(cfg);
+
+    private void SelectModel(string? value)
     {
         var model = string.IsNullOrWhiteSpace(value)
             ? CodexIntegrationService.DefaultCodexModel
             : value.Trim();
 
         var matched = false;
-        foreach (var item in CodexModelCombo.Items.OfType<ComboBoxItem>())
+        foreach (var item in ModelCombo.Items.OfType<ComboBoxItem>())
         {
             var tag = item.Tag?.ToString() ?? item.Content?.ToString() ?? "";
             if (tag.Equals(model, StringComparison.OrdinalIgnoreCase))
             {
-                CodexModelCombo.SelectedItem = item;
+                ModelCombo.SelectedItem = item;
                 matched = true;
                 break;
             }
@@ -197,12 +229,12 @@ public partial class CodexProxyView : UserControl
 
         if (!matched)
         {
-            CodexModelCombo.SelectedItem = null;
-            CodexModelCombo.Text = model;
+            ModelCombo.SelectedItem = null;
+            ModelCombo.Text = model;
         }
     }
 
-    private static string GetCodexModelInput(ComboBox combo)
+    private static string GetModelInput(ComboBox combo)
     {
         if (combo.SelectedItem is ComboBoxItem item)
         {
@@ -275,11 +307,11 @@ public partial class CodexProxyView : UserControl
         cfg.CodexProxyTimeoutSeconds = timeoutSeconds;
         cfg.ApiEndpoint = EndpointBox.Text.Trim();
         cfg.ApiKey = ApiKeyBox.Password.Trim();
-        cfg.Model = string.IsNullOrWhiteSpace(ModelBox.Text) ? CodexIntegrationService.DefaultCodexModel : ModelBox.Text.Trim();
+        cfg.Model = GetModelInput(ModelCombo);
+        if (string.IsNullOrWhiteSpace(cfg.Model))
+            cfg.Model = CodexIntegrationService.DefaultCodexModel;
+        cfg.CodexModel = "";
         cfg.CodexAutoConfigure = CodexAutoConfigureCheck.IsChecked == true;
-        cfg.CodexModel = GetCodexModelInput(CodexModelCombo);
-        if (string.IsNullOrWhiteSpace(cfg.CodexModel))
-            cfg.CodexModel = CodexIntegrationService.DefaultCodexModel;
         cfg.CodexModelReasoningEffort = GetSelectedComboTag(ReasoningEffortCombo) ?? "";
         cfg.CodexModelReasoningSummary = GetSelectedComboTag(ReasoningSummaryCombo) ?? "";
 

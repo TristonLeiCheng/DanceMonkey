@@ -101,14 +101,17 @@
                                      FontSize="13.5"
                                      Margin="0,0,0,10"/>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="代理默认模型" VerticalAlignment="Center" Margin="0,0,12,10"/>
-                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="ModelBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="模型" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <ComboBox Grid.Row="4" Grid.Column="1" x:Name="ModelCombo"
+                                  Style="{StaticResource UiComboBox}"
+                                  IsEditable="True"
+                                  Margin="0,0,0,10"/>
 
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="超时（秒）" VerticalAlignment="Center" Margin="0,0,12,0"/>
                         <TextBox Grid.Row="5" Grid.Column="1" x:Name="TimeoutBox" Style="{StaticResource UiTextBox}"/>
                     </Grid>
 
-                    <TextBlock Text="上游地址可填写 /v1 或完整 /v1/chat/completions；API Key 留空时，会使用 Codex 请求里的 Authorization Bearer。"
+                    <TextBlock Text="模型同时用于 DM Proxy 上游转发与 Codex config.toml；上游地址可填写 /v1 或完整 /v1/chat/completions。"
                                Style="{StaticResource UiHint}"
                                Margin="0,12,0,0"
                                TextWrapping="Wrap"/>
@@ -129,6 +132,12 @@
                                 MinWidth="148"
                                 Margin="0,0,10,0"
                                 Click="ApplyCodexConfigBtn_OnClick"/>
+                        <Button x:Name="RestoreCodexConfigBtn"
+                                Content="恢复 Codex 默认"
+                                Style="{StaticResource UiBtnSecondary}"
+                                MinWidth="118"
+                                Margin="0,0,10,0"
+                                Click="RestoreCodexConfigBtn_OnClick"/>
                         <Button x:Name="ApplyNoProxyBtn"
                                 Content="设置 NO_PROXY"
                                 Style="{StaticResource UiBtnSecondary}"
@@ -147,17 +156,10 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Codex 模型" VerticalAlignment="Center" Margin="0,0,12,10"/>
-                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CodexModelCombo"
-                                  Style="{StaticResource UiComboBox}"
-                                  IsEditable="True"
-                                  Margin="0,0,0,10"/>
-
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="推理强度" VerticalAlignment="Center" Margin="0,0,12,10"/>
-                        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="ReasoningEffortCombo" Style="{StaticResource UiComboBox}" Margin="0,0,0,10">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="推理强度" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="ReasoningEffortCombo" Style="{StaticResource UiComboBox}" Margin="0,0,0,10">
                             <ComboBoxItem Content="不设置" Tag=""/>
                             <ComboBoxItem Content="minimal" Tag="minimal"/>
                             <ComboBoxItem Content="low" Tag="low"/>
@@ -166,25 +168,25 @@
                             <ComboBoxItem Content="xhigh" Tag="xhigh"/>
                         </ComboBox>
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="上下文窗口" VerticalAlignment="Center" Margin="0,0,12,10"/>
-                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="ContextWindowBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="上下文窗口" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="ContextWindowBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="自动压缩阈值" VerticalAlignment="Center" Margin="0,0,12,10"/>
-                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="CompactLimitBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="自动压缩阈值" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="CompactLimitBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,10"/>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="推理摘要" VerticalAlignment="Center" Margin="0,0,12,10"/>
-                        <ComboBox Grid.Row="4" Grid.Column="1" x:Name="ReasoningSummaryCombo" Style="{StaticResource UiComboBox}" Margin="0,0,0,10">
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="推理摘要" VerticalAlignment="Center" Margin="0,0,12,10"/>
+                        <ComboBox Grid.Row="3" Grid.Column="1" x:Name="ReasoningSummaryCombo" Style="{StaticResource UiComboBox}" Margin="0,0,0,10">
                             <ComboBoxItem Content="不设置" Tag=""/>
                             <ComboBoxItem Content="auto" Tag="auto"/>
                             <ComboBoxItem Content="concise" Tag="concise"/>
                             <ComboBoxItem Content="detailed" Tag="detailed" IsSelected="True"/>
                         </ComboBox>
 
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="配置文件" Style="{StaticResource UiHint}" Margin="0,0,12,0"/>
-                        <TextBlock Grid.Row="5" Grid.Column="1" x:Name="CodexConfigPathText" TextWrapping="Wrap"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="配置文件" Style="{StaticResource UiHint}" Margin="0,0,12,0"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" x:Name="CodexConfigPathText" TextWrapping="Wrap"/>
                     </Grid>
 
-                    <TextBlock Text="「设置 NO_PROXY」等价于 setx NO_PROXY &quot;localhost,127.0.0.1&quot;，用于绕过企业代理访问本机 DM Proxy。启动代理时会同时写入 config.toml 与 NO_PROXY。"
+                    <TextBlock Text="写入时会注释掉 config.toml 中可能冲突的旧 model / model_provider / model_providers 配置，并将 DM Proxy 配置放在文件最上方。「恢复 Codex 默认」会移除 DanceMonkey 注入的配置块。"
                                Style="{StaticResource UiHint}"
                                Margin="0,12,0,0"
                                TextWrapping="Wrap"/>

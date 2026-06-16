@@ -224,13 +224,13 @@ dotnet build DanceMonkey.Cli\DanceMonkey.Cli.csproj -c Debug
 
 ```json
 {
-	"version": "1.3.6",
-	"packageUrl": "DanceMonkey-win-x64-1.3.6.zip",
+	"version": "1.3.7",
+	"packageUrl": "DanceMonkey-win-x64-1.3.7.zip",
 	"entryExe": "DanceMonkey.exe"
 }
 ```
 
-版本说明见 [`docs/releases/`](docs/releases/)（如 [v1.3.6](docs/releases/v1.3.6.md)）。
+版本说明见 [`docs/releases/`](docs/releases/)（如 [v1.3.7](docs/releases/v1.3.7.md)）。
 
 ---
 

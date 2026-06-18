@@ -6,13 +6,14 @@ using System.Windows.Forms;
 namespace DesktopAssistant.Services;
 
 /// <summary>
-/// 从 UNC 或带版本号的解压目录启动时，自动复制/跳转到本机固定目录
-/// <c>%LOCALAPPDATA%\DanceMonkey\app</c>，避免双击无反应（UNC 禁止执行）或升级后仍点旧路径。
+/// 从 UNC 网络路径启动时，自动复制/跳转到本机固定目录
+/// <c>%LOCALAPPDATA%\DanceMonkey\app</c>，避免 UNC 禁止执行导致双击无反应。
+/// 本地磁盘目录（含带版本号的解压文件夹）不再自动迁移，在线升级会在源目录就地更新。
 /// </summary>
 public static class LocalInstallBootstrap
 {
     /// <summary>
-    /// 若已 spawn 本机固定目录下的进程，返回 true，调用方应直接 exit。
+    /// 若已从本机固定目录 spawn 新进程，返回 true，调用方应直接 exit。
     /// </summary>
     public static bool TryRelaunchFromCanonicalInstall(string[]? args)
     {
@@ -29,8 +30,7 @@ public static class LocalInstallBootstrap
             return false;
 
         var fromUnc = IsUncPath(currentDir);
-        var fromVersioned = AppInstallPathService.LooksVersionedInstallDirectory(currentDir);
-        if (!fromUnc && !fromVersioned)
+        if (!fromUnc)
             return false;
 
         try

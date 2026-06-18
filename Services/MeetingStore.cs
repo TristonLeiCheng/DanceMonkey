@@ -86,6 +86,13 @@ public sealed class MeetingStore
     public void SaveProjects(IReadOnlyList<MeetingProject> items) => SaveList(_projectsFile, items);
     public void SaveTemplates(IReadOnlyList<MeetingTemplate> items) => SaveList(_templatesFile, items);
 
+    public void DeleteTemplate(string id)
+    {
+        var all = LoadTemplates();
+        all.RemoveAll(t => t.Id == id && !t.BuiltIn);
+        SaveTemplates(all);
+    }
+
     private static void SaveList<T>(string file, IReadOnlyList<T> items)
     {
         var env = new StoreEnvelope<T> { SchemaVersion = SchemaVersion, Items = items.ToList() };
@@ -106,11 +113,38 @@ public sealed class MeetingStore
         return record;
     }
 
-    public void DeleteMeeting(string id)
+    public void DeleteMeeting(string id, bool deleteMarkdown = true)
     {
         var all = LoadMeetings();
+        var rec = all.FirstOrDefault(m => m.Id == id);
+        if (rec != null && deleteMarkdown && !string.IsNullOrWhiteSpace(rec.MarkdownPath) && File.Exists(rec.MarkdownPath))
+        {
+            try { File.Delete(rec.MarkdownPath); }
+            catch { /* 文件删除失败不阻塞索引移除 */ }
+        }
         all.RemoveAll(m => m.Id == id);
         SaveMeetings(all);
+    }
+
+    /// <summary>归档会议：标记状态并将 Markdown 移至 Meetings/_archive/。</summary>
+    public MeetingRecord ArchiveMeeting(MeetingRecord record)
+    {
+        if (!string.IsNullOrWhiteSpace(record.MarkdownPath) && File.Exists(record.MarkdownPath))
+        {
+            var archiveDir = Path.Combine(MeetingsRoot, "_archive", record.StartTime.ToString("yyyy"), record.StartTime.ToString("MM"));
+            Directory.CreateDirectory(archiveDir);
+            var dest = Path.Combine(archiveDir, Path.GetFileName(record.MarkdownPath));
+            if (!string.Equals(record.MarkdownPath, dest, StringComparison.OrdinalIgnoreCase))
+            {
+                if (File.Exists(dest)) File.Delete(dest);
+                File.Move(record.MarkdownPath, dest);
+                record.MarkdownPath = dest;
+            }
+        }
+        record.Status = MeetingStatus.Archived;
+        if (!record.Tags.Contains("归档", StringComparer.OrdinalIgnoreCase))
+            record.Tags.Add("归档");
+        return UpsertMeeting(record);
     }
 
     public MeetingProject UpsertProject(MeetingProject project)
@@ -234,7 +268,8 @@ public sealed class MeetingStore
         try
         {
             files = Directory.EnumerateFiles(MeetingsRoot, "*.md", SearchOption.AllDirectories)
-                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}_hub{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
+                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}_hub{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                         && !f.Contains($"{Path.DirectorySeparatorChar}_archive{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase));
         }
         catch
         {

@@ -33,7 +33,9 @@ public partial class MeetingAssistantView : UserControl
     private bool _libEditMode;
     private bool _libGroupedView;
     private string _libSearchKeyword = "";
+    private bool _libShowArchived;
     private readonly List<MeetingAttendee> _workbenchAttendees = new();
+    private string? _editingTemplateId;
 
     public MeetingAssistantView()
     {
@@ -79,6 +81,7 @@ public partial class MeetingAssistantView : UserControl
         RefreshLibrary();
         SelectCalendarDay(DateTime.Today);
         InitSeriesTab();
+        ResetTemplateForm();
         UpdateActionButtons();
     }
 
@@ -111,7 +114,10 @@ public partial class MeetingAssistantView : UserControl
     {
         TplList.Items.Clear();
         foreach (var t in _templates)
-            TplList.Items.Add(new ListBoxItem { Content = $"{t.Icon} {t.Name}", Tag = t.Id });
+        {
+            var badge = t.BuiltIn ? "  ·内置" : "";
+            TplList.Items.Add(new ListBoxItem { Content = $"{t.Icon} {t.Name}{badge}", Tag = t.Id });
+        }
     }
 
     private void TemplateCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -277,6 +283,7 @@ public partial class MeetingAssistantView : UserControl
         MeetingStatus.Planned => "计划中",
         MeetingStatus.InProgress => "进行中",
         MeetingStatus.Cancelled => "已取消",
+        MeetingStatus.Archived => "已归档",
         _ => "已完成",
     };
 
@@ -497,6 +504,9 @@ public partial class MeetingAssistantView : UserControl
             ? meetings
             : meetings.Where(m => m.ProjectId == filterId).ToList();
 
+        if (!_libShowArchived)
+            filtered = filtered.Where(m => m.Status != MeetingStatus.Archived).ToList();
+
         if (!string.IsNullOrWhiteSpace(_libSearchKeyword))
         {
             var kw = _libSearchKeyword;
@@ -549,6 +559,7 @@ public partial class MeetingAssistantView : UserControl
         var projName = _projects.FirstOrDefault(p => p.Id == m.ProjectId)?.Name;
         var label = $"{m.StartTime:MM-dd HH:mm}  {m.Title}";
         if (m.Status == MeetingStatus.Planned) label += "（计划）";
+        if (m.Status == MeetingStatus.Archived) label += "（归档）";
         if (!string.IsNullOrWhiteSpace(projName)) label += $"  ·{projName}";
         return new ListBoxItem { Content = label, Tag = m };
     }
@@ -603,6 +614,80 @@ public partial class MeetingAssistantView : UserControl
             _libSearchKeyword = LibSearchBox.Text.Trim();
             RefreshLibrary();
             e.Handled = true;
+        }
+    }
+
+    private void LibShowArchivedCheck_OnChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded) return;
+        _libShowArchived = LibShowArchivedCheck.IsChecked == true;
+        RefreshLibrary();
+    }
+
+    private void BtnLibDelete_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_store == null || _selectedLibMeeting == null)
+        {
+            MessageBox.Show("请先在左侧选择一场会议。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var rec = _selectedLibMeeting;
+        if (MessageBox.Show($"确定永久删除会议「{rec.Title}」？\n此操作将删除会议记录及 Markdown 文件，不可恢复。",
+                "确认删除", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            if (_workbenchMeeting?.Id == rec.Id)
+                NewWorkbenchMeeting();
+            _store.DeleteMeeting(rec.Id);
+            _selectedLibMeeting = null;
+            LibDetailTitle.Text = "选择左侧会议查看详情";
+            _ = RenderMdAsync(LibDetailBox, null);
+            RefreshLibrary();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"删除失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void BtnLibArchive_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_store == null || _selectedLibMeeting == null)
+        {
+            MessageBox.Show("请先在左侧选择一场会议。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var rec = _selectedLibMeeting;
+        if (rec.Status == MeetingStatus.Archived)
+        {
+            MessageBox.Show("该会议已归档。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (MessageBox.Show($"将会议「{rec.Title}」归档？\n归档后默认列表中隐藏，Markdown 将移至 _archive 目录。",
+                "确认归档", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        try
+        {
+            var archived = _store.ArchiveMeeting(rec);
+            _selectedLibMeeting = archived;
+            if (_workbenchMeeting?.Id == archived.Id)
+                _workbenchMeeting = archived;
+            if (!_libShowArchived)
+            {
+                _selectedLibMeeting = null;
+                LibDetailTitle.Text = "会议已归档（勾选「显示归档」可查看）";
+                _ = RenderMdAsync(LibDetailBox, null);
+            }
+            else
+                ShowLibraryMeetingDetail(archived);
+            RefreshLibrary();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"归档失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -779,6 +864,22 @@ public partial class MeetingAssistantView : UserControl
 
     // ═══════════════ Templates ═══════════════
 
+    private void BtnTplNew_OnClick(object sender, RoutedEventArgs e) => ResetTemplateForm();
+
+    private void ResetTemplateForm()
+    {
+        _editingTemplateId = null;
+        TplList.SelectedItem = null;
+        TplFormTitle.Text = "新建模板";
+        TplMetaText.Text = "自定义模板可编辑、删除；内置模板仅可修改内容。";
+        TplNameBox.Text = "";
+        TplCategoryBox.Text = "";
+        TplAgendaBox.Text = "";
+        TplPromptBox.Text = "";
+        TplPreviewText.Text = "";
+        BtnTplDelete.IsEnabled = false;
+    }
+
     private void TplList_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (TplList.SelectedItem is not ListBoxItem item || item.Tag is not string id)
@@ -786,25 +887,31 @@ public partial class MeetingAssistantView : UserControl
         var tpl = _templates.FirstOrDefault(t => t.Id == id);
         if (tpl == null) return;
 
+        _editingTemplateId = tpl.Id;
+        TplFormTitle.Text = tpl.BuiltIn ? $"编辑内置模板 · {tpl.Name}" : $"编辑模板 · {tpl.Name}";
         TplNameBox.Text = tpl.Name;
         TplCategoryBox.Text = tpl.Category;
         TplAgendaBox.Text = string.Join(Environment.NewLine, tpl.AgendaTemplate);
         TplPromptBox.Text = tpl.SummaryPromptOverride;
+        BtnTplDelete.IsEnabled = !tpl.BuiltIn;
 
-        var sb = new StringBuilder();
-        sb.AppendLine($"{tpl.Icon} {tpl.Name}");
-        if (!string.IsNullOrWhiteSpace(tpl.Category))
-            sb.AppendLine($"分类：{tpl.Category}");
-        sb.AppendLine($"默认时长：{tpl.DefaultDurationMinutes} 分钟");
-        sb.AppendLine($"内置：{(tpl.BuiltIn ? "是" : "否")}");
+        var meta = new StringBuilder();
+        meta.Append($"默认时长 {tpl.DefaultDurationMinutes} 分钟");
+        if (!string.IsNullOrWhiteSpace(tpl.Category)) meta.Append($" · 分类 {tpl.Category}");
+        meta.Append(tpl.BuiltIn ? " · 内置（不可删除）" : " · 自定义");
+        TplMetaText.Text = meta.ToString();
+
+        var preview = new StringBuilder();
         if (tpl.StructuredSections.Count > 0)
-            sb.AppendLine($"结构化分区：{string.Join(" / ", tpl.StructuredSections)}");
+            preview.AppendLine($"分区：{string.Join(" / ", tpl.StructuredSections)}");
         if (tpl.DefaultTags.Count > 0)
-            sb.AppendLine($"默认标签：{string.Join("、", tpl.DefaultTags)}");
-        _ = RenderMdAsync(TplDetailBox, sb.ToString());
+            preview.AppendLine($"默认标签：{string.Join("、", tpl.DefaultTags)}");
+        if (tpl.AgendaTemplate.Count > 0)
+            preview.AppendLine($"议程：{string.Join("；", tpl.AgendaTemplate)}");
+        TplPreviewText.Text = preview.ToString().Trim();
     }
 
-    private void BtnAddTemplate_OnClick(object sender, RoutedEventArgs e)
+    private void BtnTplSave_OnClick(object sender, RoutedEventArgs e)
     {
         if (_store == null) return;
         var name = TplNameBox.Text.Trim();
@@ -814,34 +921,65 @@ public partial class MeetingAssistantView : UserControl
             return;
         }
 
-        var existing = _templates.FirstOrDefault(t =>
-            string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase) && !t.BuiltIn);
-
-        if (existing != null)
+        MeetingTemplate target;
+        if (!string.IsNullOrWhiteSpace(_editingTemplateId))
         {
-            existing.Category = TplCategoryBox.Text.Trim();
-            existing.AgendaTemplate = SplitLines(TplAgendaBox.Text);
-            existing.SummaryPromptOverride = TplPromptBox.Text.Trim();
+            target = _templates.FirstOrDefault(t => t.Id == _editingTemplateId)
+                     ?? new MeetingTemplate { Id = _editingTemplateId };
+            if (!_templates.Any(t => t.Id == target.Id))
+                _templates.Add(target);
         }
         else
         {
-            _templates.Add(new MeetingTemplate
-            {
-                Name = name,
-                Category = TplCategoryBox.Text.Trim(),
-                AgendaTemplate = SplitLines(TplAgendaBox.Text),
-                SummaryPromptOverride = TplPromptBox.Text.Trim(),
-                BuiltIn = false,
-            });
+            target = new MeetingTemplate { BuiltIn = false };
+            _templates.Add(target);
+            _editingTemplateId = target.Id;
         }
+
+        target.Name = name;
+        target.Category = TplCategoryBox.Text.Trim();
+        target.AgendaTemplate = SplitLines(TplAgendaBox.Text);
+        target.SummaryPromptOverride = TplPromptBox.Text.Trim();
 
         _store.SaveTemplates(_templates);
         _templates = _store.LoadTemplates();
         PopulateTemplateCombo();
         PopulateTemplateList();
+        foreach (var obj in TplList.Items)
+        {
+            if (obj is ListBoxItem it && it.Tag?.ToString() == _editingTemplateId)
+            {
+                TplList.SelectedItem = it;
+                break;
+            }
+        }
         if (TemplateCombo.Items.Count > 0 && TemplateCombo.SelectedIndex < 0)
             TemplateCombo.SelectedIndex = 0;
         MessageBox.Show("模板已保存。", "成功", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void BtnTplDelete_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_store == null || string.IsNullOrWhiteSpace(_editingTemplateId))
+        {
+            MessageBox.Show("请先选择要删除的自定义模板。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var tpl = _templates.FirstOrDefault(t => t.Id == _editingTemplateId);
+        if (tpl == null) return;
+        if (tpl.BuiltIn)
+        {
+            MessageBox.Show("内置模板不可删除，但可以修改议程与提示词。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (MessageBox.Show($"确定删除模板「{tpl.Name}」？", "确认", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+
+        _store.DeleteTemplate(tpl.Id);
+        _templates = _store.LoadTemplates();
+        PopulateTemplateCombo();
+        PopulateTemplateList();
+        ResetTemplateForm();
     }
 
     // ═══════════════ Calendar ═══════════════
@@ -919,7 +1057,7 @@ public partial class MeetingAssistantView : UserControl
             BorderBrush = (Brush)FindResource(isToday ? "BrushBorderFocus" : "BrushBorderSubtle"),
             Padding = new Thickness(6, 4, 6, 4),
             Cursor = System.Windows.Input.Cursors.Hand,
-            MinHeight = 64,
+            MinHeight = 52,
         };
 
         var grid = new Grid();
@@ -1503,24 +1641,24 @@ public partial class MeetingAssistantView : UserControl
             BorderBrush = Res("BrushBorderSubtle", "#eeeeee"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(14, 12, 14, 12),
-            Margin = new Thickness(0, 0, 10, 10),
-            Width = 150
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 8, 8),
+            Width = 130
         };
         var sp = new StackPanel();
-        sp.Children.Add(new TextBlock { Text = $"{icon} {value}", FontSize = 20, FontWeight = FontWeights.SemiBold, Foreground = Res("BrushTextPrimary", "#222222") });
-        sp.Children.Add(new TextBlock { Text = label, FontSize = 12, Margin = new Thickness(0, 4, 0, 0), Foreground = Res("BrushTextSecondary", "#666666") });
+        sp.Children.Add(new TextBlock { Text = $"{icon} {value}", FontSize = 17, FontWeight = FontWeights.SemiBold, Foreground = Res("BrushTextPrimary", "#222222") });
+        sp.Children.Add(new TextBlock { Text = label, FontSize = 11, Margin = new Thickness(0, 2, 0, 0), Foreground = Res("BrushTextSecondary", "#666666") });
         border.Child = sp;
         return border;
     }
 
     private FrameworkElement MakeProjectRow(string name, Brush color, int count, int minutes, double frac)
     {
-        var panel = new StackPanel { Margin = new Thickness(2, 0, 2, 10) };
-        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
-        head.Children.Add(new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(2), Background = color, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
-        head.Children.Add(new TextBlock { Text = name, FontSize = 12.5, Foreground = Res("BrushTextPrimary", "#222222"), VerticalAlignment = VerticalAlignment.Center });
-        head.Children.Add(new TextBlock { Text = $"  {count} 场 · {minutes} 分钟", FontSize = 11.5, Foreground = Res("BrushTextMuted", "#999999"), VerticalAlignment = VerticalAlignment.Center });
+        var panel = new StackPanel { Margin = new Thickness(2, 0, 2, 8) };
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 3) };
+        head.Children.Add(new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(2), Background = color, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+        head.Children.Add(new TextBlock { Text = name, FontSize = 11.5, Foreground = Res("BrushTextPrimary", "#222222"), VerticalAlignment = VerticalAlignment.Center });
+        head.Children.Add(new TextBlock { Text = $"  {count} 场 · {minutes} 分钟", FontSize = 10.5, Foreground = Res("BrushTextMuted", "#999999"), VerticalAlignment = VerticalAlignment.Center });
         panel.Children.Add(head);
 
         var grid = new Grid { Height = 8 };

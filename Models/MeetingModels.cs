@@ -63,6 +63,7 @@ public static class MeetingStatus
     public const string InProgress = "InProgress";
     public const string Completed = "Completed";
     public const string Cancelled = "Cancelled";
+    public const string Archived = "Archived";
 }
 
 /// <summary>会议中心：项目（关联与统计维度）。</summary>

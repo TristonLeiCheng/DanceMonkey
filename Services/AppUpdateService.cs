@@ -181,7 +181,6 @@ public sealed class AppUpdateService
         var payloadRoot = ResolvePayloadRoot(extractRoot, manifest.EntryExe);
         File.WriteAllText(scriptPath, BuildUpdaterScript(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
-        var previousInstall = AppInstallPathService.CurrentInstallDirectory;
         var installDirectory = AppInstallPathService.ResolveUpdateInstallDirectory();
 
         return new AppUpdateLaunchInfo
@@ -189,7 +188,7 @@ public sealed class AppUpdateService
             ScriptPath = scriptPath,
             SourceDirectory = payloadRoot,
             InstallDirectory = installDirectory,
-            PreviousInstallDirectory = previousInstall,
+            PreviousInstallDirectory = installDirectory,
             ExeName = Path.GetFileName(manifest.EntryExe),
             UpdateStartupEntry = StartupService.IsEnabled()
         };
@@ -218,8 +217,6 @@ public sealed class AppUpdateService
         startInfo.ArgumentList.Add(launchInfo.SourceDirectory);
         startInfo.ArgumentList.Add("-InstallDir");
         startInfo.ArgumentList.Add(launchInfo.InstallDirectory);
-        startInfo.ArgumentList.Add("-PreviousInstallDir");
-        startInfo.ArgumentList.Add(launchInfo.PreviousInstallDirectory);
         startInfo.ArgumentList.Add("-UpdateStartup");
         startInfo.ArgumentList.Add(launchInfo.UpdateStartupEntry ? "1" : "0");
         startInfo.ArgumentList.Add("-ExeName");
@@ -338,7 +335,6 @@ public sealed class AppUpdateService
         "param(\n" +
         "    [string]$SourceDir,\n" +
         "    [string]$InstallDir,\n" +
-        "    [string]$PreviousInstallDir,\n" +
         "    [string]$UpdateStartup,\n" +
         "    [string]$ExeName,\n" +
         "    [int]$CurrentPid\n" +
@@ -353,7 +349,6 @@ public sealed class AppUpdateService
         "        Wait-Process -Id $CurrentPid -ErrorAction SilentlyContinue\n" +
         "    }\n" +
         "    $install = Normalize-Dir $InstallDir\n" +
-        "    $previous = Normalize-Dir $PreviousInstallDir\n" +
         "    New-Item -ItemType Directory -Force -Path $install | Out-Null\n" +
         "    $copy = Start-Process -FilePath 'robocopy.exe' -ArgumentList @($SourceDir, $install, '/E', '/R:2', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP') -Wait -PassThru -NoNewWindow\n" +
         "    if ($copy.ExitCode -gt 7) {\n" +
@@ -369,30 +364,7 @@ public sealed class AppUpdateService
         "            Set-ItemProperty -Path $runKey -Name 'DanceMonkey' -Value ('\"' + $mainExe + '\"')\n" +
         "        }\n" +
         "    }\n" +
-        "    if ($previous -and ($previous -ne $install)) {\n" +
-        "        $launcher = Join-Path $previous '启动 DanceMonkey.bat'\n" +
-        "        @\"\r\n" +
-        "@echo off\r\n" +
-        "start \"\" \"$mainExe\"\r\n" +
-        "\"@ | Set-Content -LiteralPath $launcher -Encoding UTF8\r\n" +
-        "        $hint = Join-Path $previous '请使用本机安装目录启动.txt'\r\n" +
-        "        @\"\r\n" +
-        "升级已完成。请从本机固定目录启动 DanceMonkey：\r\n" +
-        "\r\n" +
-        "$mainExe\r\n" +
-        "\r\n" +
-        "也可双击本目录下的「启动 DanceMonkey.bat」。\r\n" +
-        "\"@ | Set-Content -LiteralPath $hint -Encoding UTF8\r\n" +
-        "    }\n" +
         "    Start-Process -FilePath $mainExe -WorkingDirectory $install | Out-Null\n" +
-        "    if ($previous -and ($previous -ne $install)) {\n" +
-        "        Add-Type -AssemblyName PresentationFramework\n" +
-        "        [System.Windows.MessageBox]::Show(\r\n" +
-        "            \"升级完成。程序已安装到：`n`n$install`n`n请今后从此目录或「启动 DanceMonkey.bat」启动。旧解压目录中的 bat 已指向新位置。\",\r\n" +
-        "            'DanceMonkey 更新',\r\n" +
-        "            'OK',\r\n" +
-        "            'Information') | Out-Null\r\n" +
-        "    }\n" +
         "}\n" +
         "catch {\n" +
         "    Add-Type -AssemblyName PresentationFramework\n" +

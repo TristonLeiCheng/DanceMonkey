@@ -7,10 +7,10 @@
     <UserControl.Resources>
         <Style x:Key="HubTabItem" TargetType="TabItem">
             <Setter Property="Foreground" Value="{StaticResource BrushTextSecondary}"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="Medium"/>
-            <Setter Property="Padding" Value="12,7"/>
-            <Setter Property="Margin" Value="0,0,8,6"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="0,0,6,4"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TabItem">
@@ -78,14 +78,50 @@
         </Style>
 
         <Style x:Key="WorkbenchSectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+        </Style>
+
+        <Style x:Key="HubCompactLabel" TargetType="TextBlock" BasedOn="{StaticResource UiFieldLabel}">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+        </Style>
+        <Style x:Key="HubCompactTextBox" TargetType="TextBox" BasedOn="{StaticResource UiTextBox}">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="MinHeight" Value="26"/>
+            <Setter Property="Padding" Value="6,3"/>
+        </Style>
+        <Style x:Key="HubCompactComboBox" TargetType="ComboBox" BasedOn="{StaticResource UiComboBox}">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="MinHeight" Value="26"/>
+            <Setter Property="Padding" Value="8,3,28,3"/>
+        </Style>
+        <Style x:Key="HubPanelTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
-            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style x:Key="HubBtnSm" TargetType="Button" BasedOn="{StaticResource UiBtnSecondary}">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="11.5"/>
+        </Style>
+        <Style x:Key="HubBtnPrimarySm" TargetType="Button" BasedOn="{StaticResource UiBtnPrimary}">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="11.5"/>
+        </Style>
+        <Style x:Key="HubContentText" TargetType="TextBox">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="CaretBrush" Value="{StaticResource BrushTextPrimary}"/>
         </Style>
     </UserControl.Resources>
 
-    <TabControl x:Name="HubTabs" Style="{StaticResource HubTabControl}" Margin="14,12,16,12" SelectionChanged="HubTabs_OnSelectionChanged">
+    <TabControl x:Name="HubTabs" Style="{StaticResource HubTabControl}" Margin="10,8,12,8" SelectionChanged="HubTabs_OnSelectionChanged">
 
         <!-- ═══════════ 工作台 ═══════════ -->
         <TabItem Header="📝 工作台">
@@ -96,149 +132,139 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" Background="{StaticResource BrushSurface}" CornerRadius="10" Padding="12,10"
-                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Margin="0,0,0,10">
+                <Border Grid.Row="0" Background="{StaticResource BrushSurface}" CornerRadius="8" Padding="8,6"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Margin="0,0,0,6">
                     <Grid>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button x:Name="BtnNewMeeting" Content="＋ 新建会议" Style="{StaticResource UiBtnPrimary}"
-                                    Padding="12,7" FontSize="12.5" Click="BtnNewMeeting_OnClick"/>
-                            <Button x:Name="BtnOpenInWorkbench" Content="↩ 从会议库打开" Style="{StaticResource UiBtnSecondary}"
-                                    Padding="12,7" FontSize="12.5" Margin="8,0,0,0" Click="BtnOpenInWorkbench_OnClick"/>
-                            <Border Background="{StaticResource BrushSurfaceMuted}" CornerRadius="6" Padding="10,4" Margin="14,0,0,0">
-                                <TextBlock x:Name="WorkbenchHintText" Text="未保存的新会议" FontSize="12"
+                            <Button x:Name="BtnNewMeeting" Content="＋ 新建" Style="{StaticResource HubBtnPrimarySm}" Click="BtnNewMeeting_OnClick"/>
+                            <Button x:Name="BtnOpenInWorkbench" Content="↩ 从库打开" Style="{StaticResource HubBtnSm}" Margin="6,0,0,0" Click="BtnOpenInWorkbench_OnClick"/>
+                            <Border Background="{StaticResource BrushSurfaceMuted}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0">
+                                <TextBlock x:Name="WorkbenchHintText" Text="未保存的新会议" FontSize="11"
                                            Foreground="{StaticResource BrushTextSecondary}"/>
                             </Border>
                         </StackPanel>
                         <TextBlock x:Name="WorkbenchIdText" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                   FontSize="11" Foreground="{StaticResource BrushTextMuted}"/>
+                                   FontSize="10" Foreground="{StaticResource BrushTextMuted}"/>
                     </Grid>
                 </Border>
 
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="280" MinWidth="240"/>
+                        <ColumnDefinition Width="248" MinWidth="220"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="10"
+                    <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="8"
                             BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14,12">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10,8">
                             <StackPanel>
                                 <TextBlock Text="📋 会议信息" Style="{StaticResource WorkbenchSectionTitle}"/>
-                                <TextBlock Text="主题" Style="{StaticResource UiFieldLabel}"/>
-                                <TextBox x:Name="MeetingTitleBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,8"
+                                <TextBlock Text="主题" Style="{StaticResource HubCompactLabel}"/>
+                                <TextBox x:Name="MeetingTitleBox" Style="{StaticResource HubCompactTextBox}" Margin="0,0,0,5"
                                          Text="会议记录" VerticalContentAlignment="Center"/>
-                                <Grid Margin="0,0,0,8">
+                                <Grid Margin="0,0,0,5">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="10"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
-                                        <TextBlock Text="状态" Style="{StaticResource UiFieldLabel}"/>
-                                        <ComboBox x:Name="StatusCombo" Style="{StaticResource UiComboBox}"/>
+                                        <TextBlock Text="状态" Style="{StaticResource HubCompactLabel}"/>
+                                        <ComboBox x:Name="StatusCombo" Style="{StaticResource HubCompactComboBox}"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <TextBlock Text="模板" Style="{StaticResource UiFieldLabel}"/>
-                                        <ComboBox x:Name="TemplateCombo" Style="{StaticResource UiComboBox}"
+                                        <TextBlock Text="模板" Style="{StaticResource HubCompactLabel}"/>
+                                        <ComboBox x:Name="TemplateCombo" Style="{StaticResource HubCompactComboBox}"
                                                   SelectionChanged="TemplateCombo_OnSelectionChanged"/>
                                     </StackPanel>
                                 </Grid>
-                                <TextBlock Text="项目" Style="{StaticResource UiFieldLabel}"/>
-                                <ComboBox x:Name="ProjectCombo" Style="{StaticResource UiComboBox}" Margin="0,0,0,8"/>
-                                <TextBlock Text="开始时间" Style="{StaticResource UiFieldLabel}"/>
-                                <TextBox x:Name="MeetingStartBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,8"
+                                <TextBlock Text="项目" Style="{StaticResource HubCompactLabel}"/>
+                                <ComboBox x:Name="ProjectCombo" Style="{StaticResource HubCompactComboBox}" Margin="0,0,0,5"/>
+                                <TextBlock Text="开始时间" Style="{StaticResource HubCompactLabel}"/>
+                                <TextBox x:Name="MeetingStartBox" Style="{StaticResource HubCompactTextBox}" Margin="0,0,0,5"
                                          ToolTip="格式：yyyy-MM-dd HH:mm"/>
-                                <TextBlock Text="结束时间（可选）" Style="{StaticResource UiFieldLabel}"/>
-                                <TextBox x:Name="MeetingEndBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,8"
+                                <TextBlock Text="结束时间（可选）" Style="{StaticResource HubCompactLabel}"/>
+                                <TextBox x:Name="MeetingEndBox" Style="{StaticResource HubCompactTextBox}" Margin="0,0,0,5"
                                          ToolTip="格式：yyyy-MM-dd HH:mm"/>
-                                <TextBlock Text="标签（逗号分隔）" Style="{StaticResource UiFieldLabel}"/>
-                                <TextBox x:Name="TagsBox" Style="{StaticResource UiTextBox}" Margin="0,0,0,14"/>
+                                <TextBlock Text="标签（逗号分隔）" Style="{StaticResource HubCompactLabel}"/>
+                                <TextBox x:Name="TagsBox" Style="{StaticResource HubCompactTextBox}" Margin="0,0,0,8"/>
                                 <TextBlock Text="👥 参会人" Style="{StaticResource WorkbenchSectionTitle}"/>
-                                <ListBox x:Name="AttendeesList" MinHeight="72" MaxHeight="140" Margin="0,0,0,8"
+                                <ListBox x:Name="AttendeesList" MinHeight="48" MaxHeight="96" Margin="0,0,0,5"
+                                         FontSize="11.5"
                                          BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
-                                         Background="Transparent" Padding="4"/>
+                                         Background="Transparent" Padding="2"/>
                                 <Grid Margin="0,0,0,6">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="8"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="AttendeeNameBox" Grid.Column="0" Style="{StaticResource UiTextBox}" ToolTip="姓名"/>
-                                    <TextBox x:Name="AttendeeRoleBox" Grid.Column="2" Style="{StaticResource UiTextBox}" ToolTip="角色/部门"/>
+                                    <TextBox x:Name="AttendeeNameBox" Grid.Column="0" Style="{StaticResource HubCompactTextBox}" ToolTip="姓名"/>
+                                    <TextBox x:Name="AttendeeRoleBox" Grid.Column="2" Style="{StaticResource HubCompactTextBox}" ToolTip="角色/部门"/>
                                 </Grid>
                                 <StackPanel Orientation="Horizontal">
-                                    <Button x:Name="BtnAddAttendee" Content="添加" Style="{StaticResource UiBtnSecondary}"
-                                            Padding="10,5" FontSize="12" Click="BtnAddAttendee_OnClick"/>
-                                    <Button x:Name="BtnRemoveAttendee" Content="移除" Style="{StaticResource UiBtnSecondary}"
-                                            Padding="10,5" FontSize="12" Margin="8,0,0,0" Click="BtnRemoveAttendee_OnClick"/>
+                                    <Button x:Name="BtnAddAttendee" Content="添加" Style="{StaticResource HubBtnSm}" Click="BtnAddAttendee_OnClick"/>
+                                    <Button x:Name="BtnRemoveAttendee" Content="移除" Style="{StaticResource HubBtnSm}" Margin="6,0,0,0" Click="BtnRemoveAttendee_OnClick"/>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
 
-                    <Grid Grid.Column="1" Margin="10,0,0,0">
+                    <Grid Grid.Column="1" Margin="8,0,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition x:Name="SummaryColumn" Width="0"/>
                         </Grid.ColumnDefinitions>
 
-                        <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="10"
+                        <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="8"
                                 BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
-                                <Border Grid.Row="0" Padding="14,10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                                <Border Grid.Row="0" Padding="10,6" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
                                     <Grid>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="📋 议程" FontSize="13" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource BrushTextPrimary}"/>
-                                            <TextBlock Text="  每行一项" FontSize="11.5"
+                                            <TextBlock Text="📋 议程" Style="{StaticResource HubPanelTitle}"/>
+                                            <TextBlock Text="  每行一项" FontSize="10.5"
                                                        Foreground="{StaticResource BrushTextMuted}" VerticalAlignment="Center"/>
                                         </StackPanel>
-                                        <Button x:Name="BtnPrepPack" Content="🧭 AI 会前准备" Style="{StaticResource UiBtnSecondary}"
-                                                Padding="8,3" FontSize="11.5" HorizontalAlignment="Right" Click="BtnPrepPack_OnClick"/>
+                                        <Button x:Name="BtnPrepPack" Content="🧭 AI 会前准备" Style="{StaticResource HubBtnSm}"
+                                                HorizontalAlignment="Right" Click="BtnPrepPack_OnClick"/>
                                     </Grid>
                                 </Border>
                                 <TextBox x:Name="AgendaBox" Grid.Row="1" AcceptsReturn="True"
-                                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="Transparent"
-                                         BorderThickness="0" Padding="14,12" FontSize="13"
-                                         Foreground="{StaticResource BrushTextPrimary}"/>
+                                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Style="{StaticResource HubContentText}"/>
                             </Grid>
                         </Border>
 
-                        <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="10" Margin="10,0,0,0"
+                        <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="8" Margin="8,0,0,0"
                                 BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
-                                <Border Grid.Row="0" Padding="14,10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
-                                    <TextBlock Text="✍ 会上手记" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource BrushTextPrimary}"/>
+                                <Border Grid.Row="0" Padding="10,6" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                                    <TextBlock Text="✍ 会上手记" Style="{StaticResource HubPanelTitle}"/>
                                 </Border>
                                 <TextBox x:Name="QuickNotesBox" Grid.Row="1" AcceptsReturn="True"
-                                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="Transparent"
-                                         BorderThickness="0" Padding="14,12" FontSize="13"
-                                         Foreground="{StaticResource BrushTextPrimary}"/>
+                                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Style="{StaticResource HubContentText}"/>
                             </Grid>
                         </Border>
 
-                        <Border x:Name="SummaryPanel" Grid.Column="2" Background="{StaticResource BrushSurface}" CornerRadius="10"
-                                Margin="10,0,0,0" Visibility="Collapsed"
+                        <Border x:Name="SummaryPanel" Grid.Column="2" Background="{StaticResource BrushSurface}" CornerRadius="8"
+                                Margin="8,0,0,0" Visibility="Collapsed"
                                 BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
-                                <Border Grid.Row="0" Padding="14,10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
-                                    <TextBlock Text="📋 AI 纪要" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource BrushTextPrimary}"/>
+                                <Border Grid.Row="0" Padding="10,6" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                                    <TextBlock Text="📋 AI 纪要" Style="{StaticResource HubPanelTitle}"/>
                                 </Border>
                                 <wv2:WebView2 x:Name="SummaryBox" Grid.Row="1"/>
                             </Grid>
@@ -246,18 +272,14 @@
                     </Grid>
                 </Grid>
 
-                <Border Grid.Row="2" Margin="0,10,0,0">
+                <Border Grid.Row="2" Margin="0,6,0,0">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                        <Button x:Name="BtnSummary" Content="📋 生成纪要" Style="{StaticResource UiBtnPrimary}" Padding="14,8"
-                                FontSize="12.5" IsEnabled="False" Click="BtnSummary_OnClick"/>
-                        <Button x:Name="BtnSave" Content="💾 保存" Style="{StaticResource UiBtnSecondary}" Padding="14,8"
-                                FontSize="12.5" Margin="8,0,0,0" IsEnabled="False" Click="BtnSave_OnClick"/>
-                        <Button x:Name="BtnCopy" Content="📄 复制全文" Style="{StaticResource UiBtnSecondary}" Padding="14,8"
-                                FontSize="12.5" Margin="8,0,0,0" IsEnabled="False" Click="BtnCopy_OnClick"/>
-                        <Button x:Name="BtnClear" Content="🗑 清空" Style="{StaticResource UiBtnSecondary}" Padding="14,8"
-                                FontSize="12.5" Margin="8,0,0,0" IsEnabled="False" Click="BtnClear_OnClick"/>
-                        <TextBlock x:Name="ErrorText" Text="" Foreground="#E53935" FontSize="12" VerticalAlignment="Center"
-                                   Margin="20,0,0,0" TextWrapping="Wrap" MaxWidth="380"/>
+                        <Button x:Name="BtnSummary" Content="📋 生成纪要" Style="{StaticResource HubBtnPrimarySm}" IsEnabled="False" Click="BtnSummary_OnClick"/>
+                        <Button x:Name="BtnSave" Content="💾 保存" Style="{StaticResource HubBtnSm}" Margin="6,0,0,0" IsEnabled="False" Click="BtnSave_OnClick"/>
+                        <Button x:Name="BtnCopy" Content="📄 复制" Style="{StaticResource HubBtnSm}" Margin="6,0,0,0" IsEnabled="False" Click="BtnCopy_OnClick"/>
+                        <Button x:Name="BtnClear" Content="🗑 清空" Style="{StaticResource HubBtnSm}" Margin="6,0,0,0" IsEnabled="False" Click="BtnClear_OnClick"/>
+                        <TextBlock x:Name="ErrorText" Text="" Foreground="#E53935" FontSize="11" VerticalAlignment="Center"
+                                   Margin="14,0,0,0" TextWrapping="Wrap" MaxWidth="360"/>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -341,45 +363,47 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0" Background="{StaticResource BrushSurface}" CornerRadius="10" Padding="14,12"
-                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Margin="0,0,0,10">
+                <Border Grid.Row="0" Background="{StaticResource BrushSurface}" CornerRadius="8" Padding="10,8"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Margin="0,0,0,6">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <Grid Grid.Row="0" Margin="0,0,0,10">
+                        <Grid Grid.Row="0" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="LibSearchBox" Style="{StaticResource UiTextBox}"
+                            <TextBox x:Name="LibSearchBox" Style="{StaticResource HubCompactTextBox}"
                                      VerticalContentAlignment="Center" KeyDown="LibSearchBox_OnKeyDown"
                                      ToolTip="搜索标题、标签、参会人、议程、手记、纪要"/>
-                            <Button Grid.Column="1" x:Name="BtnLibSearch" Content="🔍 搜索" Style="{StaticResource UiBtnSecondary}"
-                                    Padding="12,7" FontSize="12" Margin="8,0,0,0" Click="BtnLibSearch_OnClick"/>
+                            <Button Grid.Column="1" x:Name="BtnLibSearch" Content="🔍" Style="{StaticResource HubBtnSm}" Margin="6,0,0,0" Click="BtnLibSearch_OnClick"/>
                         </Grid>
                         <Grid Grid.Row="1">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="130"/>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="180"/>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="列表" VerticalAlignment="Center" FontSize="12"
-                                       Foreground="{StaticResource BrushTextSecondary}" Margin="0,0,8,0"/>
-                            <ComboBox x:Name="LibViewModeCombo" Grid.Column="1" Style="{StaticResource UiComboBox}"
+                            <TextBlock Grid.Column="0" Text="列表" VerticalAlignment="Center" FontSize="11"
+                                       Foreground="{StaticResource BrushTextSecondary}" Margin="0,0,6,0"/>
+                            <ComboBox x:Name="LibViewModeCombo" Grid.Column="1" Style="{StaticResource HubCompactComboBox}"
                                       SelectionChanged="LibViewModeCombo_OnSelectionChanged" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="2" Text="项目" VerticalAlignment="Center" FontSize="12"
-                                       Foreground="{StaticResource BrushTextSecondary}" Margin="16,0,8,0"/>
-                            <ComboBox x:Name="LibProjectFilter" Grid.Column="3" Style="{StaticResource UiComboBox}"
+                            <TextBlock Grid.Column="2" Text="项目" VerticalAlignment="Center" FontSize="11"
+                                       Foreground="{StaticResource BrushTextSecondary}" Margin="10,0,6,0"/>
+                            <ComboBox x:Name="LibProjectFilter" Grid.Column="3" Style="{StaticResource HubCompactComboBox}"
                                       SelectionChanged="LibProjectFilter_OnSelectionChanged" VerticalAlignment="Center"/>
-                            <Button Grid.Column="4" x:Name="BtnLibRefresh" Content="↺ 刷新" Style="{StaticResource UiBtnSecondary}"
-                                    Padding="12,7" FontSize="12" Margin="12,0,0,0" Click="BtnLibRefresh_OnClick"/>
-                            <TextBlock Grid.Column="6" x:Name="LibStatsText" Text="" VerticalAlignment="Center" FontSize="12"
+                            <CheckBox x:Name="LibShowArchivedCheck" Grid.Column="4" Content="显示归档" FontSize="11"
+                                      Margin="10,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource BrushTextSecondary}"
+                                      Checked="LibShowArchivedCheck_OnChanged" Unchecked="LibShowArchivedCheck_OnChanged"/>
+                            <Button Grid.Column="5" x:Name="BtnLibRefresh" Content="↺" Style="{StaticResource HubBtnSm}" Margin="8,0,0,0" Click="BtnLibRefresh_OnClick"/>
+                            <TextBlock Grid.Column="7" x:Name="LibStatsText" Text="" VerticalAlignment="Center" FontSize="10.5"
                                        Foreground="{StaticResource BrushTextMuted}"/>
                         </Grid>
                     </Grid>
@@ -387,11 +411,11 @@
 
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="320"/>
+                        <ColumnDefinition Width="280"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="10"
+                    <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="8"
                             BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -399,28 +423,27 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <ListBox x:Name="LibMeetingList" Grid.Row="0" BorderThickness="0" Background="Transparent"
-                                     Padding="6" SelectionChanged="LibMeetingList_OnSelectionChanged"/>
+                                     FontSize="11.5" Padding="4" SelectionChanged="LibMeetingList_OnSelectionChanged"/>
                             <TreeView x:Name="LibProjectTree" Grid.Row="0" BorderThickness="0" Background="Transparent"
-                                      Padding="4,6,4,6" Visibility="Collapsed"
+                                      FontSize="11.5" Padding="2,4,2,4" Visibility="Collapsed"
                                       SelectedItemChanged="LibProjectTree_OnSelectedItemChanged"/>
-                            <Border Grid.Row="1" Padding="10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,1,0,0">
+                            <Border Grid.Row="1" Padding="8" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,1,0,0">
                                 <StackPanel>
-                                    <TextBlock Text="新建项目" FontSize="12" Foreground="{StaticResource BrushTextSecondary}" Margin="0,0,0,6"/>
+                                    <TextBlock Text="新建项目" FontSize="11" Foreground="{StaticResource BrushTextSecondary}" Margin="0,0,0,4"/>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="NewProjectNameBox" Grid.Column="0" Style="{StaticResource UiTextBox}"/>
-                                        <Button Grid.Column="1" x:Name="BtnAddProject" Content="添加" Style="{StaticResource UiBtnSecondary}"
-                                                Padding="12,7" FontSize="12" Margin="8,0,0,0" Click="BtnAddProject_OnClick"/>
+                                        <TextBox x:Name="NewProjectNameBox" Grid.Column="0" Style="{StaticResource HubCompactTextBox}"/>
+                                        <Button Grid.Column="1" x:Name="BtnAddProject" Content="添加" Style="{StaticResource HubBtnSm}" Margin="6,0,0,0" Click="BtnAddProject_OnClick"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
                         </Grid>
                     </Border>
 
-                    <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="10" Margin="10,0,0,0"
+                    <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="8" Margin="8,0,0,0"
                             BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -428,34 +451,25 @@
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
-                            <Border Grid.Row="0" Padding="14,10" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
-                                <TextBlock x:Name="LibDetailTitle" Text="选择左侧会议查看详情" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource BrushTextPrimary}"/>
+                            <Border Grid.Row="0" Padding="10,6" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                                <TextBlock x:Name="LibDetailTitle" Text="选择左侧会议查看详情" Style="{StaticResource HubPanelTitle}"/>
                             </Border>
                             <Grid Grid.Row="1">
                                 <wv2:WebView2 x:Name="LibDetailBox"/>
                                 <TextBox x:Name="LibDetailEditor" Visibility="Collapsed" AcceptsReturn="True"
-                                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                                         BorderThickness="0" Padding="14,12" FontSize="13"
-                                         Background="Transparent" Foreground="{StaticResource BrushTextPrimary}"/>
+                                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Style="{StaticResource HubContentText}"/>
                             </Grid>
-                            <Border Grid.Row="2" Padding="12,8" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,1,0,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <Button x:Name="BtnLibEdit" Content="✏ 编辑纪要" Style="{StaticResource UiBtnSecondary}"
-                                            Padding="10,5" FontSize="12" Margin="0,0,8,0" Click="BtnLibEdit_OnClick"/>
-                                    <Button x:Name="BtnLibSaveEdit" Content="💾 保存修改" Style="{StaticResource UiBtnPrimary}"
-                                            Padding="10,5" FontSize="12" Margin="0,0,8,0" Visibility="Collapsed"
-                                            Click="BtnLibSaveEdit_OnClick"/>
-                                    <Button x:Name="BtnLibCancelEdit" Content="取消" Style="{StaticResource UiBtnSecondary}"
-                                            Padding="10,5" FontSize="12" Margin="0,0,8,0" Visibility="Collapsed"
-                                            Click="BtnLibCancelEdit_OnClick"/>
-                                    <Button x:Name="BtnLibOpenWorkbench" Content="📝 在工作台打开" Style="{StaticResource UiBtnSecondary}"
-                                            Padding="10,5" FontSize="12" Margin="0,0,8,0" Click="BtnLibOpenWorkbench_OnClick"/>
-                                    <Button x:Name="BtnLibEmail" Content="✉ 会后邮件" Style="{StaticResource UiBtnSecondary}"
-                                            Padding="10,5" FontSize="12" Margin="0,0,8,0" Click="BtnLibEmail_OnClick"/>
-                                    <Button x:Name="BtnLibSyncTasks" Content="✅ 行动项入待办" Style="{StaticResource UiBtnSecondary}"
-                                            Padding="10,5" FontSize="12" Click="BtnLibSyncTasks_OnClick"/>
-                                </StackPanel>
+                            <Border Grid.Row="2" Padding="8,6" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,1,0,0">
+                                <WrapPanel>
+                                    <Button x:Name="BtnLibEdit" Content="✏ 编辑" Style="{StaticResource HubBtnSm}" Margin="0,0,6,4" Click="BtnLibEdit_OnClick"/>
+                                    <Button x:Name="BtnLibSaveEdit" Content="💾 保存" Style="{StaticResource HubBtnPrimarySm}" Margin="0,0,6,4" Visibility="Collapsed" Click="BtnLibSaveEdit_OnClick"/>
+                                    <Button x:Name="BtnLibCancelEdit" Content="取消" Style="{StaticResource HubBtnSm}" Margin="0,0,6,4" Visibility="Collapsed" Click="BtnLibCancelEdit_OnClick"/>
+                                    <Button x:Name="BtnLibOpenWorkbench" Content="📝 工作台" Style="{StaticResource HubBtnSm}" Margin="0,0,6,4" Click="BtnLibOpenWorkbench_OnClick"/>
+                                    <Button x:Name="BtnLibArchive" Content="📦 归档" Style="{StaticResource HubBtnSm}" Margin="0,0,6,4" Click="BtnLibArchive_OnClick"/>
+                                    <Button x:Name="BtnLibDelete" Content="🗑 删除" Style="{StaticResource HubBtnSm}" Margin="0,0,6,4" Click="BtnLibDelete_OnClick"/>
+                                    <Button x:Name="BtnLibEmail" Content="✉ 邮件" Style="{StaticResource HubBtnSm}" Margin="0,0,6,4" Click="BtnLibEmail_OnClick"/>
+                                    <Button x:Name="BtnLibSyncTasks" Content="✅ 待办" Style="{StaticResource HubBtnSm}" Margin="0,0,6,4" Click="BtnLibSyncTasks_OnClick"/>
+                                </WrapPanel>
                             </Border>
                         </Grid>
                     </Border>
@@ -504,12 +518,12 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock Text="名称" Style="{StaticResource UiFieldLabel}"/>
-                                    <TextBox x:Name="SeriesNameBox" Style="{StaticResource UiTextBox}"/>
+                                    <TextBlock Text="名称" Style="{StaticResource HubCompactLabel}"/>
+                                    <TextBox x:Name="SeriesNameBox" Style="{StaticResource HubCompactTextBox}"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
-                                    <TextBlock Text="项目" Style="{StaticResource UiFieldLabel}"/>
-                                    <ComboBox x:Name="SeriesProjectCombo" Style="{StaticResource UiComboBox}"/>
+                                    <TextBlock Text="项目" Style="{StaticResource HubCompactLabel}"/>
+                                    <ComboBox x:Name="SeriesProjectCombo" Style="{StaticResource HubCompactComboBox}"/>
                                 </StackPanel>
                             </Grid>
 
@@ -520,18 +534,18 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock Text="重复方式" Style="{StaticResource UiFieldLabel}"/>
-                                    <ComboBox x:Name="SeriesRecurrenceCombo" Style="{StaticResource UiComboBox}"
+                                    <TextBlock Text="重复方式" Style="{StaticResource HubCompactLabel}"/>
+                                    <ComboBox x:Name="SeriesRecurrenceCombo" Style="{StaticResource HubCompactComboBox}"
                                               SelectionChanged="SeriesRecurrenceCombo_OnSelectionChanged"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
-                                    <TextBlock Text="模板" Style="{StaticResource UiFieldLabel}"/>
-                                    <ComboBox x:Name="SeriesTemplateCombo" Style="{StaticResource UiComboBox}"/>
+                                    <TextBlock Text="模板" Style="{StaticResource HubCompactLabel}"/>
+                                    <ComboBox x:Name="SeriesTemplateCombo" Style="{StaticResource HubCompactComboBox}"/>
                                 </StackPanel>
                             </Grid>
 
                             <StackPanel x:Name="SeriesWeekdayPanel" Margin="0,0,0,8">
-                                <TextBlock Text="星期（可多选）" Style="{StaticResource UiFieldLabel}"/>
+                                <TextBlock Text="星期（可多选）" Style="{StaticResource HubCompactLabel}"/>
                                 <StackPanel Orientation="Horizontal">
                                     <CheckBox x:Name="Dow1" Content="一" Margin="0,0,12,0" Foreground="{StaticResource BrushTextPrimary}"/>
                                     <CheckBox x:Name="Dow2" Content="二" Margin="0,0,12,0" Foreground="{StaticResource BrushTextPrimary}"/>
@@ -544,32 +558,32 @@
                             </StackPanel>
 
                             <StackPanel x:Name="SeriesMonthdayPanel" Margin="0,0,0,8" Visibility="Collapsed">
-                                <TextBlock Text="每月第几天 (1-31)" Style="{StaticResource UiFieldLabel}"/>
-                                <TextBox x:Name="SeriesDayOfMonthBox" Style="{StaticResource UiTextBox}" Width="90" HorizontalAlignment="Left"/>
+                                <TextBlock Text="每月第几天 (1-31)" Style="{StaticResource HubCompactLabel}"/>
+                                <TextBox x:Name="SeriesDayOfMonthBox" Style="{StaticResource HubCompactTextBox}" Width="90" HorizontalAlignment="Left"/>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <StackPanel Margin="0,0,18,0">
-                                    <TextBlock Text="时（0-23）" Style="{StaticResource UiFieldLabel}"/>
-                                    <TextBox x:Name="SeriesHourBox" Style="{StaticResource UiTextBox}" Width="70"/>
+                                    <TextBlock Text="时（0-23）" Style="{StaticResource HubCompactLabel}"/>
+                                    <TextBox x:Name="SeriesHourBox" Style="{StaticResource HubCompactTextBox}" Width="70"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,18,0">
-                                    <TextBlock Text="分（0-59）" Style="{StaticResource UiFieldLabel}"/>
-                                    <TextBox x:Name="SeriesMinuteBox" Style="{StaticResource UiTextBox}" Width="70"/>
+                                    <TextBlock Text="分（0-59）" Style="{StaticResource HubCompactLabel}"/>
+                                    <TextBox x:Name="SeriesMinuteBox" Style="{StaticResource HubCompactTextBox}" Width="70"/>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,18,0">
-                                    <TextBlock Text="时长（分钟）" Style="{StaticResource UiFieldLabel}"/>
-                                    <TextBox x:Name="SeriesDurationBox" Style="{StaticResource UiTextBox}" Width="90"/>
+                                    <TextBlock Text="时长（分钟）" Style="{StaticResource HubCompactLabel}"/>
+                                    <TextBox x:Name="SeriesDurationBox" Style="{StaticResource HubCompactTextBox}" Width="90"/>
                                 </StackPanel>
                                 <StackPanel>
-                                    <TextBlock Text="提前提醒（分钟）" Style="{StaticResource UiFieldLabel}"/>
-                                    <TextBox x:Name="SeriesReminderBox" Style="{StaticResource UiTextBox}" Width="110"/>
+                                    <TextBlock Text="提前提醒（分钟）" Style="{StaticResource HubCompactLabel}"/>
+                                    <TextBox x:Name="SeriesReminderBox" Style="{StaticResource HubCompactTextBox}" Width="110"/>
                                 </StackPanel>
                             </StackPanel>
 
                             <StackPanel Margin="0,0,0,8">
-                                <TextBlock Text="默认议程（每行一项）" Style="{StaticResource UiFieldLabel}"/>
-                                <TextBox x:Name="SeriesAgendaBox" Style="{StaticResource UiTextBox}" TextWrapping="Wrap"
+                                <TextBlock Text="默认议程（每行一项）" Style="{StaticResource HubCompactLabel}"/>
+                                <TextBox x:Name="SeriesAgendaBox" Style="{StaticResource HubCompactTextBox}" TextWrapping="Wrap"
                                          AcceptsReturn="True" MinHeight="70" VerticalScrollBarVisibility="Auto"/>
                             </StackPanel>
 
@@ -599,22 +613,35 @@
 
         <!-- ═══════════ 模板 ═══════════ -->
         <TabItem Header="📐 模板">
-            <Grid Margin="0,8,0,0">
+            <Grid Margin="0,6,0,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="300"/>
+                    <ColumnDefinition Width="240"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="10"
+                <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="8"
                         BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
-                    <ListBox x:Name="TplList" BorderThickness="0" Background="Transparent" Padding="6"
-                             SelectionChanged="TplList_OnSelectionChanged"/>
-                </Border>
-
-                <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="10" Margin="10,0,0,0"
-                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Padding="16">
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Border Grid.Row="0" Padding="8,6" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="模板列表" Style="{StaticResource HubPanelTitle}" VerticalAlignment="Center"/>
+                                <Button x:Name="BtnTplNew" Content="＋ 新建" Style="{StaticResource HubBtnSm}" Margin="8,0,0,0" Click="BtnTplNew_OnClick"/>
+                            </StackPanel>
+                        </Border>
+                        <ListBox x:Name="TplList" Grid.Row="1" BorderThickness="0" Background="Transparent"
+                                 FontSize="11.5" Padding="4" SelectionChanged="TplList_OnSelectionChanged"/>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="8" Margin="8,0,0,0"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Padding="10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -622,35 +649,39 @@
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="新建 / 编辑模板" Style="{StaticResource UiSectionTitle}" Margin="0,0,0,10"/>
-                        <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <TextBlock Grid.Row="0" x:Name="TplFormTitle" Text="编辑模板" Style="{StaticResource HubPanelTitle}" Margin="0,0,0,8"/>
+                        <TextBlock Grid.Row="1" x:Name="TplMetaText" FontSize="10.5" Foreground="{StaticResource BrushTextMuted}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                        <Grid Grid.Row="2" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="8"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="模板名称" Style="{StaticResource UiFieldLabel}"/>
-                                <TextBox x:Name="TplNameBox" Style="{StaticResource UiTextBox}"/>
+                                <TextBlock Text="模板名称" Style="{StaticResource HubCompactLabel}"/>
+                                <TextBox x:Name="TplNameBox" Style="{StaticResource HubCompactTextBox}"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2">
-                                <TextBlock Text="分类" Style="{StaticResource UiFieldLabel}"/>
-                                <TextBox x:Name="TplCategoryBox" Style="{StaticResource UiTextBox}"/>
+                                <TextBlock Text="分类" Style="{StaticResource HubCompactLabel}"/>
+                                <TextBox x:Name="TplCategoryBox" Style="{StaticResource HubCompactTextBox}"/>
                             </StackPanel>
                         </Grid>
-                        <StackPanel Grid.Row="2" Margin="0,0,0,8">
-                            <TextBlock Text="议程模板（每行一项）" Style="{StaticResource UiFieldLabel}"/>
-                            <TextBox x:Name="TplAgendaBox" Style="{StaticResource UiTextBox}" TextWrapping="Wrap"
-                                     AcceptsReturn="True" MinHeight="80" VerticalScrollBarVisibility="Auto"/>
+                        <StackPanel Grid.Row="3" Margin="0,0,0,6">
+                            <TextBlock Text="议程模板（每行一项）" Style="{StaticResource HubCompactLabel}"/>
+                            <TextBox x:Name="TplAgendaBox" Style="{StaticResource HubCompactTextBox}" TextWrapping="Wrap"
+                                     AcceptsReturn="True" MinHeight="56" MaxHeight="120" VerticalScrollBarVisibility="Auto"/>
                         </StackPanel>
-                        <StackPanel Grid.Row="3" Margin="0,0,0,8">
-                            <TextBlock Text="专属 AI 纪要提示词（可留空用默认）" Style="{StaticResource UiFieldLabel}"/>
-                            <TextBox x:Name="TplPromptBox" Style="{StaticResource UiTextBox}" TextWrapping="Wrap"
-                                     AcceptsReturn="True" MinHeight="60" VerticalScrollBarVisibility="Auto"/>
+                        <StackPanel Grid.Row="4" Margin="0,0,0,6">
+                            <TextBlock Text="专属 AI 纪要提示词（可留空）" Style="{StaticResource HubCompactLabel}"/>
+                            <TextBox x:Name="TplPromptBox" Style="{StaticResource HubCompactTextBox}" TextWrapping="Wrap"
+                                     AcceptsReturn="True" MinHeight="48" MaxHeight="100" VerticalScrollBarVisibility="Auto"/>
                         </StackPanel>
-                        <wv2:WebView2 x:Name="TplDetailBox" Grid.Row="4" Margin="0,0,0,10"/>
-                        <Button Grid.Row="5" x:Name="BtnAddTemplate" Content="保存模板" Style="{StaticResource UiBtnPrimary}"
-                                HorizontalAlignment="Right" MinWidth="110" Click="BtnAddTemplate_OnClick"/>
+                        <TextBlock Grid.Row="5" x:Name="TplPreviewText" FontSize="11" Foreground="{StaticResource BrushTextSecondary}"
+                                   TextWrapping="Wrap" VerticalAlignment="Top" Margin="0,0,0,8"/>
+                        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="BtnTplDelete" Content="删除" Style="{StaticResource HubBtnSm}" Margin="0,0,6,0" IsEnabled="False" Click="BtnTplDelete_OnClick"/>
+                            <Button x:Name="BtnTplSave" Content="保存模板" Style="{StaticResource HubBtnPrimarySm}" Click="BtnTplSave_OnClick"/>
+                        </StackPanel>
                     </Grid>
                 </Border>
             </Grid>
@@ -692,18 +723,16 @@
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Text="🔍 跨会议检索" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{StaticResource BrushTextPrimary}" Margin="0,0,0,8"/>
-                        <TextBox x:Name="DashSearchBox" Grid.Row="1" Style="{StaticResource UiTextBox}"
-                                 VerticalContentAlignment="Center" Margin="0,0,0,8"
+                        <TextBox x:Name="DashSearchBox" Grid.Row="1" Style="{StaticResource HubCompactTextBox}"
+                                 VerticalContentAlignment="Center" Margin="0,0,0,6"
                                  ToolTip="输入关键词或问题，如：预算的结论是什么"/>
-                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
-                            <Button x:Name="BtnDashKeyword" Content="🔍 关键词" Style="{StaticResource UiBtnSecondary}"
-                                    Padding="10,5" FontSize="12" Margin="0,0,8,0" Click="BtnDashKeyword_OnClick"/>
-                            <Button x:Name="BtnDashAsk" Content="🤖 AI 问答" Style="{StaticResource UiBtnPrimary}"
-                                    Padding="10,5" FontSize="12" Click="BtnDashAsk_OnClick"/>
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,6">
+                            <Button x:Name="BtnDashKeyword" Content="🔍 关键词" Style="{StaticResource HubBtnSm}" Margin="0,0,6,0" Click="BtnDashKeyword_OnClick"/>
+                            <Button x:Name="BtnDashAsk" Content="🤖 AI 问答" Style="{StaticResource HubBtnPrimarySm}" Click="BtnDashAsk_OnClick"/>
                         </StackPanel>
                         <TextBox x:Name="DashSearchResult" Grid.Row="3" IsReadOnly="True" AcceptsReturn="True"
                                  TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                                 Style="{StaticResource UiResultBox}" FontSize="12.5"/>
+                                 Style="{StaticResource UiResultBox}" FontSize="11.5"/>
                     </Grid>
                 </Border>
             </Grid>

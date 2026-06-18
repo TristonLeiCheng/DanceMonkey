@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace DesktopAssistant.Services;
 
 /// <summary>
-/// 解析应用安装目录。升级时若当前目录名含版本号，则迁移到无版本号的固定目录，避免文件夹名与程序版本不一致。
+/// 解析应用安装目录。在线升级始终在 <see cref="CurrentInstallDirectory"/> 就地替换，不迁移到其它固定目录。
 /// </summary>
 public static class AppInstallPathService
 {
@@ -21,16 +21,8 @@ public static class AppInstallPathService
     public static string CurrentInstallDirectory =>
         NormalizeDirectory(AppContext.BaseDirectory);
 
-    /// <summary>
-    /// 升级目标目录：版本化目录 → 迁移到 <see cref="CanonicalInstallDirectory"/>；否则就地升级。
-    /// </summary>
-    public static string ResolveUpdateInstallDirectory()
-    {
-        var current = CurrentInstallDirectory;
-        return LooksVersionedInstallDirectory(current)
-            ? CanonicalInstallDirectory
-            : current;
-    }
+    /// <summary>升级目标目录：始终为当前程序所在目录（源目录就地更新）。</summary>
+    public static string ResolveUpdateInstallDirectory() => CurrentInstallDirectory;
 
     /// <summary>目录名是否像带版本号的解压包目录（如 DanceMonkey-win-x64-1.3.0）。</summary>
     public static bool LooksVersionedInstallDirectory(string? directoryPath)

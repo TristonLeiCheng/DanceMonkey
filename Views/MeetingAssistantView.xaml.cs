@@ -1,6 +1,8 @@
-﻿using System.Text;
+﻿using System.Globalization;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using DesktopAssistant.Models;
 using DesktopAssistant.Services;
@@ -26,6 +28,12 @@ public partial class MeetingAssistantView : UserControl
     private List<MeetingSeries> _series = new();
     private MeetingSeries? _selectedSeries;
     private MeetingRecord? _selectedLibMeeting;
+    private MeetingRecord? _workbenchMeeting;
+    private bool _suppressTemplateFill;
+    private bool _libEditMode;
+    private bool _libGroupedView;
+    private string _libSearchKeyword = "";
+    private readonly List<MeetingAttendee> _workbenchAttendees = new();
 
     public MeetingAssistantView()
     {
@@ -60,11 +68,14 @@ public partial class MeetingAssistantView : UserControl
         PopulateTemplateCombo();
         PopulateProjectCombos();
         PopulateTemplateList();
+        PopulateStatusCombo();
+        InitLibViewModeCombo();
         _loaded = true;
 
         if (TemplateCombo.Items.Count > 0)
             TemplateCombo.SelectedIndex = 0;
 
+        NewWorkbenchMeeting();
         RefreshLibrary();
         SelectCalendarDay(DateTime.Today);
         InitSeriesTab();
@@ -105,7 +116,7 @@ public partial class MeetingAssistantView : UserControl
 
     private void TemplateCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_loaded) return;
+        if (!_loaded || _suppressTemplateFill) return;
         var id = (TemplateCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString();
         _selectedTemplate = _templates.FirstOrDefault(t => t.Id == id);
         if (_selectedTemplate == null) return;
@@ -113,6 +124,215 @@ public partial class MeetingAssistantView : UserControl
         AgendaBox.Text = string.Join(Environment.NewLine, _selectedTemplate.AgendaTemplate);
         if (string.IsNullOrWhiteSpace(MeetingTitleBox.Text) || MeetingTitleBox.Text.Trim() == "会议记录")
             MeetingTitleBox.Text = $"{_selectedTemplate.Name} {DateTime.Now:MM-dd}";
+    }
+
+    private void PopulateStatusCombo()
+    {
+        StatusCombo.Items.Clear();
+        StatusCombo.Items.Add(new ComboBoxItem { Content = "计划中", Tag = MeetingStatus.Planned });
+        StatusCombo.Items.Add(new ComboBoxItem { Content = "进行中", Tag = MeetingStatus.InProgress });
+        StatusCombo.Items.Add(new ComboBoxItem { Content = "已完成", Tag = MeetingStatus.Completed });
+        StatusCombo.Items.Add(new ComboBoxItem { Content = "已取消", Tag = MeetingStatus.Cancelled });
+        StatusCombo.SelectedIndex = 2;
+    }
+
+    private void InitLibViewModeCombo()
+    {
+        LibViewModeCombo.Items.Clear();
+        LibViewModeCombo.Items.Add(new ComboBoxItem { Content = "平铺列表", Tag = "flat" });
+        LibViewModeCombo.Items.Add(new ComboBoxItem { Content = "按项目分组", Tag = "grouped" });
+        LibViewModeCombo.SelectedIndex = 0;
+    }
+
+    // ═══════════════ Workbench ═══════════════
+
+    private void BtnNewMeeting_OnClick(object sender, RoutedEventArgs e) => NewWorkbenchMeeting();
+
+    private void BtnOpenInWorkbench_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedLibMeeting == null)
+        {
+            MessageBox.Show("请先在会议库中选择一场会议。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            HubTabs.SelectedIndex = 2;
+            return;
+        }
+        LoadWorkbenchMeeting(_selectedLibMeeting);
+        HubTabs.SelectedIndex = 0;
+    }
+
+    private void NewWorkbenchMeeting()
+    {
+        _workbenchMeeting = new MeetingRecord
+        {
+            StartTime = DateTime.Now,
+            Status = MeetingStatus.InProgress,
+        };
+        _workbenchAttendees.Clear();
+        _lastSummary = null;
+        _suppressTemplateFill = true;
+        try
+        {
+            MeetingTitleBox.Text = "会议记录";
+            MeetingStartBox.Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+            MeetingEndBox.Text = "";
+            TagsBox.Text = "";
+            AgendaBox.Text = "";
+            QuickNotesBox.Text = "";
+            AttendeesList.Items.Clear();
+            AttendeeNameBox.Text = "";
+            AttendeeRoleBox.Text = "";
+            SelectComboByTag(StatusCombo, MeetingStatus.InProgress);
+            if (ProjectCombo.Items.Count > 0) ProjectCombo.SelectedIndex = 0;
+            if (TemplateCombo.Items.Count > 0) TemplateCombo.SelectedIndex = 0;
+            _ = RenderMdAsync(SummaryBox, null);
+            HideSummaryPanel();
+        }
+        finally
+        {
+            _suppressTemplateFill = false;
+        }
+        UpdateWorkbenchHint();
+        UpdateActionButtons();
+        ClearError();
+    }
+
+    private void LoadWorkbenchMeeting(MeetingRecord rec)
+    {
+        _workbenchMeeting = rec;
+        _workbenchAttendees.Clear();
+        _workbenchAttendees.AddRange(rec.Attendees.Select(a => new MeetingAttendee { Name = a.Name, Role = a.Role }));
+        _lastSummary = rec.SummaryMarkdown;
+        _suppressTemplateFill = true;
+        try
+        {
+            MeetingTitleBox.Text = rec.Title;
+            MeetingStartBox.Text = rec.StartTime.ToString("yyyy-MM-dd HH:mm");
+            MeetingEndBox.Text = rec.EndTime?.ToString("yyyy-MM-dd HH:mm") ?? "";
+            TagsBox.Text = string.Join(", ", rec.Tags);
+            AgendaBox.Text = string.Join(Environment.NewLine, rec.AgendaItems);
+            QuickNotesBox.Text = rec.QuickNotes;
+            SelectComboByTag(StatusCombo, rec.Status);
+            SelectComboByTag(ProjectCombo, rec.ProjectId);
+            SelectComboByTag(TemplateCombo, rec.TemplateId);
+            _selectedTemplate = _templates.FirstOrDefault(t => t.Id == rec.TemplateId);
+            RefreshAttendeesList();
+            if (!string.IsNullOrWhiteSpace(_lastSummary))
+            {
+                _ = RenderMdAsync(SummaryBox, _lastSummary);
+                ShowSummaryPanel();
+            }
+            else
+            {
+                _ = RenderMdAsync(SummaryBox, null);
+                HideSummaryPanel();
+            }
+        }
+        finally
+        {
+            _suppressTemplateFill = false;
+        }
+        UpdateWorkbenchHint();
+        UpdateActionButtons();
+        ClearError();
+    }
+
+    private MeetingRecord BuildMeetingFromWorkbench()
+    {
+        var rec = _workbenchMeeting ?? new MeetingRecord();
+        rec.Title = string.IsNullOrWhiteSpace(MeetingTitleBox.Text) ? "会议记录" : MeetingTitleBox.Text.Trim();
+        rec.ProjectId = (ProjectCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
+        rec.TemplateId = _selectedTemplate?.Id ?? (TemplateCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
+        rec.Status = (StatusCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? MeetingStatus.Completed;
+        rec.StartTime = ParseDateTimeOr(MeetingStartBox.Text, DateTime.Now);
+        rec.EndTime = ParseNullableDateTime(MeetingEndBox.Text);
+        if (rec.EndTime.HasValue)
+            rec.DurationSeconds = Math.Max(0, (int)(rec.EndTime.Value - rec.StartTime).TotalSeconds);
+        rec.AgendaItems = SplitLines(AgendaBox.Text);
+        rec.QuickNotes = QuickNotesBox.Text.Trim();
+        rec.SummaryMarkdown = _lastSummary ?? "";
+        rec.Attendees = _workbenchAttendees.Select(a => new MeetingAttendee { Name = a.Name, Role = a.Role }).ToList();
+        rec.Tags = SplitTags(TagsBox.Text);
+        if (rec.Tags.Count == 0 && _selectedTemplate?.DefaultTags.Count > 0)
+            rec.Tags = new List<string>(_selectedTemplate.DefaultTags);
+        return rec;
+    }
+
+    private void UpdateWorkbenchHint()
+    {
+        if (_workbenchMeeting == null)
+        {
+            WorkbenchHintText.Text = "未保存的新会议";
+            WorkbenchIdText.Text = "";
+            return;
+        }
+        var status = StatusLabel((StatusCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? _workbenchMeeting.Status);
+        var saved = !string.IsNullOrWhiteSpace(_workbenchMeeting.Id)
+            && (_store?.LoadMeetings().Any(m => m.Id == _workbenchMeeting.Id) ?? false);
+        WorkbenchHintText.Text = saved ? $"编辑中 · {status}" : $"新会议 · {status}";
+        WorkbenchIdText.Text = saved ? $"ID: {_workbenchMeeting.Id[..Math.Min(8, _workbenchMeeting.Id.Length)]}…" : "";
+    }
+
+    private static string StatusLabel(string status) => status switch
+    {
+        MeetingStatus.Planned => "计划中",
+        MeetingStatus.InProgress => "进行中",
+        MeetingStatus.Cancelled => "已取消",
+        _ => "已完成",
+    };
+
+    private void RefreshAttendeesList()
+    {
+        AttendeesList.Items.Clear();
+        foreach (var a in _workbenchAttendees)
+        {
+            var label = string.IsNullOrWhiteSpace(a.Role) ? a.Name : $"{a.Name}（{a.Role}）";
+            AttendeesList.Items.Add(new ListBoxItem { Content = label, Tag = a });
+        }
+    }
+
+    private void BtnAddAttendee_OnClick(object sender, RoutedEventArgs e)
+    {
+        var name = AttendeeNameBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            ShowError("请输入参会人姓名。");
+            return;
+        }
+        _workbenchAttendees.Add(new MeetingAttendee { Name = name, Role = AttendeeRoleBox.Text.Trim() });
+        AttendeeNameBox.Text = "";
+        AttendeeRoleBox.Text = "";
+        RefreshAttendeesList();
+        ClearError();
+    }
+
+    private void BtnRemoveAttendee_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (AttendeesList.SelectedItem is not ListBoxItem item || item.Tag is not MeetingAttendee a) return;
+        _workbenchAttendees.RemoveAll(x => x.Name == a.Name && x.Role == a.Role);
+        RefreshAttendeesList();
+    }
+
+    private static List<string> SplitTags(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return new List<string>();
+        return text.Split(new[] { ',', '，', ';', '；' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim()).Where(t => t.Length > 0).Distinct().ToList();
+    }
+
+    private static DateTime ParseDateTimeOr(string? text, DateTime fallback)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return fallback;
+        if (DateTime.TryParse(text.Trim(), CultureInfo.CurrentCulture, DateTimeStyles.None, out var d)) return d;
+        if (DateTime.TryParse(text.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out d)) return d;
+        return fallback;
+    }
+
+    private static DateTime? ParseNullableDateTime(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (DateTime.TryParse(text.Trim(), CultureInfo.CurrentCulture, DateTimeStyles.None, out var d)) return d;
+        if (DateTime.TryParse(text.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out d)) return d;
+        return null;
     }
 
     // ═══════════════ Summary ═══════════════
@@ -200,32 +420,14 @@ public partial class MeetingAssistantView : UserControl
             return;
         }
 
-        var title = string.IsNullOrWhiteSpace(MeetingTitleBox.Text) ? "会议记录" : MeetingTitleBox.Text.Trim();
-        var projectId = (ProjectCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
-        var agenda = SplitLines(AgendaBox.Text);
-        var tags = _selectedTemplate?.DefaultTags ?? new List<string>();
-
-        var now = DateTime.Now;
-        var record = new MeetingRecord
-        {
-            Title = title,
-            ProjectId = projectId,
-            TemplateId = _selectedTemplate?.Id ?? "",
-            StartTime = now,
-            EndTime = now,
-            DurationSeconds = 0,
-            Status = MeetingStatus.Completed,
-            AgendaItems = agenda,
-            QuickNotes = QuickNotesBox.Text.Trim(),
-            SummaryMarkdown = _lastSummary ?? "",
-            Tags = new List<string>(tags),
-        };
-
+        var record = BuildMeetingFromWorkbench();
         try
         {
             _store.ExportMarkdown(record, null);
             _store.UpsertMeeting(record);
+            _workbenchMeeting = record;
             RefreshLibrary();
+            UpdateWorkbenchHint();
             MessageBox.Show($"已保存到会议库：\n{record.MarkdownPath}", "保存成功", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -271,18 +473,14 @@ public partial class MeetingAssistantView : UserControl
         if (MessageBox.Show("确定要清空当前会议记录？", "确认", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 
-        QuickNotesBox.Text = "";
-        _ = RenderMdAsync(SummaryBox, null);
-        _lastSummary = null;
-        HideSummaryPanel();
-        UpdateActionButtons();
+        NewWorkbenchMeeting();
     }
 
     // ═══════════════ Library ═══════════════
 
-    private void RefreshLibrary()
+    private List<MeetingRecord> GetFilteredMeetings()
     {
-        if (_store == null) return;
+        if (_store == null) return new List<MeetingRecord>();
         List<MeetingRecord> meetings;
         try
         {
@@ -291,27 +489,127 @@ public partial class MeetingAssistantView : UserControl
         }
         catch
         {
-            meetings = new List<MeetingRecord>();
+            return new List<MeetingRecord>();
         }
 
         var filterId = (LibProjectFilter.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
         var filtered = string.IsNullOrEmpty(filterId)
             ? meetings
             : meetings.Where(m => m.ProjectId == filterId).ToList();
-        filtered = filtered.OrderByDescending(m => m.StartTime).ToList();
 
-        LibMeetingList.Items.Clear();
-        foreach (var m in filtered)
+        if (!string.IsNullOrWhiteSpace(_libSearchKeyword))
         {
-            var projName = _projects.FirstOrDefault(p => p.Id == m.ProjectId)?.Name;
-            var label = $"{m.StartTime:MM-dd HH:mm}  {m.Title}";
-            if (!string.IsNullOrWhiteSpace(projName))
-                label += $"  ·{projName}";
-            LibMeetingList.Items.Add(new ListBoxItem { Content = label, Tag = m });
+            var kw = _libSearchKeyword;
+            filtered = filtered.Where(m => MeetingMatchesSearch(m, kw)).ToList();
+        }
+
+        return filtered.OrderByDescending(m => m.StartTime).ToList();
+    }
+
+    private bool MeetingMatchesSearch(MeetingRecord m, string kw)
+    {
+        if (m.Title.Contains(kw, StringComparison.OrdinalIgnoreCase)) return true;
+        if (m.Tags.Any(t => t.Contains(kw, StringComparison.OrdinalIgnoreCase))) return true;
+        if (m.Attendees.Any(a => a.Name.Contains(kw, StringComparison.OrdinalIgnoreCase)
+                                 || a.Role.Contains(kw, StringComparison.OrdinalIgnoreCase))) return true;
+        if (m.AgendaItems.Any(a => a.Contains(kw, StringComparison.OrdinalIgnoreCase))) return true;
+        if (m.QuickNotes.Contains(kw, StringComparison.OrdinalIgnoreCase)) return true;
+        if (m.SummaryMarkdown.Contains(kw, StringComparison.OrdinalIgnoreCase)) return true;
+        var text = GetMeetingText(m);
+        return text.Contains(kw, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void RefreshLibrary()
+    {
+        if (_store == null) return;
+        var filtered = GetFilteredMeetings();
+
+        if (_libGroupedView)
+        {
+            LibMeetingList.Visibility = Visibility.Collapsed;
+            LibProjectTree.Visibility = Visibility.Visible;
+            PopulateLibProjectTree(filtered);
+        }
+        else
+        {
+            LibProjectTree.Visibility = Visibility.Collapsed;
+            LibMeetingList.Visibility = Visibility.Visible;
+            LibMeetingList.Items.Clear();
+            foreach (var m in filtered)
+                LibMeetingList.Items.Add(MakeMeetingListItem(m));
         }
 
         var totalMinutes = filtered.Sum(m => m.DurationSeconds) / 60;
-        LibStatsText.Text = $"会议 {filtered.Count} 场 · 总时长 {totalMinutes} 分钟 · 项目 {_projects.Count} 个";
+        var searchHint = string.IsNullOrWhiteSpace(_libSearchKeyword) ? "" : $" · 搜索「{_libSearchKeyword}」";
+        LibStatsText.Text = $"会议 {filtered.Count} 场 · 总时长 {totalMinutes} 分钟 · 项目 {_projects.Count} 个{searchHint}";
+    }
+
+    private ListBoxItem MakeMeetingListItem(MeetingRecord m)
+    {
+        var projName = _projects.FirstOrDefault(p => p.Id == m.ProjectId)?.Name;
+        var label = $"{m.StartTime:MM-dd HH:mm}  {m.Title}";
+        if (m.Status == MeetingStatus.Planned) label += "（计划）";
+        if (!string.IsNullOrWhiteSpace(projName)) label += $"  ·{projName}";
+        return new ListBoxItem { Content = label, Tag = m };
+    }
+
+    private void PopulateLibProjectTree(IReadOnlyList<MeetingRecord> meetings)
+    {
+        LibProjectTree.Items.Clear();
+        var groups = meetings.GroupBy(m => m.ProjectId ?? "")
+            .OrderBy(g => string.IsNullOrEmpty(g.Key) ? "zzz" : (_projects.FirstOrDefault(p => p.Id == g.Key)?.Name ?? g.Key))
+            .ToList();
+
+        foreach (var g in groups)
+        {
+            var projName = string.IsNullOrEmpty(g.Key) ? "未分类" : (_projects.FirstOrDefault(p => p.Id == g.Key)?.Name ?? "未分类");
+            var header = new TreeViewItem
+            {
+                Header = $"{projName}（{g.Count()}）",
+                Tag = $"project:{g.Key}",
+                IsExpanded = true,
+            };
+            foreach (var m in g.OrderByDescending(x => x.StartTime))
+            {
+                var child = new TreeViewItem
+                {
+                    Header = $"{m.StartTime:MM-dd HH:mm}  {m.Title}",
+                    Tag = m,
+                };
+                header.Items.Add(child);
+            }
+            LibProjectTree.Items.Add(header);
+        }
+    }
+
+    private void LibViewModeCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        var mode = (LibViewModeCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "flat";
+        _libGroupedView = mode == "grouped";
+        RefreshLibrary();
+    }
+
+    private void BtnLibSearch_OnClick(object sender, RoutedEventArgs e)
+    {
+        _libSearchKeyword = LibSearchBox.Text.Trim();
+        RefreshLibrary();
+    }
+
+    private void LibSearchBox_OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            _libSearchKeyword = LibSearchBox.Text.Trim();
+            RefreshLibrary();
+            e.Handled = true;
+        }
+    }
+
+    private void LibProjectTree_OnSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (e.NewValue is TreeViewItem item && item.Tag is MeetingRecord rec)
+            ShowLibraryMeetingDetail(rec);
     }
 
     private void LibProjectFilter_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -332,16 +630,30 @@ public partial class MeetingAssistantView : UserControl
     {
         if (LibMeetingList.SelectedItem is not ListBoxItem item || item.Tag is not MeetingRecord rec)
             return;
+        ShowLibraryMeetingDetail(rec);
+    }
+
+    private void ShowLibraryMeetingDetail(MeetingRecord rec)
+    {
+        if (_libEditMode) ExitLibEditMode(false);
 
         _selectedLibMeeting = rec;
         LibDetailTitle.Text = rec.Title;
         var sb = new StringBuilder();
         var projName = _projects.FirstOrDefault(p => p.Id == rec.ProjectId)?.Name;
         sb.AppendLine($"时间：{rec.StartTime:yyyy-MM-dd HH:mm}");
+        if (rec.EndTime.HasValue)
+            sb.AppendLine($"结束：{rec.EndTime:yyyy-MM-dd HH:mm}");
+        sb.AppendLine($"状态：{StatusLabel(rec.Status)}");
         if (!string.IsNullOrWhiteSpace(projName))
             sb.AppendLine($"项目：{projName}");
         if (rec.Tags.Count > 0)
             sb.AppendLine($"标签：{string.Join("、", rec.Tags)}");
+        if (rec.Attendees.Count > 0)
+        {
+            sb.AppendLine($"参会人：{string.Join("、", rec.Attendees.Select(a =>
+                string.IsNullOrWhiteSpace(a.Role) ? a.Name : $"{a.Name}（{a.Role}）"))}");
+        }
         sb.AppendLine();
 
         if (!string.IsNullOrWhiteSpace(rec.MarkdownPath) && File.Exists(rec.MarkdownPath))
@@ -354,7 +666,7 @@ public partial class MeetingAssistantView : UserControl
             }
             catch
             {
-                // fall through to in-memory content
+                // fall through
             }
         }
 
@@ -372,6 +684,79 @@ public partial class MeetingAssistantView : UserControl
             sb.AppendLine(rec.QuickNotes);
         }
         _ = RenderMdAsync(LibDetailBox, sb.ToString());
+    }
+
+    private string GetEditableSummary(MeetingRecord rec)
+    {
+        if (!string.IsNullOrWhiteSpace(rec.SummaryMarkdown))
+            return rec.SummaryMarkdown;
+        return GetMeetingText(rec);
+    }
+
+    private void BtnLibEdit_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedLibMeeting == null)
+        {
+            MessageBox.Show("请先在左侧选择一场会议。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        EnterLibEditMode();
+    }
+
+    private void EnterLibEditMode()
+    {
+        if (_selectedLibMeeting == null) return;
+        _libEditMode = true;
+        LibDetailEditor.Text = GetEditableSummary(_selectedLibMeeting);
+        LibDetailBox.Visibility = Visibility.Collapsed;
+        LibDetailEditor.Visibility = Visibility.Visible;
+        BtnLibEdit.Visibility = Visibility.Collapsed;
+        BtnLibSaveEdit.Visibility = Visibility.Visible;
+        BtnLibCancelEdit.Visibility = Visibility.Visible;
+    }
+
+    private void ExitLibEditMode(bool save)
+    {
+        if (save && _selectedLibMeeting != null && _store != null)
+        {
+            _selectedLibMeeting.SummaryMarkdown = LibDetailEditor.Text.Trim();
+            try
+            {
+                _store.ExportMarkdown(_selectedLibMeeting, null);
+                _store.UpsertMeeting(_selectedLibMeeting);
+                RefreshLibrary();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"保存失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+        }
+
+        _libEditMode = false;
+        LibDetailEditor.Visibility = Visibility.Collapsed;
+        LibDetailBox.Visibility = Visibility.Visible;
+        BtnLibEdit.Visibility = Visibility.Visible;
+        BtnLibSaveEdit.Visibility = Visibility.Collapsed;
+        BtnLibCancelEdit.Visibility = Visibility.Collapsed;
+
+        if (_selectedLibMeeting != null)
+            ShowLibraryMeetingDetail(_selectedLibMeeting);
+    }
+
+    private void BtnLibSaveEdit_OnClick(object sender, RoutedEventArgs e) => ExitLibEditMode(true);
+
+    private void BtnLibCancelEdit_OnClick(object sender, RoutedEventArgs e) => ExitLibEditMode(false);
+
+    private void BtnLibOpenWorkbench_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedLibMeeting == null)
+        {
+            MessageBox.Show("请先在左侧选择一场会议。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        LoadWorkbenchMeeting(_selectedLibMeeting);
+        HubTabs.SelectedIndex = 0;
     }
 
     private void BtnAddProject_OnClick(object sender, RoutedEventArgs e)
@@ -642,13 +1027,35 @@ public partial class MeetingAssistantView : UserControl
             LibProjectFilter.SelectedIndex = 0;
         RefreshLibrary();
         HubTabs.SelectedIndex = 2;
-        foreach (var obj in LibMeetingList.Items)
+
+        if (_libGroupedView)
         {
-            if (obj is ListBoxItem it && it.Tag is MeetingRecord m && m.Id == rec.Id)
+            foreach (var obj in LibProjectTree.Items)
             {
-                LibMeetingList.SelectedItem = it;
-                it.BringIntoView();
-                break;
+                if (obj is not TreeViewItem group) continue;
+                foreach (var childObj in group.Items)
+                {
+                    if (childObj is TreeViewItem child && child.Tag is MeetingRecord m && m.Id == rec.Id)
+                    {
+                        group.IsExpanded = true;
+                        child.IsSelected = true;
+                        child.BringIntoView();
+                        ShowLibraryMeetingDetail(rec);
+                        return;
+                    }
+                }
+            }
+        }
+        else
+        {
+            foreach (var obj in LibMeetingList.Items)
+            {
+                if (obj is ListBoxItem it && it.Tag is MeetingRecord m && m.Id == rec.Id)
+                {
+                    LibMeetingList.SelectedItem = it;
+                    it.BringIntoView();
+                    break;
+                }
             }
         }
     }
@@ -968,12 +1375,30 @@ public partial class MeetingAssistantView : UserControl
     private void BtnSeriesStart_OnClick(object sender, RoutedEventArgs e)
     {
         var s = _selectedSeries ?? BuildSeriesFromForm();
-        if (!string.IsNullOrWhiteSpace(s.TemplateId))
-            SelectComboByTag(TemplateCombo, s.TemplateId);
-        SelectComboByTag(ProjectCombo, s.ProjectId);
-        MeetingTitleBox.Text = $"{s.Name} {DateTime.Now:MM-dd}";
-        if (s.DefaultAgenda.Count > 0)
-            AgendaBox.Text = string.Join(Environment.NewLine, s.DefaultAgenda);
+        NewWorkbenchMeeting();
+        _suppressTemplateFill = true;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(s.TemplateId))
+                SelectComboByTag(TemplateCombo, s.TemplateId);
+            SelectComboByTag(ProjectCombo, s.ProjectId);
+            _selectedTemplate = _templates.FirstOrDefault(t => t.Id == s.TemplateId);
+            MeetingTitleBox.Text = $"{s.Name} {DateTime.Now:MM-dd}";
+            if (s.DefaultAgenda.Count > 0)
+                AgendaBox.Text = string.Join(Environment.NewLine, s.DefaultAgenda);
+            if (s.DefaultAttendees.Count > 0)
+            {
+                _workbenchAttendees.Clear();
+                _workbenchAttendees.AddRange(s.DefaultAttendees.Select(a => new MeetingAttendee { Name = a.Name, Role = a.Role }));
+                RefreshAttendeesList();
+            }
+            _workbenchMeeting!.SeriesId = s.Id;
+        }
+        finally
+        {
+            _suppressTemplateFill = false;
+        }
+        UpdateWorkbenchHint();
         HubTabs.SelectedIndex = 0;
     }
 

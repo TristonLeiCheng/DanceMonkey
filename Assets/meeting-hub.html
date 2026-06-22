@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>会议中心</title>
+  <style>
+    :root {
+      --bg: #FDFCF7; --card: #fff; --line: #EBE7DF; --line2: #E6E1D8;
+      --text: #1e293b; --muted: #64748b; --amber: #b45309; --amber-bg: #F2ECE1;
+      --amber-light: #FAF8F5; --input-bg: #FBF9F5;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
+    button, input, select, textarea { font: inherit; }
+    .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .hdr { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; background: #fff; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+    .brand-icon { background: #b45309; color: #fff; padding: 6px; border-radius: 8px; font-size: 14px; }
+    .nav { display: flex; gap: 6px; padding: 8px 20px; background: #fff; border-bottom: 1px solid var(--line); flex-shrink: 0; overflow-x: auto; }
+    .nav-btn { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border: none; border-radius: 999px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .nav-btn:hover { background: var(--amber-light); color: var(--text); }
+    .nav-btn.active { background: var(--amber-bg); color: #78350f; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: #FAF8F5; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+    .main { flex: 1; overflow-y: auto; padding: 16px 20px; }
+    .footer { padding: 10px 20px; background: #fff; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .btn { border: 1px solid var(--line2); background: #fff; color: var(--text); padding: 7px 14px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .btn:hover { background: var(--amber-bg); }
+    .btn-primary { background: linear-gradient(135deg, #d97706, #b45309); border: none; color: #fff; }
+    .btn-primary:hover { filter: brightness(1.05); }
+    .btn-blue { background: #2563eb; border: none; color: #fff; }
+    .btn-danger { border-color: #fecaca; color: #dc2626; }
+    .btn-sm { padding: 5px 10px; font-size: 11px; }
+    .card { background: var(--card); border: 1px solid var(--line2); border-radius: 14px; padding: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+    .lbl { font-size: 10px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; display: block; }
+    .inp { width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--line2); border-radius: 10px; font-size: 12px; }
+    .inp:focus { outline: none; border-color: #d97706; background: #fff; }
+    .grid-wb { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    @media (min-width: 1000px) { .grid-wb { grid-template-columns: 3fr 4fr 5fr; } }
+    .sec-title { font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--amber-bg); margin-bottom: 10px; }
+    .tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: var(--amber-light); border: 1px solid var(--line2); border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .tag:hover { border-color: #fca5a5; color: #dc2626; }
+    .agenda-item { padding: 8px 10px; background: #FCFBFA; border: 1px solid var(--line2); border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .agenda-item:hover { border-color: #d97706; }
+    .collapse-hdr { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: none; background: transparent; cursor: pointer; text-align: left; }
+    .collapse-body { padding: 0 14px 14px; border-top: 1px solid var(--amber-bg); }
+    .action-row { padding: 8px 10px; border: 1px solid var(--line2); border-radius: 10px; margin-bottom: 6px; display: flex; gap: 8px; align-items: flex-start; font-size: 12px; }
+    .action-row.done { opacity: .6; }
+    .chk { width: 16px; height: 16px; border-radius: 4px; border: 1px solid #cbd5e1; cursor: pointer; flex-shrink: 0; margin-top: 2px; }
+    .chk.on { background: #10b981; border-color: #10b981; color: #fff; display: grid; place-items: center; font-size: 10px; }
+    .bubble { position: fixed; z-index: 40; background: #0f172a; color: #fff; border-radius: 10px; padding: 6px 8px; display: flex; gap: 4px; align-items: center; font-size: 11px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+    .bubble button { background: transparent; border: none; color: #fff; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-weight: 700; }
+    .bubble button:hover { background: #d97706; }
+    .toast { position: fixed; bottom: 70px; right: 20px; z-index: 50; background: #0f172a; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; animation: fadeIn .2s; }
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 60; display: grid; place-items: center; padding: 16px; }
+    .modal { background: #FCFBFA; border: 1px solid var(--line2); border-radius: 16px; max-width: 640px; width: 100%; max-height: 85vh; display: flex; flex-direction: column; }
+    .modal pre { flex: 1; overflow: auto; padding: 16px; margin: 0; font-size: 11px; line-height: 1.6; white-space: pre-wrap; background: #fff; }
+    .crumb { font-size: 12px; font-weight: 600; background: #EFECE6; padding: 6px 12px; border-radius: 8px; border: 1px solid #E1DBD0; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block; animation: pulse 2s infinite; }
+    .list-row { padding: 8px 10px; border: 1px solid var(--line2); border-radius: 8px; margin-bottom: 4px; font-size: 12px; cursor: pointer; }
+    .list-row:hover, .list-row.sel { border-color: #d97706; background: var(--amber-light); }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .cal-cell { min-height: 52px; padding: 4px; border: 1px solid var(--line2); border-radius: 8px; cursor: pointer; font-size: 11px; }
+    .cal-cell.muted { opacity: .45; }
+    .cal-cell.today { border-color: #d97706; }
+    .cal-cell.sel { background: var(--amber-bg); }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+    .stat-card { padding: 12px; }
+    .stat-val { font-size: 22px; font-weight: 800; }
+    .bar-track { height: 8px; background: #EFECE6; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+    .bar-fill { height: 100%; border-radius: 4px; }
+    .two-col { display: grid; grid-template-columns: 280px 1fr; gap: 14px; min-height: 400px; }
+    .hidden { display: none !important; }
+    .err { color: #dc2626; font-size: 11px; margin-top: 6px; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="hdr">
+    <div class="brand"><span class="brand-icon">🧠</span><span>会议中心</span><span style="color:#94a3b8;font-size:11px">|</span><span id="versionLabel" style="font-size:11px;color:#94a3b8;font-family:monospace">Workspace</span></div>
+  </header>
+  <nav class="nav" id="nav"></nav>
+  <div class="toolbar" id="toolbar">
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-blue btn-sm" data-act="newMeeting">＋ 新建</button>
+      <button class="btn btn-sm" data-act="openFromLib">📂 从库打开</button>
+    </div>
+    <div class="crumb" id="crumb">会议记录</div>
+  </div>
+  <main class="main" id="main"></main>
+  <footer class="footer hidden" id="footer">
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm" data-act="generateSummary">✨ 生成纪要</button>
+      <button class="btn btn-sm" data-act="saveMeeting">💾 保存</button>
+      <button class="btn btn-sm" data-act="copyDraft">📋 复制草稿</button>
+      <button class="btn btn-danger btn-sm" data-act="clearWorkbench">🗑 清空面板</button>
+    </div>
+    <span style="font-size:11px;color:#94a3b8;font-family:monospace">数据保存在本地客户端</span>
+  </footer>
+</div>
+<div id="toast" class="toast hidden"></div>
+<div id="modalRoot"></div>
+<div id="bubble" class="bubble hidden"></div>
+
+<script>
+const NAV = [
+  { id: 'workbench', icon: '▣', label: '工作台' },
+  { id: 'calendar', icon: '📅', label: '日历' },
+  { id: 'library', icon: '🗄', label: '会议库' },
+  { id: 'tasks', icon: '☑', label: '行动项' },
+  { id: 'decisions', icon: '⚖', label: '决策项' },
+  { id: 'routines', icon: '🔁', label: '例会' },
+  { id: 'templates', icon: '📄', label: '模板' },
+  { id: 'stats', icon: '📊', label: '统计' },
+];
+const PRESET_USERS = ['张经理 (PM)', '李工 (研发)', '王工 (架构)', '赵主管 (业务)', '小刘 (设计)'];
+const STATUS_OPTS = [
+  { v: 'Planned', l: '准备中' }, { v: 'InProgress', l: '进行中' },
+  { v: 'Completed', l: '已结束' }, { v: 'Cancelled', l: '已取消' },
+];
+
+let state = {};
+let localWb = {};
+let ui = { actionsOpen: false, decisionsOpen: false, showUserModal: false, showSummaryModal: false, summaryText: '' };
+
+function send(type, payload = {}) {
+  if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({ type, ...payload });
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function uid() { return 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7); }
+function statusLabel(v) { return (STATUS_OPTS.find(o => o.v === v) || { l: '已完成' }).l; }
+
+function syncWbFromState() {
+  if (state.workbench) localWb = JSON.parse(JSON.stringify(state.workbench));
+}
+
+function pushWb() { send('setWorkbench', { workbench: localWb }); }
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 3000);
+}
+
+window.MeetingHub = {
+  receiveState(payload) {
+    state = payload || {};
+    if (state.toast) showToast(state.toast);
+    syncWbFromState();
+    renderAll();
+  },
+  showError(msg) { showToast('⚠️ ' + msg); }
+};
+
+function renderAll() {
+  document.getElementById('versionLabel').textContent = 'Workspace ' + (state.version || '');
+  renderNav();
+  document.getElementById('toolbar').classList.toggle('hidden', state.activeNav !== 'workbench');
+  document.getElementById('footer').classList.toggle('hidden', state.activeNav !== 'workbench');
+  updateCrumb();
+  const main = document.getElementById('main');
+  const nav = state.activeNav || 'workbench';
+  if (nav === 'workbench') main.innerHTML = renderWorkbench();
+  else if (nav === 'calendar') main.innerHTML = renderCalendar();
+  else if (nav === 'library') main.innerHTML = renderLibrary();
+  else if (nav === 'tasks') main.innerHTML = renderTasks();
+  else if (nav === 'decisions') main.innerHTML = renderDecisions();
+  else if (nav === 'routines') main.innerHTML = renderRoutines();
+  else if (nav === 'templates') main.innerHTML = renderTemplates();
+  else if (nav === 'stats') main.innerHTML = renderStats();
+  bindEvents();
+}
+
+function renderNav() {
+  document.getElementById('nav').innerHTML = NAV.map(n =>
+    `<button class="nav-btn ${state.activeNav === n.id ? 'active' : ''}" data-nav="${n.id}">${n.icon} ${n.label}</button>`
+  ).join('');
+}
+
+function updateCrumb() {
+  const el = document.getElementById('crumb');
+  if (!el || state.activeNav !== 'workbench') return;
+  const st = statusLabel(localWb.status);
+  el.innerHTML = `${esc(localWb.title || '会议记录')} <span style="color:#94a3b8">•</span> <span style="color:#059669"><span class="status-dot"></span> ${esc(st)}</span>`;
+}
+
+function renderWorkbench() {
+  const tpls = state.templates || [];
+  const projs = state.projects || [];
+  const agendas = localWb.agendaItems || [];
+  const acts = localWb.actionItems || [];
+  const decs = localWb.decisions || [];
+  const atts = localWb.attendees || [];
+  return `<div class="grid-wb">
+    <div class="card">
+      <div class="sec-title">📋 会议信息设置</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div><label class="lbl">主题</label><input class="inp" id="wbTitle" value="${esc(localWb.title)}"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><label class="lbl">当前状态</label><select class="inp" id="wbStatus">${STATUS_OPTS.map(o=>`<option value="${o.v}" ${localWb.status===o.v?'selected':''}>${o.l}</option>`).join('')}</select></div>
+          <div><label class="lbl">套用模板</label><select class="inp" id="wbTemplate">${tpls.map(t=>`<option value="${t.id}" ${localWb.templateId===t.id?'selected':''}>${esc(t.icon)} ${esc(t.name)}</option>`).join('')}</select></div>
+        </div>
+        <div><label class="lbl">关联项目</label><select class="inp" id="wbProject"><option value="">（无项目）</option>${projs.map(p=>`<option value="${p.id}" ${localWb.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
+        <div><label class="lbl">开始时间</label><input class="inp" id="wbStart" value="${esc(localWb.startTime)}"></div>
+        <div><label class="lbl">结束时间 (可选)</label><input class="inp" id="wbEnd" value="${esc(localWb.endTime||'')}"></div>
+        <div><label class="lbl">标签</label><input class="inp" id="wbTags" value="${esc(localWb.tags||'')}"></div>
+        <div style="border-top:1px solid var(--amber-bg);padding-top:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span class="lbl" style="margin:0">参会人 (${atts.length})</span>
+            <button class="btn btn-sm" data-act="showUserModal">+ 添加</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${atts.map((a,i)=>`<span class="tag" data-rm-att="${i}">${esc(a.role?a.name+' ('+a.role+')':a.name)} ✕</span>`).join('')}</div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="sec-title" style="margin:0;border:0;padding:0">📌 议程</div>
+        <button class="btn btn-sm" data-act="aiPrep">✨ AI 会前准备</button>
+      </div>
+      <div style="flex:1;min-height:200px;overflow-y:auto;margin-bottom:8px" id="agendaList">
+        ${agendas.length ? agendas.map((a,i)=>`<div class="agenda-item"><span>${esc(a)}</span><button data-rm-agenda="${i}" style="border:none;background:none;cursor:pointer;color:#94a3b8">🗑</button></div>`).join('') : '<p style="text-align:center;color:#94a3b8;font-size:12px;padding:24px">暂无议程</p>'}
+      </div>
+      <div style="display:flex;gap:6px"><input class="inp" id="newAgenda" placeholder="添加议题…"><button class="btn btn-sm" data-act="addAgenda">添加</button></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="card">
+        <div class="sec-title">💬 会上手记 <span style="margin-left:auto;font-size:10px;background:#fffbeb;padding:2px 8px;border-radius:99px;border:1px solid #fde68a;color:#92400e">智能输入区</span></div>
+        <textarea class="inp" id="wbNotes" rows="8" style="resize:none;line-height:1.6" placeholder="随手记录…选中文字可转为行动项/决策项">${esc(localWb.quickNotes)}</textarea>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <button class="collapse-hdr" data-toggle="actions">
+          <span style="font-size:12px;font-weight:800">⚡ 会议行动项 (${acts.length})</span>
+          <span>${ui.actionsOpen ? '▲' : '▼'}</span>
+        </button>
+        ${ui.actionsOpen ? `<div class="collapse-body">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:10px;color:#94a3b8">同步状态：就绪</span>
+            <button class="btn btn-sm" data-act="syncZenTask">→ ZenTask</button>
+          </div>
+          ${acts.map(a=>`<div class="action-row ${a.done?'done':''}"><div class="chk ${a.done?'on':''}" data-toggle-act="${a.id}">${a.done?'✓':''}</div><div style="flex:1"><div style="${a.done?'text-decoration:line-through;color:#94a3b8':''}">${esc(a.task)}</div><div style="font-size:10px;color:#64748b;margin-top:2px">👤 ${esc(a.owner||'待分派')} · 📅 ${esc(a.dueDate||'—')}</div></div><button data-rm-act="${a.id}" style="border:none;background:none;cursor:pointer">🗑</button></div>`).join('') || '<p style="text-align:center;color:#94a3b8;font-size:11px">暂无行动项</p>'}
+          <div style="display:flex;gap:6px;margin-top:8px"><input class="inp" id="newActTask" placeholder="新行动项"><input class="inp" id="newActOwner" style="width:90px" placeholder="负责人"><button class="btn btn-sm" data-act="addAction">+</button></div>
+        </div>` : ''}
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <button class="collapse-hdr" data-toggle="decisions">
+          <span style="font-size:12px;font-weight:800">💡 决策项 (${decs.length})</span>
+          <span>${ui.decisionsOpen ? '▲' : '▼'}</span>
+        </button>
+        ${ui.decisionsOpen ? `<div class="collapse-body">
+          ${decs.map((d,i)=>`<div class="agenda-item"><span><b style="color:#b45309">#${i+1}</b> ${esc(d.content)}</span><button data-rm-dec="${d.id}" style="border:none;background:none;cursor:pointer">🗑</button></div>`).join('') || '<p style="text-align:center;color:#94a3b8;font-size:11px">暂无决策</p>'}
+          <div style="display:flex;gap:6px;margin-top:8px"><input class="inp" id="newDec" placeholder="记录决策…"><button class="btn btn-sm" data-act="addDecision">+ 达成</button></div>
+        </div>` : ''}
+      </div>
+    </div>
+  </div>${state.error ? `<p class="err">${esc(state.error)}</p>` : ''}${state.busy ? '<p style="text-align:center;color:#b45309;font-size:12px">处理中…</p>' : ''}`;
+}
+
+function renderCalendar() {
+  const c = state.calendar || {};
+  const weekdays = ['一','二','三','四','五','六','日'];
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <button class="btn btn-sm" data-act="calPrev">◀</button>
+      <strong>${esc(c.monthLabel)}</strong>
+      <button class="btn btn-sm" data-act="calNext">▶</button>
+      <button class="btn btn-sm" data-act="calToday">今天</button>
+      <span style="font-size:12px;color:#64748b">本月 ${c.monthCount||0} 场</span>
+    </div>
+    <div class="cal-grid" style="margin-bottom:4px">${weekdays.map(w=>`<div style="text-align:center;font-size:10px;color:#94a3b8;padding:4px">${w}</div>`).join('')}</div>
+    <div class="cal-grid">${(c.cells||[]).map(cell=>`<div class="cal-cell ${cell.inMonth?'':'muted'} ${cell.isToday?'today':''} ${cell.isSelected?'sel':''}" data-cal-day="${cell.date}">
+      <div style="font-weight:${cell.isToday?'700':'400'}">${cell.day}</div>
+      ${cell.count?`<div style="font-size:9px;color:#b45309;margin-top:2px">${cell.count}场</div>`:''}
+    </div>`).join('')}</div>
+    <div style="margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong style="font-size:13px">${esc(c.dayTitle||'')}</strong>
+        <button class="btn btn-sm" data-act="calSchedule">+ 排会</button>
+      </div>
+      ${(c.dayMeetings||[]).map(m=>`<div class="list-row" data-open-meeting="${m.id}">${esc(m.startTime)} ${esc(m.title)} ${m.projectName?'· '+esc(m.projectName):''}</div>`).join('') || '<p style="color:#94a3b8;font-size:12px">当日无会议</p>'}
+    </div>
+  </div>`;
+}
+
+function renderLibrary() {
+  const lib = state.library || {};
+  const detail = lib.detail;
+  return `<div class="two-col">
+    <div class="card">
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <input class="inp" id="libSearch" value="${esc(lib.search||'')}" placeholder="搜索…" style="flex:1">
+        <button class="btn btn-sm" data-act="libSearch">搜</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;font-size:11px">
+        <label><input type="checkbox" id="libGrouped" ${lib.grouped?'checked':''}> 按项目分组</label>
+        <label><input type="checkbox" id="libArchived" ${lib.showArchived?'checked':''}> 显示归档</label>
+      </div>
+      <p style="font-size:10px;color:#94a3b8;margin-bottom:8px">${esc(lib.stats||'')}</p>
+      <div style="max-height:420px;overflow-y:auto" id="libList">
+        ${lib.grouped ? (lib.groups||[]).map(g=>`<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:700;color:#64748b;margin-bottom:4px">${esc(g.projectName)} (${g.meetings.length})</div>
+          ${g.meetings.map(m=>`<div class="list-row ${lib.selectedId===m.id?'sel':''}" data-lib-select="${m.id}">${esc(m.startTime)} ${esc(m.title)}</div>`).join('')}
+        </div>`).join('') : (lib.meetings||[]).map(m=>`<div class="list-row ${lib.selectedId===m.id?'sel':''}" data-lib-select="${m.id}">${esc(m.startTime)} ${esc(m.title)} ${m.statusLabel?`· ${esc(m.statusLabel)}`:''}</div>`).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <strong>${esc(detail?.title || '选择会议查看详情')}</strong>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${detail ? `<button class="btn btn-sm" data-act="libOpenWb">工作台打开</button>
+          <button class="btn btn-sm" data-act="libEdit">${lib.editMode?'编辑中':'编辑纪要'}</button>
+          ${lib.editMode?'<button class="btn btn-primary btn-sm" data-act="libSaveEdit">保存</button><button class="btn btn-sm" data-act="libCancelEdit">取消</button>':''}
+          <button class="btn btn-sm" data-act="libEmail">📧 邮件</button>
+          <button class="btn btn-sm" data-act="libSyncTasks">✅ 待办</button>
+          <button class="btn btn-sm" data-act="libArchive">归档</button>
+          <button class="btn btn-danger btn-sm" data-act="libDelete">删除</button>` : ''}
+        </div>
+      </div>
+      ${lib.editMode ? `<textarea class="inp" id="libEditor" rows="18" style="resize:vertical;font-family:monospace;font-size:11px">${esc(lib.editText||'')}</textarea>` :
+        `<pre style="white-space:pre-wrap;font-size:11px;line-height:1.6;max-height:480px;overflow:auto;margin:0;color:#334155">${esc(detail?.markdown || '（暂无内容）')}</pre>`}
+    </div>
+  </div>`;
+}
+
+function renderTasks() {
+  const a = state.actions || {};
+  const projs = state.projects || [];
+  return `<div class="card">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <select class="inp" id="actFilter" style="width:auto">
+        <option value="all" ${a.filter==='all'?'selected':''}>全部</option>
+        <option value="open" ${a.filter==='open'?'selected':''}>进行中</option>
+        <option value="done" ${a.filter==='done'?'selected':''}>已完成</option>
+        <option value="unsynced" ${a.filter==='unsynced'?'selected':''}>未同步</option>
+      </select>
+      <select class="inp" id="actProject" style="width:auto"><option value="">全部项目</option>${projs.map(p=>`<option value="${p.id}" ${a.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
+      <button class="btn btn-sm" data-act="actSyncAll">批量同步 ZenTask</button>
+      <button class="btn btn-sm" data-act="actMarkDone">标记完成</button>
+      <button class="btn btn-sm" data-act="actOpenMeeting">打开会议</button>
+      <span style="font-size:11px;color:#64748b;margin-left:auto">${esc(a.stats||'')}</span>
+    </div>
+    <div>${(a.rows||[]).map(r=>`<div class="list-row ${a.selectedKey===r.key?'sel':''}" data-act-select="${r.key}">
+      <div style="font-weight:600">${esc(r.task)}</div>
+      <div style="font-size:10px;color:#64748b;margin-top:2px">${esc(r.meetingLabel)} · ${esc(r.owner)} · ${esc(r.due)} · ${r.done?'✓完成':r.synced?'已同步':'未同步'}</div>
+    </div>`).join('') || '<p style="color:#94a3b8;font-size:12px">暂无行动项</p>'}</div>
+  </div>`;
+}
+
+function renderDecisions() {
+  const d = state.decisions || {};
+  const projs = state.projects || [];
+  return `<div class="card">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <input class="inp" id="decSearch" value="${esc(d.search||'')}" placeholder="搜索决策…" style="flex:1;max-width:240px">
+      <select class="inp" id="decProject" style="width:auto"><option value="">全部项目</option>${projs.map(p=>`<option value="${p.id}" ${d.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
+      <button class="btn btn-sm" data-act="decFilter">筛选</button>
+      <button class="btn btn-sm" data-act="decOpenMeeting">打开会议</button>
+      <button class="btn btn-danger btn-sm" data-act="decDelete">删除</button>
+      <span style="font-size:11px;color:#64748b;margin-left:auto">${esc(d.stats||'')}</span>
+    </div>
+    <div>${(d.rows||[]).map(r=>`<div class="list-row ${d.selectedKey===r.key?'sel':''}" data-dec-select="${r.key}">
+      <div style="font-size:10px;color:#94a3b8">${esc(r.dateLabel)} · ${esc(r.meetingTitle)} · ${esc(r.projectName)}</div>
+      <div style="font-size:12px;margin-top:4px">${esc(r.content)}</div>
+    </div>`).join('') || '<p style="color:#94a3b8;font-size:12px">暂无决策</p>'}</div>
+  </div>`;
+}
+
+function renderRoutines() {
+  const r = state.routines || {};
+  const f = r.form || {};
+  const projs = state.projects || [];
+  const tpls = state.templates || [];
+  const recTypes = [['Daily','每天'],['Weekly','每周'],['BiWeekly','每两周'],['Monthly','每月'],['Weekday','工作日']];
+  return `<div class="two-col">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong>例会列表</strong><button class="btn btn-sm" data-act="seriesNew">新建</button></div>
+      ${(r.list||[]).map(s=>`<div class="list-row ${r.editingId===s.id?'sel':''}" data-series-select="${s.id}">${s.active?'🔁':'⏸'} ${esc(s.name)} <span style="color:#94a3b8;font-size:10px">${esc(s.recurrence)}</span></div>`).join('') || '<p style="color:#94a3b8;font-size:12px">暂无例会</p>'}
+    </div>
+    <div class="card">
+      <div class="sec-title">例会设置</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div><label class="lbl">名称</label><input class="inp" id="serName" value="${esc(f.name||'')}"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><label class="lbl">项目</label><select class="inp" id="serProject"><option value="">无</option>${projs.map(p=>`<option value="${p.id}" ${f.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
+          <div><label class="lbl">模板</label><select class="inp" id="serTemplate"><option value="">无</option>${tpls.map(t=>`<option value="${t.id}" ${f.templateId===t.id?'selected':''}>${esc(t.name)}</option>`).join('')}</select></div>
+        </div>
+        <div><label class="lbl">重复</label><select class="inp" id="serRec">${recTypes.map(([v,l])=>`<option value="${v}" ${f.recurrenceType===v?'selected':''}>${l}</option>`).join('')}</select></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+          <div><label class="lbl">时</label><input class="inp" id="serHour" type="number" value="${f.hour??10}"></div>
+          <div><label class="lbl">分</label><input class="inp" id="serMin" type="number" value="${f.minute??0}"></div>
+          <div><label class="lbl">时长(分)</label><input class="inp" id="serDur" type="number" value="${f.durationMinutes??30}"></div>
+          <div><label class="lbl">提醒(分)</label><input class="inp" id="serRem" type="number" value="${f.reminderMinutes??10}"></div>
+        </div>
+        <div><label class="lbl">默认议程</label><textarea class="inp" id="serAgenda" rows="4">${esc(f.agendaText||'')}</textarea></div>
+        <label style="font-size:12px"><input type="checkbox" id="serActive" ${f.active!==false?'checked':''}> 启用</label>
+        <pre style="font-size:11px;color:#64748b;white-space:pre-wrap;background:var(--input-bg);padding:8px;border-radius:8px">${esc(r.preview||'')}</pre>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" data-act="seriesSave">保存</button>
+          <button class="btn btn-sm" data-act="seriesPreview">预览</button>
+          <button class="btn btn-sm" data-act="seriesStart">从此启动会议</button>
+          <button class="btn btn-danger btn-sm" data-act="seriesDelete">删除</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderTemplates() {
+  const tpls = state.templates || [];
+  const f = state.templateForm || {};
+  return `<div class="two-col">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><strong>模板列表</strong><button class="btn btn-sm" data-act="tplNew">新建</button></div>
+      ${tpls.map(t=>`<div class="list-row ${state.editingTemplateId===t.id?'sel':''}" data-tpl-select="${t.id}">${esc(t.icon)} ${esc(t.name)}${t.builtIn?' ·内置':''}</div>`).join('')}
+    </div>
+    <div class="card">
+      <div class="sec-title">模板编辑</div>
+      <p style="font-size:11px;color:#64748b;margin-bottom:10px">${esc(f.meta||'')}</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div><label class="lbl">名称</label><input class="inp" id="tplName" value="${esc(f.name||'')}"></div>
+        <div><label class="lbl">分类</label><input class="inp" id="tplCat" value="${esc(f.category||'')}"></div>
+        <div><label class="lbl">议程模板（每行一项）</label><textarea class="inp" id="tplAgenda" rows="6">${esc(f.agendaText||'')}</textarea></div>
+        <div><label class="lbl">AI 纪要 Prompt 覆盖</label><textarea class="inp" id="tplPrompt" rows="4">${esc(f.prompt||'')}</textarea></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" data-act="tplSave">保存</button>
+          <button class="btn btn-danger btn-sm" data-act="tplDelete" ${f.builtIn?'disabled':''}>删除</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderStats() {
+  const s = state.stats || {};
+  const maxMin = Math.max(1, ...(s.projects||[]).map(p=>p.minutes));
+  return `<div>
+    <div class="stat-grid" style="margin-bottom:16px">${(s.cards||[]).map(c=>`<div class="card stat-card"><div class="stat-val">${c.icon} ${esc(c.value)}</div><div style="font-size:10px;color:#64748b;margin-top:4px">${esc(c.label)}</div></div>`).join('')}</div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="sec-title">项目会议分布</div>
+      ${(s.projects||[]).map(p=>`<div style="margin-bottom:10px"><div style="font-size:12px;display:flex;justify-content:space-between"><span>${esc(p.name)}</span><span style="color:#94a3b8;font-size:10px">${p.count}场 · ${p.minutes}分钟</span></div><div class="bar-track"><div class="bar-fill" style="width:${(p.minutes/maxMin*100).toFixed(0)}%;background:${esc(p.color)}"></div></div></div>`).join('') || '<p style="color:#94a3b8;font-size:12px">暂无数据</p>'}
+    </div>
+    <div class="card">
+      <div class="sec-title">跨会议检索 / AI 问答</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input class="inp" id="dashSearch" placeholder="关键词或问题…" style="flex:1">
+        <button class="btn btn-sm" data-act="dashSearch">检索</button>
+        <button class="btn btn-primary btn-sm" data-act="dashAsk">🤖 AI 问答</button>
+      </div>
+      <pre style="white-space:pre-wrap;font-size:11px;line-height:1.6;max-height:240px;overflow:auto;margin:0">${esc(state.dashSearchResult||'')}</pre>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="sec-title">新建项目</div>
+      <div style="display:flex;gap:8px"><input class="inp" id="newProject" placeholder="项目名称"><button class="btn btn-sm" data-act="addProject">添加</button></div>
+    </div>
+  </div>`;
+}
+
+function collectWbFromDom() {
+  const g = id => document.getElementById(id);
+  if (g('wbTitle')) localWb.title = g('wbTitle').value;
+  if (g('wbStatus')) localWb.status = g('wbStatus').value;
+  if (g('wbTemplate')) localWb.templateId = g('wbTemplate').value;
+  if (g('wbProject')) localWb.projectId = g('wbProject').value;
+  if (g('wbStart')) localWb.startTime = g('wbStart').value;
+  if (g('wbEnd')) localWb.endTime = g('wbEnd').value;
+  if (g('wbTags')) localWb.tags = g('wbTags').value;
+  if (g('wbNotes')) localWb.quickNotes = g('wbNotes').value;
+}
+
+function bindEvents() {
+  document.querySelectorAll('[data-nav]').forEach(el => el.onclick = () => send('setTab', { nav: el.dataset.nav }));
+  document.querySelectorAll('[data-act]').forEach(el => el.onclick = () => handleAction(el.dataset.act));
+
+  const wbTitle = document.getElementById('wbTitle');
+  if (wbTitle) {
+    ['wbTitle','wbStatus','wbTemplate','wbProject','wbStart','wbEnd','wbTags','wbNotes'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.onchange = () => { collectWbFromDom(); if (id === 'wbTemplate') { send('setWorkbench', { workbench: localWb }); send('applyTemplate', { templateId: localWb.templateId }); } else pushWb(); updateCrumb(); };
+      if (el.tagName === 'INPUT' && el.type === 'text') el.oninput = () => { collectWbFromDom(); updateCrumb(); };
+    });
+    const notes = document.getElementById('wbNotes');
+    if (notes) notes.onmouseup = onNotesSelect;
+  }
+
+  document.querySelectorAll('[data-rm-agenda]').forEach(el => el.onclick = () => {
+    localWb.agendaItems.splice(+el.dataset.rmAgenda, 1);
+    renderAll();
+  });
+  document.querySelectorAll('[data-rm-att]').forEach(el => el.onclick = () => {
+    localWb.attendees.splice(+el.dataset.rmAtt, 1);
+    renderAll();
+  });
+  document.querySelectorAll('[data-rm-act]').forEach(el => el.onclick = () => {
+    localWb.actionItems = localWb.actionItems.filter(a => a.id !== el.dataset.rmAct);
+    renderAll();
+  });
+  document.querySelectorAll('[data-rm-dec]').forEach(el => el.onclick = () => {
+    localWb.decisions = localWb.decisions.filter(d => d.id !== el.dataset.rmDec);
+    renderAll();
+  });
+  document.querySelectorAll('[data-toggle-act]').forEach(el => el.onclick = () => {
+    const a = localWb.actionItems.find(x => x.id === el.dataset.toggleAct);
+    if (a) a.done = !a.done;
+    renderAll();
+  });
+  document.querySelectorAll('[data-toggle]').forEach(el => el.onclick = () => {
+    if (el.dataset.toggle === 'actions') { ui.actionsOpen = !ui.actionsOpen; ui.decisionsOpen = false; }
+    if (el.dataset.toggle === 'decisions') { ui.decisionsOpen = !ui.decisionsOpen; ui.actionsOpen = false; }
+    renderAll();
+  });
+  document.querySelectorAll('[data-lib-select]').forEach(el => el.onclick = () => send('libSelect', { meetingId: el.dataset.libSelect }));
+  document.querySelectorAll('[data-open-meeting]').forEach(el => el.onclick = () => send('openMeeting', { meetingId: el.dataset.openMeeting }));
+  document.querySelectorAll('[data-act-select]').forEach(el => el.onclick = () => send('actSelect', { key: el.dataset.actSelect }));
+  document.querySelectorAll('[data-dec-select]').forEach(el => el.onclick = () => send('decSelect', { key: el.dataset.decSelect }));
+  document.querySelectorAll('[data-cal-day]').forEach(el => el.onclick = () => send('calSelectDay', { value: el.dataset.calDay }));
+  document.querySelectorAll('[data-series-select]').forEach(el => el.onclick = () => send('seriesSelect', { seriesId: el.dataset.seriesSelect }));
+  document.querySelectorAll('[data-tpl-select]').forEach(el => el.onclick = () => send('tplSelect', { templateId: el.dataset.tplSelect }));
+}
+
+function onNotesSelect(e) {
+  const text = window.getSelection().toString().trim();
+  const bubble = document.getElementById('bubble');
+  if (text.length < 2) { bubble.classList.add('hidden'); return; }
+  bubble.classList.remove('hidden');
+  bubble.style.left = Math.min(e.clientX, window.innerWidth - 220) + 'px';
+  bubble.style.top = (e.clientY - 40 + window.scrollY) + 'px';
+  bubble.innerHTML = `<span style="color:#94a3b8;font-size:10px;padding:0 4px">转为:</span>
+    <button data-convert="action">⚡ 行动项</button>
+    <button data-convert="decision">💡 决策项</button>
+    <button data-convert="close">✕</button>`;
+  bubble.querySelectorAll('button').forEach(btn => btn.onclick = () => {
+    if (btn.dataset.convert === 'close') { bubble.classList.add('hidden'); return; }
+    collectWbFromDom();
+    if (btn.dataset.convert === 'action') {
+      localWb.actionItems.push({ id: uid(), task: text, owner: '待分派', dueDate: new Date(Date.now()+3*864e5).toISOString().slice(0,10), done: false, syncedToTodo: false });
+      ui.actionsOpen = true;
+      showToast('已转为行动项');
+    } else {
+      localWb.decisions.push({ id: uid(), content: text, owner: '' });
+      ui.decisionsOpen = true;
+      showToast('已转为决策项');
+    }
+    bubble.classList.add('hidden');
+    window.getSelection().removeAllRanges();
+    renderAll();
+  });
+}
+
+function handleAction(act) {
+  collectWbFromDom();
+  if (act === 'newMeeting') { if (confirm('创建新会议？未保存内容将丢失。')) send('newMeeting'); return; }
+  if (act === 'openFromLib') { send('setTab', { nav: 'library' }); return; }
+  if (act === 'saveMeeting') { pushWb(); send('saveMeeting'); return; }
+  if (act === 'generateSummary') { pushWb(); send('generateSummary'); return; }
+  if (act === 'aiPrep') { pushWb(); send('aiPrep'); return; }
+  if (act === 'copyDraft') { pushWb(); send('copyDraft'); return; }
+  if (act === 'clearWorkbench') { if (confirm('确认清空？')) { pushWb(); send('clearWorkbench'); } return; }
+  if (act === 'syncZenTask') { pushWb(); send('syncZenTaskWorkbench'); return; }
+  if (act === 'addAgenda') {
+    const v = document.getElementById('newAgenda')?.value?.trim();
+    if (v) { localWb.agendaItems.push((localWb.agendaItems.length+1)+'. '+v); renderAll(); }
+    return;
+  }
+  if (act === 'addAction') {
+    const task = document.getElementById('newActTask')?.value?.trim();
+    const owner = document.getElementById('newActOwner')?.value?.trim() || '待分派';
+    if (task) { localWb.actionItems.push({ id: uid(), task, owner, dueDate: '', done: false, syncedToTodo: false }); renderAll(); }
+    return;
+  }
+  if (act === 'addDecision') {
+    const c = document.getElementById('newDec')?.value?.trim();
+    if (c) { localWb.decisions.push({ id: uid(), content: c, owner: '' }); renderAll(); }
+    return;
+  }
+  if (act === 'showUserModal') {
+    const name = prompt('选择或输入参会人：\n' + PRESET_USERS.join('\n'), PRESET_USERS[0]);
+    if (name) { localWb.attendees.push({ name: name.trim(), role: '' }); renderAll(); }
+    return;
+  }
+  if (act === 'libSearch') send('libSearch', { value: document.getElementById('libSearch')?.value });
+  if (act === 'libOpenWb') send('openMeeting', { meetingId: state.library?.selectedId });
+  if (act === 'libEdit') send('libEditStart');
+  if (act === 'libSaveEdit') send('libEditSave', { value: document.getElementById('libEditor')?.value });
+  if (act === 'libCancelEdit') send('libEditCancel');
+  if (act === 'libDelete') { if (confirm('永久删除此会议？')) send('libDelete'); }
+  if (act === 'libArchive') { if (confirm('归档此会议？')) send('libArchive'); }
+  if (act === 'libEmail') send('libEmail');
+  if (act === 'libSyncTasks') send('libSyncTasks');
+  if (act === 'actSyncAll') send('actSyncAll');
+  if (act === 'actMarkDone') send('actMarkDone');
+  if (act === 'actOpenMeeting') send('actOpenMeeting');
+  if (act === 'decFilter') send('decSetFilter', { value: document.getElementById('decSearch')?.value, projectId: document.getElementById('decProject')?.value });
+  if (act === 'decDelete') { if (confirm('删除此决策？')) send('decDelete'); }
+  if (act === 'decOpenMeeting') send('decOpenMeeting');
+  if (act === 'calPrev') send('calPrev');
+  if (act === 'calNext') send('calNext');
+  if (act === 'calToday') send('calToday');
+  if (act === 'calSchedule') {
+    const title = prompt('会议主题', '会议 ' + (state.calendar?.selectedDate||'').slice(5));
+    if (title !== null) send('calSchedule', { title, value: state.calendar?.selectedDate });
+  }
+  if (act === 'seriesNew') send('seriesNew');
+  if (act === 'seriesSave') send('seriesSave', { series: readSeriesForm() });
+  if (act === 'seriesPreview') send('seriesPreview', { series: readSeriesForm() });
+  if (act === 'seriesStart') send('seriesStart');
+  if (act === 'seriesDelete') { if (confirm('删除此例会？')) send('seriesDelete'); }
+  if (act === 'tplNew') send('tplNew');
+  if (act === 'tplSave') send('tplSave', { template: readTplForm() });
+  if (act === 'tplDelete') { if (confirm('删除模板？')) send('tplDelete'); }
+  if (act === 'dashSearch') send('dashSearch', { value: document.getElementById('dashSearch')?.value });
+  if (act === 'dashAsk') send('dashAsk', { value: document.getElementById('dashSearch')?.value });
+  if (act === 'addProject') send('addProject', { value: document.getElementById('newProject')?.value });
+
+  const actFilter = document.getElementById('actFilter');
+  if (actFilter && act === undefined) {}
+}
+
+function readSeriesForm() {
+  return {
+    name: document.getElementById('serName')?.value || '',
+    projectId: document.getElementById('serProject')?.value || '',
+    templateId: document.getElementById('serTemplate')?.value || '',
+    recurrenceType: document.getElementById('serRec')?.value || 'Weekly',
+    daysOfWeek: [1],
+    dayOfMonth: 1,
+    hour: +(document.getElementById('serHour')?.value || 10),
+    minute: +(document.getElementById('serMin')?.value || 0),
+    durationMinutes: +(document.getElementById('serDur')?.value || 30),
+    reminderMinutes: +(document.getElementById('serRem')?.value || 10),
+    agendaText: document.getElementById('serAgenda')?.value || '',
+    active: document.getElementById('serActive')?.checked !== false,
+  };
+}
+
+function readTplForm() {
+  return {
+    name: document.getElementById('tplName')?.value || '',
+    category: document.getElementById('tplCat')?.value || '',
+    agendaText: document.getElementById('tplAgenda')?.value || '',
+    prompt: document.getElementById('tplPrompt')?.value || '',
+    builtIn: state.templateForm?.builtIn,
+    meta: state.templateForm?.meta,
+  };
+}
+
+document.addEventListener('change', e => {
+  if (e.target.id === 'libGrouped') send('libSetGrouped', { enabled: e.target.checked });
+  if (e.target.id === 'libArchived') send('libSetShowArchived', { enabled: e.target.checked });
+  if (e.target.id === 'actFilter' || e.target.id === 'actProject') send('actSetFilter', { filter: document.getElementById('actFilter')?.value, projectId: document.getElementById('actProject')?.value });
+});
+
+// 生成纪要后展示弹窗
+const _origReceive = window.MeetingHub.receiveState;
+window.MeetingHub.receiveState = function(payload) {
+  const prev = state.workbench?.summaryMarkdown;
+  _origReceive(payload);
+  if (payload.workbench?.summaryMarkdown && payload.workbench.summaryMarkdown !== prev && payload.activeNav === 'workbench') {
+    showSummaryModal(payload.workbench.summaryMarkdown);
+  }
+};
+
+function showSummaryModal(text) {
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `<div class="modal-bg" id="summaryModal"><div class="modal">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--line);font-weight:800">✨ 结构化会议纪要</div>
+    <pre>${esc(text)}</pre>
+    <div style="padding:12px 18px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--line)">
+      <button class="btn btn-sm" onclick="document.getElementById('modalRoot').innerHTML=''">返回修改</button>
+      <button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText(${JSON.stringify(text)});showToast('已复制');document.getElementById('modalRoot').innerHTML=''">复制并分发</button>
+    </div>
+  </div></div>`;
+}
+
+send('init');
+renderAll();
+</script>
+</body>
+</html>

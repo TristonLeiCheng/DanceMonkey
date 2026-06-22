@@ -102,6 +102,7 @@ public sealed class MeetingStore
 
     public MeetingRecord UpsertMeeting(MeetingRecord record)
     {
+        NormalizeRecord(record);
         record.UpdatedAt = DateTime.Now;
         var all = LoadMeetings();
         var idx = all.FindIndex(m => m.Id == record.Id);
@@ -205,7 +206,18 @@ public sealed class MeetingStore
             sb.AppendLine();
         }
 
-        if (record.Decisions.Count > 0)
+        if (record.DecisionItems.Count > 0)
+        {
+            sb.AppendLine("## 决策记录");
+            sb.AppendLine();
+            foreach (var d in record.DecisionItems)
+            {
+                var line = string.IsNullOrWhiteSpace(d.Owner) ? d.Content : $"{d.Content}（{d.Owner}）";
+                sb.AppendLine($"- {line}");
+            }
+            sb.AppendLine();
+        }
+        else if (record.Decisions.Count > 0)
         {
             sb.AppendLine("## 决策记录");
             sb.AppendLine();
@@ -453,6 +465,23 @@ public sealed class MeetingStore
     };
 
     // ═══════════════ helpers ═══════════════
+
+    /// <summary>将旧版 Decisions 字符串迁移到 DecisionItems，并保持 Decisions 与 DecisionItems 同步。</summary>
+    public static void NormalizeRecord(MeetingRecord record)
+    {
+        if (record.DecisionItems.Count == 0 && record.Decisions.Count > 0)
+        {
+            foreach (var d in record.Decisions)
+            {
+                if (string.IsNullOrWhiteSpace(d)) continue;
+                record.DecisionItems.Add(new MeetingDecision { Content = d.Trim() });
+            }
+        }
+        record.Decisions = record.DecisionItems
+            .Where(d => !string.IsNullOrWhiteSpace(d.Content))
+            .Select(d => string.IsNullOrWhiteSpace(d.Owner) ? d.Content.Trim() : $"{d.Content.Trim()}（{d.Owner.Trim()}）")
+            .ToList();
+    }
 
     private static void AtomicWrite(string path, string content)
     {

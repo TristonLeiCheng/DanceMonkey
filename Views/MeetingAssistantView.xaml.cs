@@ -13,6 +13,29 @@ using Brushes = System.Windows.Media.Brushes;
 
 namespace DesktopAssistant.Views;
 
+public sealed class MeetingActionRowView
+{
+    public required MeetingRecord Meeting { get; init; }
+    public required MeetingActionItem Item { get; init; }
+    public string MeetingLabel { get; init; } = "";
+    public string Task { get; init; } = "";
+    public string Owner { get; init; } = "";
+    public string DueLabel { get; init; } = "";
+    public string StatusLabel { get; init; } = "";
+    public string SyncLabel { get; init; } = "";
+}
+
+public sealed class MeetingDecisionRowView
+{
+    public required MeetingRecord Meeting { get; init; }
+    public required MeetingDecision Item { get; init; }
+    public string DateLabel { get; init; } = "";
+    public string MeetingTitle { get; init; } = "";
+    public string ProjectName { get; init; } = "";
+    public string Content { get; init; } = "";
+    public string Owner { get; init; } = "";
+}
+
 public partial class MeetingAssistantView : UserControl
 {
     private bool _isBusy;
@@ -35,6 +58,12 @@ public partial class MeetingAssistantView : UserControl
     private string _libSearchKeyword = "";
     private bool _libShowArchived;
     private readonly List<MeetingAttendee> _workbenchAttendees = new();
+    private readonly List<MeetingActionItem> _workbenchActionItems = new();
+    private readonly List<MeetingDecision> _workbenchDecisions = new();
+    private string _actFilter = "all";
+    private string _decSearchKeyword = "";
+    private MeetingActionRowView? _selectedActionRow;
+    private MeetingDecisionRowView? _selectedDecisionRow;
     private string? _editingTemplateId;
 
     public MeetingAssistantView()
@@ -72,6 +101,9 @@ public partial class MeetingAssistantView : UserControl
         PopulateTemplateList();
         PopulateStatusCombo();
         InitLibViewModeCombo();
+        InitActFilterCombo();
+        PopulateActProjectFilters();
+        PopulateDecProjectFilters();
         _loaded = true;
 
         if (TemplateCombo.Items.Count > 0)
@@ -108,6 +140,9 @@ public partial class MeetingAssistantView : UserControl
         var restore = LibProjectFilter.Items.Cast<ComboBoxItem>()
             .FirstOrDefault(i => (i.Tag?.ToString() ?? "") == (prevTag ?? ""));
         LibProjectFilter.SelectedItem = restore ?? LibProjectFilter.Items[0];
+
+        PopulateActProjectFilters();
+        PopulateDecProjectFilters();
     }
 
     private void PopulateTemplateList()
@@ -187,6 +222,10 @@ public partial class MeetingAssistantView : UserControl
             AttendeesList.Items.Clear();
             AttendeeNameBox.Text = "";
             AttendeeRoleBox.Text = "";
+            _workbenchActionItems.Clear();
+            _workbenchDecisions.Clear();
+            RefreshWorkbenchActionList();
+            RefreshWorkbenchDecisionList();
             SelectComboByTag(StatusCombo, MeetingStatus.InProgress);
             if (ProjectCombo.Items.Count > 0) ProjectCombo.SelectedIndex = 0;
             if (TemplateCombo.Items.Count > 0) TemplateCombo.SelectedIndex = 0;
@@ -207,6 +246,11 @@ public partial class MeetingAssistantView : UserControl
         _workbenchMeeting = rec;
         _workbenchAttendees.Clear();
         _workbenchAttendees.AddRange(rec.Attendees.Select(a => new MeetingAttendee { Name = a.Name, Role = a.Role }));
+        MeetingStore.NormalizeRecord(rec);
+        _workbenchActionItems.Clear();
+        _workbenchActionItems.AddRange(rec.ActionItems.Select(a => CloneActionItem(a)));
+        _workbenchDecisions.Clear();
+        _workbenchDecisions.AddRange(rec.DecisionItems.Select(d => CloneDecision(d)));
         _lastSummary = rec.SummaryMarkdown;
         _suppressTemplateFill = true;
         try
@@ -222,6 +266,8 @@ public partial class MeetingAssistantView : UserControl
             SelectComboByTag(TemplateCombo, rec.TemplateId);
             _selectedTemplate = _templates.FirstOrDefault(t => t.Id == rec.TemplateId);
             RefreshAttendeesList();
+            RefreshWorkbenchActionList();
+            RefreshWorkbenchDecisionList();
             if (!string.IsNullOrWhiteSpace(_lastSummary))
             {
                 _ = RenderMdAsync(SummaryBox, _lastSummary);
@@ -257,6 +303,9 @@ public partial class MeetingAssistantView : UserControl
         rec.QuickNotes = QuickNotesBox.Text.Trim();
         rec.SummaryMarkdown = _lastSummary ?? "";
         rec.Attendees = _workbenchAttendees.Select(a => new MeetingAttendee { Name = a.Name, Role = a.Role }).ToList();
+        rec.ActionItems = _workbenchActionItems.Select(CloneActionItem).ToList();
+        rec.DecisionItems = _workbenchDecisions.Select(CloneDecision).ToList();
+        MeetingStore.NormalizeRecord(rec);
         rec.Tags = SplitTags(TagsBox.Text);
         if (rec.Tags.Count == 0 && _selectedTemplate?.DefaultTags.Count > 0)
             rec.Tags = new List<string>(_selectedTemplate.DefaultTags);
@@ -319,6 +368,434 @@ public partial class MeetingAssistantView : UserControl
         RefreshAttendeesList();
     }
 
+    private static MeetingActionItem CloneActionItem(MeetingActionItem a) => new()
+    {
+        Id = a.Id,
+        Task = a.Task,
+        Owner = a.Owner,
+        DueDate = a.DueDate,
+        Done = a.Done,
+        SyncedToTodo = a.SyncedToTodo,
+        ZenTaskId = a.ZenTaskId,
+    };
+
+    private static MeetingDecision CloneDecision(MeetingDecision d) => new()
+    {
+        Id = d.Id,
+        Content = d.Content,
+        Owner = d.Owner,
+        CreatedAt = d.CreatedAt,
+    };
+
+    private void RefreshWorkbenchActionList()
+    {
+        WbActionList.Items.Clear();
+        foreach (var a in _workbenchActionItems)
+        {
+            var due = a.DueDate?.ToString("MM-dd") ?? "";
+            var sync = a.SyncedToTodo ? " ·ZenTask" : "";
+            var done = a.Done ? "✓ " : "";
+            var owner = string.IsNullOrWhiteSpace(a.Owner) ? "" : $"（{a.Owner}）";
+            WbActionList.Items.Add(new ListBoxItem
+            {
+                Content = $"{done}{a.Task}{owner}{due}{sync}",
+                Tag = a,
+            });
+        }
+    }
+
+    private void RefreshWorkbenchDecisionList()
+    {
+        WbDecisionList.Items.Clear();
+        foreach (var d in _workbenchDecisions)
+        {
+            var owner = string.IsNullOrWhiteSpace(d.Owner) ? "" : $" ·{d.Owner}";
+            WbDecisionList.Items.Add(new ListBoxItem { Content = d.Content + owner, Tag = d });
+        }
+    }
+
+    private void BtnWbAddAction_OnClick(object sender, RoutedEventArgs e)
+    {
+        var task = WbActionTaskBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(task)) { ShowError("请输入行动项任务。"); return; }
+        DateTime? due = ParseNullableDateTime(WbActionDueBox.Text);
+        _workbenchActionItems.Add(new MeetingActionItem
+        {
+            Task = task,
+            Owner = WbActionOwnerBox.Text.Trim(),
+            DueDate = due,
+        });
+        WbActionTaskBox.Text = "";
+        WbActionOwnerBox.Text = "";
+        WbActionDueBox.Text = "";
+        RefreshWorkbenchActionList();
+        ClearError();
+    }
+
+    private void BtnWbAddDecision_OnClick(object sender, RoutedEventArgs e)
+    {
+        var content = WbDecisionContentBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(content)) { ShowError("请输入决策内容。"); return; }
+        _workbenchDecisions.Add(new MeetingDecision { Content = content, Owner = WbDecisionOwnerBox.Text.Trim() });
+        WbDecisionContentBox.Text = "";
+        WbDecisionOwnerBox.Text = "";
+        RefreshWorkbenchDecisionList();
+        ClearError();
+    }
+
+    private void BtnWbSyncZenTask_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_workbenchActionItems.Count == 0)
+        {
+            MessageBox.Show("当前会议暂无行动项。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var rec = BuildMeetingFromWorkbench();
+        var synced = 0;
+        foreach (var item in _workbenchActionItems.Where(a => !a.SyncedToTodo))
+        {
+            if (SyncActionItemToZenTask(rec, item)) synced++;
+        }
+        if (_store != null && synced > 0)
+        {
+            rec.ActionItems = _workbenchActionItems.Select(CloneActionItem).ToList();
+            _store.UpsertMeeting(rec);
+            _workbenchMeeting = rec;
+        }
+        RefreshWorkbenchActionList();
+        MessageBox.Show(synced > 0 ? $"已同步 {synced} 条行动项到 ZenTask。" : "没有需要同步的行动项（均已同步）。",
+            "ZenTask", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void InitActFilterCombo()
+    {
+        ActFilterCombo.Items.Clear();
+        ActFilterCombo.Items.Add(new ComboBoxItem { Content = "全部", Tag = "all" });
+        ActFilterCombo.Items.Add(new ComboBoxItem { Content = "进行中", Tag = "open" });
+        ActFilterCombo.Items.Add(new ComboBoxItem { Content = "已完成", Tag = "done" });
+        ActFilterCombo.Items.Add(new ComboBoxItem { Content = "未同步 ZenTask", Tag = "unsynced" });
+        ActFilterCombo.SelectedIndex = 0;
+    }
+
+    private void PopulateActProjectFilters()
+    {
+        var prev = (ActProjectFilter.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+        ActProjectFilter.Items.Clear();
+        ActProjectFilter.Items.Add(new ComboBoxItem { Content = "全部项目", Tag = "" });
+        foreach (var p in _projects)
+            ActProjectFilter.Items.Add(new ComboBoxItem { Content = p.Name, Tag = p.Id });
+        ActProjectFilter.SelectedItem = ActProjectFilter.Items.Cast<ComboBoxItem>()
+            .FirstOrDefault(i => (i.Tag?.ToString() ?? "") == (prev ?? "")) ?? ActProjectFilter.Items[0];
+    }
+
+    private void PopulateDecProjectFilters()
+    {
+        var prev = (DecProjectFilter.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+        DecProjectFilter.Items.Clear();
+        DecProjectFilter.Items.Add(new ComboBoxItem { Content = "全部项目", Tag = "" });
+        foreach (var p in _projects)
+            DecProjectFilter.Items.Add(new ComboBoxItem { Content = p.Name, Tag = p.Id });
+        DecProjectFilter.SelectedItem = DecProjectFilter.Items.Cast<ComboBoxItem>()
+            .FirstOrDefault(i => (i.Tag?.ToString() ?? "") == (prev ?? "")) ?? DecProjectFilter.Items[0];
+    }
+
+    private void RefreshActionItemsTab()
+    {
+        if (_store == null) return;
+        List<MeetingRecord> meetings;
+        try
+        {
+            meetings = _store.LoadMeetings();
+            _projects = _store.LoadProjects();
+        }
+        catch { meetings = new List<MeetingRecord>(); }
+
+        var projectId = (ActProjectFilter.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
+        var rows = new List<MeetingActionRowView>();
+        foreach (var m in meetings.OrderByDescending(x => x.StartTime))
+        {
+            if (m.Status == MeetingStatus.Archived) continue;
+            MeetingStore.NormalizeRecord(m);
+            if (!string.IsNullOrEmpty(projectId) && m.ProjectId != projectId) continue;
+            var projName = _projects.FirstOrDefault(p => p.Id == m.ProjectId)?.Name ?? "";
+            foreach (var item in m.ActionItems)
+            {
+                if (_actFilter == "open" && item.Done) continue;
+                if (_actFilter == "done" && !item.Done) continue;
+                if (_actFilter == "unsynced" && item.SyncedToTodo) continue;
+                rows.Add(new MeetingActionRowView
+                {
+                    Meeting = m,
+                    Item = item,
+                    MeetingLabel = $"{m.StartTime:MM-dd} {m.Title}",
+                    Task = item.Task,
+                    Owner = string.IsNullOrWhiteSpace(item.Owner) ? "—" : item.Owner,
+                    DueLabel = item.DueDate?.ToString("yyyy-MM-dd") ?? "—",
+                    StatusLabel = item.Done ? "已完成" : "进行中",
+                    SyncLabel = item.SyncedToTodo ? "已同步" : "未同步",
+                });
+            }
+        }
+
+        ActGlobalList.ItemsSource = rows;
+        var unsynced = rows.Count(r => !r.Item.SyncedToTodo && !r.Item.Done);
+        ActStatsText.Text = $"共 {rows.Count} 条 · 未同步 {unsynced} 条";
+        _selectedActionRow = null;
+    }
+
+    private void RefreshDecisionsTab()
+    {
+        if (_store == null) return;
+        List<MeetingRecord> meetings;
+        try
+        {
+            meetings = _store.LoadMeetings();
+            _projects = _store.LoadProjects();
+        }
+        catch { meetings = new List<MeetingRecord>(); }
+
+        var projectId = (DecProjectFilter.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
+        var kw = _decSearchKeyword;
+        var rows = new List<MeetingDecisionRowView>();
+        foreach (var m in meetings.OrderByDescending(x => x.StartTime))
+        {
+            if (m.Status == MeetingStatus.Archived) continue;
+            MeetingStore.NormalizeRecord(m);
+            if (!string.IsNullOrEmpty(projectId) && m.ProjectId != projectId) continue;
+            var projName = _projects.FirstOrDefault(p => p.Id == m.ProjectId)?.Name ?? "未分类";
+            foreach (var item in m.DecisionItems)
+            {
+                if (string.IsNullOrWhiteSpace(item.Content)) continue;
+                if (!string.IsNullOrWhiteSpace(kw))
+                {
+                    var hay = $"{m.Title} {item.Content} {item.Owner} {projName}";
+                    if (hay.IndexOf(kw, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                }
+                rows.Add(new MeetingDecisionRowView
+                {
+                    Meeting = m,
+                    Item = item,
+                    DateLabel = m.StartTime.ToString("yyyy-MM-dd"),
+                    MeetingTitle = m.Title,
+                    ProjectName = projName,
+                    Content = item.Content,
+                    Owner = string.IsNullOrWhiteSpace(item.Owner) ? "—" : item.Owner,
+                });
+            }
+        }
+
+        DecGlobalList.ItemsSource = rows;
+        DecStatsText.Text = $"共 {rows.Count} 条决策";
+        _selectedDecisionRow = null;
+    }
+
+    private bool SyncActionItemToZenTask(MeetingRecord meeting, MeetingActionItem item)
+    {
+        if (item.SyncedToTodo && !string.IsNullOrWhiteSpace(item.ZenTaskId)) return false;
+        if (string.IsNullOrWhiteSpace(item.Task)) return false;
+        var cfg = App.Config.Load();
+        var store = new ZenTaskStore(cfg.NotesRootPath);
+        var projName = _projects.FirstOrDefault(p => p.Id == meeting.ProjectId)?.Name;
+        var zen = store.AddTask(new ZenTaskAddRequest
+        {
+            Title = item.Task,
+            Project = projName,
+            Source = "Meeting",
+            Notes = $"来自会议：{meeting.Title}（{meeting.StartTime:yyyy-MM-dd}）" +
+                    (string.IsNullOrWhiteSpace(item.Owner) ? "" : $"\n负责人：{item.Owner}"),
+            DueDate = item.DueDate,
+        });
+        item.ZenTaskId = zen.Id;
+        item.SyncedToTodo = true;
+        return true;
+    }
+
+    private void PersistMeeting(MeetingRecord rec)
+    {
+        if (_store == null) return;
+        MeetingStore.NormalizeRecord(rec);
+        _store.ExportMarkdown(rec, null);
+        _store.UpsertMeeting(rec);
+    }
+
+    private void ActFilterCombo_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        _actFilter = (ActFilterCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "all";
+        RefreshActionItemsTab();
+    }
+
+    private void ActProjectFilter_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        RefreshActionItemsTab();
+    }
+
+    private void BtnActRefresh_OnClick(object sender, RoutedEventArgs e) => RefreshActionItemsTab();
+
+    private void ActGlobalList_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _selectedActionRow = ActGlobalList.SelectedItem as MeetingActionRowView;
+    }
+
+    private void BtnActSyncZenTask_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedActionRow == null)
+        {
+            MessageBox.Show("请先在列表中选择一条行动项。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var row = _selectedActionRow;
+        if (row.Item.SyncedToTodo)
+        {
+            MessageBox.Show("该行动项已同步到 ZenTask。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (SyncActionItemToZenTask(row.Meeting, row.Item))
+        {
+            PersistMeeting(row.Meeting);
+            RefreshActionItemsTab();
+            MessageBox.Show("已同步到 ZenTask。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
+    private void BtnActSyncAll_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_store == null) return;
+        var meetings = _store.LoadMeetings();
+        var synced = 0;
+        foreach (var m in meetings)
+        {
+            MeetingStore.NormalizeRecord(m);
+            var changed = false;
+            foreach (var item in m.ActionItems.Where(a => !a.SyncedToTodo && !a.Done))
+            {
+                if (SyncActionItemToZenTask(m, item)) { synced++; changed = true; }
+            }
+            if (changed) PersistMeeting(m);
+        }
+        RefreshActionItemsTab();
+        MessageBox.Show(synced > 0 ? $"已批量同步 {synced} 条行动项到 ZenTask。" : "没有未同步的行动项。",
+            "ZenTask", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void BtnActMarkDone_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedActionRow == null)
+        {
+            MessageBox.Show("请先在列表中选择一条行动项。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        _selectedActionRow.Item.Done = true;
+        PersistMeeting(_selectedActionRow.Meeting);
+        RefreshActionItemsTab();
+    }
+
+    private void BtnActOpenMeeting_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedActionRow == null)
+        {
+            MessageBox.Show("请先在列表中选择一条行动项。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        LoadWorkbenchMeeting(_selectedActionRow.Meeting);
+        HubTabs.SelectedIndex = 0;
+    }
+
+    private void DecProjectFilter_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        RefreshDecisionsTab();
+    }
+
+    private void BtnDecSearch_OnClick(object sender, RoutedEventArgs e)
+    {
+        _decSearchKeyword = DecSearchBox.Text.Trim();
+        RefreshDecisionsTab();
+    }
+
+    private void DecSearchBox_OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            _decSearchKeyword = DecSearchBox.Text.Trim();
+            RefreshDecisionsTab();
+            e.Handled = true;
+        }
+    }
+
+    private void BtnDecRefresh_OnClick(object sender, RoutedEventArgs e) => RefreshDecisionsTab();
+
+    private void DecGlobalList_OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _selectedDecisionRow = DecGlobalList.SelectedItem as MeetingDecisionRowView;
+    }
+
+    private void BtnDecOpenMeeting_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedDecisionRow == null)
+        {
+            MessageBox.Show("请先在列表中选择一条决策。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        LoadWorkbenchMeeting(_selectedDecisionRow.Meeting);
+        HubTabs.SelectedIndex = 0;
+    }
+
+    private void BtnDecDelete_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (_selectedDecisionRow == null)
+        {
+            MessageBox.Show("请先在列表中选择一条决策。", "提示", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var row = _selectedDecisionRow;
+        if (MessageBox.Show($"确定删除决策「{row.Content}」？", "确认", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            return;
+        row.Meeting.DecisionItems.RemoveAll(d => d.Id == row.Item.Id);
+        PersistMeeting(row.Meeting);
+        RefreshDecisionsTab();
+    }
+
+    private void ApplyExtractedItemsFromSummary(string summary)
+    {
+        var actions = ParseActionItemsHeuristic(summary);
+        foreach (var (task, owner, due) in actions)
+        {
+            if (_workbenchActionItems.Any(a => string.Equals(a.Task, task, StringComparison.OrdinalIgnoreCase))) continue;
+            _workbenchActionItems.Add(new MeetingActionItem { Task = task, Owner = owner, DueDate = due });
+        }
+        foreach (var decision in ParseDecisionsHeuristic(summary))
+        {
+            if (_workbenchDecisions.Any(d => string.Equals(d.Content, decision, StringComparison.OrdinalIgnoreCase))) continue;
+            _workbenchDecisions.Add(new MeetingDecision { Content = decision });
+        }
+        RefreshWorkbenchActionList();
+        RefreshWorkbenchDecisionList();
+    }
+
+    private static List<string> ParseDecisionsHeuristic(string content)
+    {
+        var list = new List<string>();
+        var lines = content.Replace("\r\n", "\n").Split('\n');
+        var inSection = false;
+        foreach (var raw in lines)
+        {
+            var line = raw.Trim();
+            if (line.StartsWith("## "))
+            {
+                inSection = line.Contains("决策", StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+            if (!inSection || line.Length == 0) continue;
+            if (line.StartsWith("|") || line.StartsWith("---")) continue;
+            var item = line.TrimStart('-', '*', '•', ' ').Trim();
+            if (item.Length > 0 && !item.Contains("无明确决策"))
+                list.Add(item);
+        }
+        return list;
+    }
+
     private static List<string> SplitTags(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return new List<string>();
@@ -377,6 +854,7 @@ public partial class MeetingAssistantView : UserControl
             if (result.Success && !string.IsNullOrWhiteSpace(result.Result))
             {
                 _lastSummary = result.Result;
+                ApplyExtractedItemsFromSummary(result.Result);
                 _ = RenderMdAsync(SummaryBox, result.Result);
                 ShowSummaryPanel();
             }
@@ -990,8 +1468,10 @@ public partial class MeetingAssistantView : UserControl
         if (e.OriginalSource is not TabControl) return;
         if (HubTabs.SelectedIndex == 1) RenderCalendar();
         else if (HubTabs.SelectedIndex == 2) RefreshLibrary();
-        else if (HubTabs.SelectedIndex == 3) RefreshSeriesTab();
-        else if (HubTabs.SelectedIndex == 5) RenderDashboard();
+        else if (HubTabs.SelectedIndex == 3) RefreshActionItemsTab();
+        else if (HubTabs.SelectedIndex == 4) RefreshDecisionsTab();
+        else if (HubTabs.SelectedIndex == 5) RefreshSeriesTab();
+        else if (HubTabs.SelectedIndex == 7) RenderDashboard();
     }
 
     private void BtnCalPrev_OnClick(object sender, RoutedEventArgs e)
@@ -1803,26 +2283,41 @@ public partial class MeetingAssistantView : UserControl
             if (MessageBox.Show($"识别到 {items.Count} 条行动项，写入待办（ZenTask）？\n\n{preview}", "确认", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
-            var store = new ZenTaskStore(cfg.NotesRootPath);
-            var projName = _projects.FirstOrDefault(p => p.Id == rec.ProjectId)?.Name;
+            var synced = 0;
             foreach (var it in items)
-                store.AddTask(new ZenTaskAddRequest
+            {
+                var existing = rec.ActionItems.FirstOrDefault(a =>
+                    string.Equals(a.Task, it.Task, StringComparison.OrdinalIgnoreCase));
+                if (existing != null)
                 {
-                    Title = it.Task,
-                    Project = projName,
-                    Source = "Meeting",
-                    Notes = $"来自会议：{rec.Title}（{rec.StartTime:yyyy-MM-dd}）" + (string.IsNullOrWhiteSpace(it.Owner) ? "" : $"\n负责人：{it.Owner}"),
-                    DueDate = it.Due
-                });
+                    if (!existing.SyncedToTodo && SyncActionItemToZenTask(rec, existing)) synced++;
+                    continue;
+                }
+                var action = new MeetingActionItem { Task = it.Task, Owner = it.Owner ?? "", DueDate = it.Due };
+                if (SyncActionItemToZenTask(rec, action)) synced++;
+                rec.ActionItems.Add(action);
+            }
+            foreach (var d in ParseDecisionsHeuristic(content))
+            {
+                if (!rec.DecisionItems.Any(x => string.Equals(x.Content, d, StringComparison.OrdinalIgnoreCase)))
+                    rec.DecisionItems.Add(new MeetingDecision { Content = d });
+            }
+            MeetingStore.NormalizeRecord(rec);
+            if (_workbenchMeeting?.Id == rec.Id)
+            {
+                _workbenchActionItems.Clear();
+                _workbenchActionItems.AddRange(rec.ActionItems.Select(CloneActionItem));
+                _workbenchDecisions.Clear();
+                _workbenchDecisions.AddRange(rec.DecisionItems.Select(CloneDecision));
+                RefreshWorkbenchActionList();
+                RefreshWorkbenchDecisionList();
+            }
+            try { _store?.ExportMarkdown(rec, null); _store?.UpsertMeeting(rec); } catch { }
 
-            foreach (var it in items)
-                rec.ActionItems.Add(new MeetingActionItem { Task = it.Task, Owner = it.Owner ?? "", DueDate = it.Due, SyncedToTodo = true });
-            try { _store?.UpsertMeeting(rec); } catch { }
-
-            MessageBox.Show($"已写入 {items.Count} 条行动项到待办（ZenTask）。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show($"已处理 {items.Count} 条行动项，同步 ZenTask {synced} 条。", "完成", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex) { MessageBox.Show($"抽取失败：{ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error); }
-        finally { BtnLibSyncTasks.IsEnabled = true; BtnLibSyncTasks.Content = "✅ 行动项入待办"; }
+        finally { BtnLibSyncTasks.IsEnabled = true; BtnLibSyncTasks.Content = "✅ 待办"; }
     }
 
     private async Task<List<(string Task, string Owner, DateTime? Due)>> ExtractActionItemsAsync(string content, AppConfig cfg)

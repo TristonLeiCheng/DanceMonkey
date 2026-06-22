@@ -18,6 +18,18 @@ public sealed class MeetingActionItem
 
     /// <summary>是否已写入待办（ZenTask），避免重复同步。</summary>
     public bool SyncedToTodo { get; set; }
+
+    /// <summary>关联的 ZenTask 任务 Id（同步后回写）。</summary>
+    public string? ZenTaskId { get; set; }
+}
+
+/// <summary>会议中心：决策项。</summary>
+public sealed class MeetingDecision
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Content { get; set; } = "";
+    public string Owner { get; set; } = "";
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
 }
 
 /// <summary>会议中心：单场会议记录。</summary>
@@ -46,6 +58,7 @@ public sealed class MeetingRecord
     public string SummaryMarkdown { get; set; } = "";
 
     public List<string> Decisions { get; set; } = new();
+    public List<MeetingDecision> DecisionItems { get; set; } = new();
     public List<MeetingActionItem> ActionItems { get; set; } = new();
     public List<string> Tags { get; set; } = new();
 

@@ -129,6 +129,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto" MaxHeight="130"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
@@ -272,7 +273,74 @@
                     </Grid>
                 </Grid>
 
-                <Border Grid.Row="2" Margin="0,6,0,0">
+                <!-- 行动项 / 决策项（当前会议） -->
+                <Grid Grid.Row="2" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Background="{StaticResource BrushSurface}" CornerRadius="8"
+                            BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Padding="8,5" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                                <Grid>
+                                    <TextBlock Text="✅ 行动项" Style="{StaticResource HubPanelTitle}" VerticalAlignment="Center"/>
+                                    <Button x:Name="BtnWbSyncZenTask" Content="→ ZenTask" Style="{StaticResource HubBtnSm}"
+                                            HorizontalAlignment="Right" Click="BtnWbSyncZenTask_OnClick"/>
+                                </Grid>
+                            </Border>
+                            <ListBox x:Name="WbActionList" Grid.Row="1" BorderThickness="0" Background="Transparent"
+                                     FontSize="11" Padding="4,2" MaxHeight="56"/>
+                            <Grid Grid.Row="2" Margin="6,4,6,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="72"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="88"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="WbActionTaskBox" Grid.Column="0" Style="{StaticResource HubCompactTextBox}" ToolTip="任务"/>
+                                <TextBox x:Name="WbActionOwnerBox" Grid.Column="2" Style="{StaticResource HubCompactTextBox}" ToolTip="负责人"/>
+                                <TextBox x:Name="WbActionDueBox" Grid.Column="4" Style="{StaticResource HubCompactTextBox}" ToolTip="截止 yyyy-MM-dd"/>
+                                <Button x:Name="BtnWbAddAction" Grid.Column="5" Content="+" Style="{StaticResource HubBtnSm}" Margin="4,0,0,0" Click="BtnWbAddAction_OnClick"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                    <Border Grid.Column="1" Background="{StaticResource BrushSurface}" CornerRadius="8" Margin="8,0,0,0"
+                            BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Padding="8,5" BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
+                                <TextBlock Text="⚖ 决策项" Style="{StaticResource HubPanelTitle}"/>
+                            </Border>
+                            <ListBox x:Name="WbDecisionList" Grid.Row="1" BorderThickness="0" Background="Transparent"
+                                     FontSize="11" Padding="4,2" MaxHeight="56"/>
+                            <Grid Grid.Row="2" Margin="6,4,6,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="72"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="WbDecisionContentBox" Grid.Column="0" Style="{StaticResource HubCompactTextBox}" ToolTip="决策内容"/>
+                                <TextBox x:Name="WbDecisionOwnerBox" Grid.Column="2" Style="{StaticResource HubCompactTextBox}" ToolTip="决策人"/>
+                                <Button x:Name="BtnWbAddDecision" Grid.Column="3" Content="+" Style="{StaticResource HubBtnSm}" Margin="4,0,0,0" Click="BtnWbAddDecision_OnClick"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Border Grid.Row="3" Margin="0,6,0,0">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                         <Button x:Name="BtnSummary" Content="📋 生成纪要" Style="{StaticResource HubBtnPrimarySm}" IsEnabled="False" Click="BtnSummary_OnClick"/>
                         <Button x:Name="BtnSave" Content="💾 保存" Style="{StaticResource HubBtnSm}" Margin="6,0,0,0" IsEnabled="False" Click="BtnSave_OnClick"/>
@@ -474,6 +542,114 @@
                         </Grid>
                     </Border>
                 </Grid>
+            </Grid>
+        </TabItem>
+
+        <!-- ═══════════ 行动项 ═══════════ -->
+        <TabItem Header="✅ 行动项">
+            <Grid Margin="0,6,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Background="{StaticResource BrushSurface}" CornerRadius="8" Padding="10,8"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Margin="0,0,0,6">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="筛选" FontSize="11" VerticalAlignment="Center" Foreground="{StaticResource BrushTextSecondary}" Margin="0,0,6,0"/>
+                        <ComboBox x:Name="ActFilterCombo" Grid.Column="1" Style="{StaticResource HubCompactComboBox}"
+                                  SelectionChanged="ActFilterCombo_OnSelectionChanged"/>
+                        <TextBlock Grid.Column="2" Text="项目" FontSize="11" VerticalAlignment="Center" Foreground="{StaticResource BrushTextSecondary}" Margin="10,0,6,0"/>
+                        <ComboBox x:Name="ActProjectFilter" Grid.Column="3" Style="{StaticResource HubCompactComboBox}"
+                                  SelectionChanged="ActProjectFilter_OnSelectionChanged"/>
+                        <Button Grid.Column="4" x:Name="BtnActRefresh" Content="↺" Style="{StaticResource HubBtnSm}" Margin="8,0,0,0" Click="BtnActRefresh_OnClick"/>
+                        <TextBlock Grid.Column="6" x:Name="ActStatsText" FontSize="10.5" VerticalAlignment="Center" Foreground="{StaticResource BrushTextMuted}"/>
+                    </Grid>
+                </Border>
+                <Border Grid.Row="1" Background="{StaticResource BrushSurface}" CornerRadius="8"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                    <ListView x:Name="ActGlobalList" BorderThickness="0" Background="Transparent" FontSize="11.5"
+                              Padding="4" SelectionChanged="ActGlobalList_OnSelectionChanged">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="会议" Width="140" DisplayMemberBinding="{Binding MeetingLabel}"/>
+                                <GridViewColumn Header="任务" Width="220" DisplayMemberBinding="{Binding Task}"/>
+                                <GridViewColumn Header="负责人" Width="72" DisplayMemberBinding="{Binding Owner}"/>
+                                <GridViewColumn Header="截止" Width="88" DisplayMemberBinding="{Binding DueLabel}"/>
+                                <GridViewColumn Header="状态" Width="56" DisplayMemberBinding="{Binding StatusLabel}"/>
+                                <GridViewColumn Header="ZenTask" Width="64" DisplayMemberBinding="{Binding SyncLabel}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </Border>
+                <Border Grid.Row="2" Margin="0,6,0,0">
+                    <WrapPanel>
+                        <Button x:Name="BtnActSyncZenTask" Content="→ 同步到 ZenTask" Style="{StaticResource HubBtnPrimarySm}" Margin="0,0,6,0" Click="BtnActSyncZenTask_OnClick"/>
+                        <Button x:Name="BtnActMarkDone" Content="✓ 标记完成" Style="{StaticResource HubBtnSm}" Margin="0,0,6,0" Click="BtnActMarkDone_OnClick"/>
+                        <Button x:Name="BtnActOpenMeeting" Content="📝 打开会议" Style="{StaticResource HubBtnSm}" Margin="0,0,6,0" Click="BtnActOpenMeeting_OnClick"/>
+                        <Button x:Name="BtnActSyncAll" Content="批量同步未同步项" Style="{StaticResource HubBtnSm}" Click="BtnActSyncAll_OnClick"/>
+                    </WrapPanel>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- ═══════════ 决策项 ═══════════ -->
+        <TabItem Header="⚖ 决策项">
+            <Grid Margin="0,6,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Background="{StaticResource BrushSurface}" CornerRadius="8" Padding="10,8"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1" Margin="0,0,0,6">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="DecSearchBox" Style="{StaticResource HubCompactTextBox}" KeyDown="DecSearchBox_OnKeyDown"
+                                 ToolTip="搜索决策内容、负责人、会议标题"/>
+                        <Button Grid.Column="1" x:Name="BtnDecSearch" Content="🔍" Style="{StaticResource HubBtnSm}" Margin="6,0,0,0" Click="BtnDecSearch_OnClick"/>
+                        <ComboBox x:Name="DecProjectFilter" Grid.Column="2" Style="{StaticResource HubCompactComboBox}" Margin="8,0,0,0"
+                                  SelectionChanged="DecProjectFilter_OnSelectionChanged"/>
+                        <Button Grid.Column="3" x:Name="BtnDecRefresh" Content="↺" Style="{StaticResource HubBtnSm}" Margin="8,0,0,0" Click="BtnDecRefresh_OnClick"/>
+                        <TextBlock Grid.Column="4" x:Name="DecStatsText" FontSize="10.5" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource BrushTextMuted}"/>
+                    </Grid>
+                </Border>
+                <Border Grid.Row="1" Background="{StaticResource BrushSurface}" CornerRadius="8"
+                        BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                    <ListView x:Name="DecGlobalList" BorderThickness="0" Background="Transparent" FontSize="11.5"
+                              Padding="4" SelectionChanged="DecGlobalList_OnSelectionChanged">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="日期" Width="88" DisplayMemberBinding="{Binding DateLabel}"/>
+                                <GridViewColumn Header="会议" Width="140" DisplayMemberBinding="{Binding MeetingTitle}"/>
+                                <GridViewColumn Header="项目" Width="100" DisplayMemberBinding="{Binding ProjectName}"/>
+                                <GridViewColumn Header="决策内容" Width="280" DisplayMemberBinding="{Binding Content}"/>
+                                <GridViewColumn Header="决策人" Width="80" DisplayMemberBinding="{Binding Owner}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </Border>
+                <Border Grid.Row="2" Margin="0,6,0,0">
+                    <WrapPanel>
+                        <Button x:Name="BtnDecOpenMeeting" Content="📝 打开会议" Style="{StaticResource HubBtnSm}" Margin="0,0,6,0" Click="BtnDecOpenMeeting_OnClick"/>
+                        <Button x:Name="BtnDecDelete" Content="🗑 删除决策" Style="{StaticResource HubBtnSm}" Click="BtnDecDelete_OnClick"/>
+                    </WrapPanel>
+                </Border>
             </Grid>
         </TabItem>
 

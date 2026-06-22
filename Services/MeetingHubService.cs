@@ -317,7 +317,7 @@ public sealed class MeetingHubService
         if (tpl == null) return;
         _workbench.TemplateId = tpl.Id;
         if (tpl.AgendaTemplate.Count > 0)
-            _workbench.AgendaItems = tpl.AgendaTemplate.ToList();
+            _workbench.AgendaItems = tpl.AgendaTemplate.Select(t => new AgendaItemDto { Title = StripAgendaPrefix(t) }).ToList();
         if (string.IsNullOrWhiteSpace(_workbench.Title) || _workbench.Title == "会议记录")
             _workbench.Title = $"{tpl.Name} {DateTime.Now:MM-dd}";
         if (string.IsNullOrWhiteSpace(_workbench.Tags) && tpl.DefaultTags.Count > 0)
@@ -338,7 +338,7 @@ public sealed class MeetingHubService
         rec.EndTime = ParseNullableDateTime(_workbench.EndTime);
         if (rec.EndTime.HasValue)
             rec.DurationSeconds = Math.Max(0, (int)(rec.EndTime.Value - rec.StartTime).TotalSeconds);
-        rec.AgendaItems = _workbench.AgendaItems?.Where(s => !string.IsNullOrWhiteSpace(s)).ToList() ?? new();
+        rec.AgendaItems = SerializeAgendaToStrings(_workbench.AgendaItems);
         rec.QuickNotes = _workbench.QuickNotes?.Trim() ?? "";
         rec.SummaryMarkdown = _workbench.SummaryMarkdown ?? "";
         rec.Attendees = _workbench.Attendees?.Select(a => new MeetingAttendee { Name = a.Name, Role = a.Role }).ToList() ?? new();
@@ -368,7 +368,7 @@ public sealed class MeetingHubService
             StartTime = rec.StartTime.ToString("yyyy-MM-dd HH:mm"),
             EndTime = rec.EndTime?.ToString("yyyy-MM-dd HH:mm") ?? "",
             Tags = string.Join(", ", rec.Tags),
-            AgendaItems = rec.AgendaItems.ToList(),
+            AgendaItems = ParseAgendaFromStrings(rec.AgendaItems),
             QuickNotes = rec.QuickNotes,
             Attendees = rec.Attendees.Select(a => new AttendeeDto { Name = a.Name, Role = a.Role }).ToList(),
             ActionItems = rec.ActionItems.Select(CloneAction).ToList(),
@@ -436,7 +436,7 @@ public sealed class MeetingHubService
             var tpl = _templates.FirstOrDefault(t => t.Id == _workbench.TemplateId);
             if (tpl?.AgendaTemplate.Count > 0)
             {
-                _workbench.AgendaItems = tpl.AgendaTemplate.Select((a, i) => $"【AI】{i + 1}. {a}").ToList();
+                _workbench.AgendaItems = tpl.AgendaTemplate.Select(t => new AgendaItemDto { Title = "【AI】" + StripAgendaPrefix(t) }).ToList();
                 _lastToast = $"已根据模板「{tpl.Name}」生成议程";
             }
             else _lastError = "请先在设置中配置 API 密钥，或选择含议程的模板";
@@ -470,7 +470,7 @@ public sealed class MeetingHubService
             var result = await client.CallAsyncLong(prompt, "你是会议筹备助手。根据历史会议记录，为下一次会议生成简洁的议程草稿。");
             if (result.Success && !string.IsNullOrWhiteSpace(result.Result))
             {
-                _workbench.AgendaItems = SplitLines(result.Result);
+                _workbench.AgendaItems = ParseAgendaFromStrings(SplitLines(result.Result));
                 _lastToast = "AI 会前准备已完成";
             }
             else _lastError = result.Error ?? "生成失败";
@@ -488,7 +488,14 @@ public sealed class MeetingHubService
         }
         if (_workbench.AgendaItems?.Count > 0)
         {
-            sb.AppendLine("## 议程").AppendLine().AppendLine(string.Join("\n", _workbench.AgendaItems)).AppendLine();
+            sb.AppendLine("## 议程").AppendLine();
+            foreach (var ag in _workbench.AgendaItems)
+            {
+                if (string.IsNullOrWhiteSpace(ag.Title) && string.IsNullOrWhiteSpace(ag.Body)) continue;
+                sb.AppendLine($"## {ag.Title.Trim()}");
+                if (!string.IsNullOrWhiteSpace(ag.Body)) sb.AppendLine(ag.Body.Trim());
+                sb.AppendLine();
+            }
         }
         if (!string.IsNullOrWhiteSpace(_workbench.QuickNotes))
         {
@@ -577,6 +584,9 @@ public sealed class MeetingHubService
                 id = selected.Id,
                 title = selected.Title,
                 markdown = detailMarkdown,
+                html = _libEditMode || string.IsNullOrWhiteSpace(detailMarkdown)
+                    ? null
+                    : MarkdownHtml.ToHtmlBody(detailMarkdown),
             },
         };
     }
@@ -1032,7 +1042,8 @@ public sealed class MeetingHubService
         _workbench.ProjectId = s.ProjectId;
         _workbench.Title = $"{s.Name} {DateTime.Now:MM-dd}";
         _workbench.SeriesId = s.Id;
-        if (s.DefaultAgenda.Count > 0) _workbench.AgendaItems = s.DefaultAgenda.ToList();
+        if (s.DefaultAgenda.Count > 0)
+            _workbench.AgendaItems = s.DefaultAgenda.Select(t => new AgendaItemDto { Title = StripAgendaPrefix(t) }).ToList();
         if (s.DefaultAttendees.Count > 0)
             _workbench.Attendees = s.DefaultAttendees.Select(a => new AttendeeDto { Name = a.Name, Role = a.Role }).ToList();
         _activeNav = "workbench";
@@ -1206,7 +1217,7 @@ public sealed class MeetingHubService
 
     private bool HasWorkbenchContent() =>
         !string.IsNullOrWhiteSpace(_workbench.QuickNotes)
-        || _workbench.AgendaItems?.Count > 0
+        || _workbench.AgendaItems?.Any(a => !string.IsNullOrWhiteSpace(a.Title) || !string.IsNullOrWhiteSpace(a.Body)) == true
         || !string.IsNullOrWhiteSpace(_workbench.SummaryMarkdown);
 
     private string BuildTranscript()
@@ -1215,8 +1226,13 @@ public sealed class MeetingHubService
         if (_workbench.AgendaItems?.Count > 0)
         {
             sb.AppendLine("【会议议程】");
-            sb.AppendLine(string.Join("\n", _workbench.AgendaItems));
-            sb.AppendLine();
+            foreach (var ag in _workbench.AgendaItems)
+            {
+                if (string.IsNullOrWhiteSpace(ag.Title) && string.IsNullOrWhiteSpace(ag.Body)) continue;
+                sb.AppendLine($"## {ag.Title.Trim()}");
+                if (!string.IsNullOrWhiteSpace(ag.Body)) sb.AppendLine(ag.Body.Trim());
+                sb.AppendLine();
+            }
         }
         if (!string.IsNullOrWhiteSpace(_workbench.QuickNotes))
         {
@@ -1411,6 +1427,58 @@ public sealed class MeetingHubService
         return null;
     }
 
+    private static List<AgendaItemDto> ParseAgendaFromStrings(IEnumerable<string> items)
+    {
+        var result = new List<AgendaItemDto>();
+        foreach (var raw in items)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            var text = raw.Replace("\r\n", "\n").Trim();
+            var lines = text.Split('\n');
+            var first = lines[0].Trim();
+            string title;
+            string body;
+            if (first.StartsWith("## ", StringComparison.Ordinal))
+            {
+                title = first[3..].Trim();
+                body = string.Join("\n", lines.Skip(1)).Trim();
+            }
+            else if (first.StartsWith("# ", StringComparison.Ordinal))
+            {
+                title = first[2..].Trim();
+                body = string.Join("\n", lines.Skip(1)).Trim();
+            }
+            else
+            {
+                title = StripAgendaPrefix(first);
+                body = string.Join("\n", lines.Skip(1)).Trim();
+            }
+            if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(body)) continue;
+            result.Add(new AgendaItemDto { Title = title, Body = body });
+        }
+        return result;
+    }
+
+    private static List<string> SerializeAgendaToStrings(IEnumerable<AgendaItemDto>? items) =>
+        items?
+            .Where(a => !string.IsNullOrWhiteSpace(a.Title) || !string.IsNullOrWhiteSpace(a.Body))
+            .Select(a =>
+            {
+                var title = a.Title.Trim();
+                var body = a.Body?.Trim() ?? "";
+                return string.IsNullOrWhiteSpace(body) ? $"## {title}" : $"## {title}\n{body}";
+            })
+            .ToList() ?? new();
+
+    private static string StripAgendaPrefix(string text)
+    {
+        var t = text.Trim();
+        if (t.StartsWith("## ", StringComparison.Ordinal)) return t[3..].Trim();
+        if (t.StartsWith("# ", StringComparison.Ordinal)) return t[2..].Trim();
+        var m = System.Text.RegularExpressions.Regex.Match(t, @"^\d+\.\s*");
+        return m.Success ? t[m.Length..].Trim() : t;
+    }
+
     private static ActionItemDto CloneAction(MeetingActionItem a) => new()
     {
         Id = a.Id,
@@ -1542,13 +1610,20 @@ public sealed class WorkbenchDto
     public string StartTime { get; set; } = "";
     public string? EndTime { get; set; }
     public string? Tags { get; set; }
-    public List<string> AgendaItems { get; set; } = new();
+    public List<AgendaItemDto> AgendaItems { get; set; } = new();
     public string QuickNotes { get; set; } = "";
     public List<AttendeeDto> Attendees { get; set; } = new();
     public List<ActionItemDto> ActionItems { get; set; } = new();
     public List<DecisionDto> Decisions { get; set; } = new();
     public string? SummaryMarkdown { get; set; }
     public string? SeriesId { get; set; }
+}
+
+public sealed class AgendaItemDto
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Title { get; set; } = "";
+    public string Body { get; set; } = "";
 }
 
 public sealed class AttendeeDto

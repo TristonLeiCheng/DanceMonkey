@@ -22,7 +22,7 @@
     .nav-btn:hover { background: var(--amber-light); color: var(--text); }
     .nav-btn.active { background: var(--amber-bg); color: #78350f; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
     .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; background: #FAF8F5; border-bottom: 1px solid var(--line); flex-shrink: 0; }
-    .main { flex: 1; overflow-y: auto; padding: 16px 20px; }
+    .main { flex: 1; overflow-y: auto; padding: 12px 16px; width: 100%; min-width: 0; }
     .footer { padding: 10px 20px; background: #fff; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
     .btn { border: 1px solid var(--line2); background: #fff; color: var(--text); padding: 7px 14px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
     .btn:hover { background: var(--amber-bg); }
@@ -35,13 +35,41 @@
     .lbl { font-size: 10px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; display: block; }
     .inp { width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--line2); border-radius: 10px; font-size: 12px; }
     .inp:focus { outline: none; border-color: #d97706; background: #fff; }
-    .grid-wb { display: grid; grid-template-columns: 1fr; gap: 14px; }
-    @media (min-width: 1000px) { .grid-wb { grid-template-columns: 3fr 4fr 5fr; } }
+    .grid-wb { display: grid; width: 100%; gap: 12px; align-items: stretch; min-height: calc(100vh - 168px); grid-template-columns: minmax(0, 1fr); }
+    @media (min-width: 900px) {
+      .grid-wb { grid-template-columns: minmax(0, 26fr) minmax(0, 34fr) minmax(0, 40fr); }
+      .grid-wb.info-collapsed { grid-template-columns: 40px minmax(0, 44fr) minmax(0, 56fr); }
+    }
+    .grid-wb > * { min-width: 0; }
+    .col-info { min-width: 0; }
+    .col-info.collapsed .info-body { display: none; }
+    .col-info.collapsed { padding: 0; overflow: hidden; }
+    .col-info.collapsed .info-toggle { border-radius: 10px; min-height: 100%; writing-mode: vertical-rl; text-orientation: mixed; padding: 12px 8px; justify-content: center; }
+    .col-agenda, .col-right { min-width: 0; display: flex; flex-direction: column; }
     .sec-title { font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--amber-bg); margin-bottom: 10px; }
     .tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: var(--amber-light); border: 1px solid var(--line2); border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; }
     .tag:hover { border-color: #fca5a5; color: #dc2626; }
-    .agenda-item { padding: 8px 10px; background: #FCFBFA; border: 1px solid var(--line2); border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-    .agenda-item:hover { border-color: #d97706; }
+    .agenda-block { background: #FCFBFA; border: 1px solid var(--line2); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+    .agenda-block:hover { border-color: #d97706; }
+    .agenda-title { width: 100%; border: none; background: transparent; padding: 8px 10px; font-size: 13px; font-weight: 800; color: #78350f; border-bottom: 1px dashed var(--line2); }
+    .agenda-title:focus { outline: none; background: #fff; }
+    .agenda-title::placeholder { color: #cbd5e1; font-weight: 600; }
+    .agenda-body { width: 100%; border: none; background: transparent; padding: 8px 10px; font-size: 12px; line-height: 1.55; min-height: 56px; resize: vertical; }
+    .agenda-body:focus { outline: none; background: #fff; }
+    .agenda-block-hdr { display: flex; align-items: center; justify-content: space-between; padding: 0 6px 0 0; background: #FAF8F5; border-bottom: 1px solid var(--line2); }
+    .btn-icon { width: 32px; height: 32px; padding: 0; display: inline-grid; place-items: center; border: 1px solid var(--line2); background: var(--amber-bg); border-radius: 10px; cursor: pointer; font-size: 16px; font-weight: 700; color: #78350f; flex-shrink: 0; }
+    .btn-icon:hover { background: #d97706; color: #fff; border-color: #d97706; }
+    .btn-icon.primary { background: #d97706; color: #fff; border-color: #d97706; }
+    .md-body { font-size: 13px; line-height: 1.65; color: #334155; max-height: 520px; overflow: auto; }
+    .md-body h1, .md-body h2, .md-body h3 { color: #1e293b; margin: 1em 0 .5em; }
+    .md-body h2 { font-size: 16px; border-bottom: 1px solid var(--line2); padding-bottom: 4px; }
+    .md-body p { margin: .5em 0; }
+    .md-body ul, .md-body ol { padding-left: 1.4em; margin: .5em 0; }
+    .md-body code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+    .md-body pre { background: #f8fafc; padding: 10px; border-radius: 8px; overflow: auto; }
+    .md-body table { border-collapse: collapse; width: 100%; margin: .5em 0; font-size: 12px; }
+    .md-body th, .md-body td { border: 1px solid var(--line2); padding: 6px 8px; }
+    .md-body blockquote { border-left: 3px solid #d97706; margin: .5em 0; padding-left: 12px; color: #64748b; }
     .collapse-hdr { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: none; background: transparent; cursor: pointer; text-align: left; }
     .collapse-body { padding: 0 14px 14px; border-top: 1px solid var(--amber-bg); }
     .action-row { padding: 8px 10px; border: 1px solid var(--line2); border-radius: 10px; margin-bottom: 6px; display: flex; gap: 8px; align-items: flex-start; font-size: 12px; }
@@ -69,7 +97,7 @@
     .stat-val { font-size: 22px; font-weight: 800; }
     .bar-track { height: 8px; background: #EFECE6; border-radius: 4px; overflow: hidden; margin-top: 4px; }
     .bar-fill { height: 100%; border-radius: 4px; }
-    .two-col { display: grid; grid-template-columns: 280px 1fr; gap: 14px; min-height: 400px; }
+    .two-col { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 14px; min-height: 400px; width: 100%; }
     .hidden { display: none !important; }
     .err { color: #dc2626; font-size: 11px; margin-top: 6px; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
@@ -123,7 +151,7 @@ const STATUS_OPTS = [
 
 let state = {};
 let localWb = {};
-let ui = { actionsOpen: false, decisionsOpen: false, showUserModal: false, showSummaryModal: false, summaryText: '' };
+let ui = { actionsOpen: false, decisionsOpen: false, infoOpen: true, showUserModal: false, showSummaryModal: false, summaryText: '' };
 
 function send(type, payload = {}) {
   if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({ type, ...payload });
@@ -133,7 +161,21 @@ function uid() { return 'id-' + Date.now() + '-' + Math.random().toString(36).sl
 function statusLabel(v) { return (STATUS_OPTS.find(o => o.v === v) || { l: '已完成' }).l; }
 
 function syncWbFromState() {
-  if (state.workbench) localWb = JSON.parse(JSON.stringify(state.workbench));
+  if (state.workbench) {
+    localWb = JSON.parse(JSON.stringify(state.workbench));
+    localWb.agendaItems = normalizeAgendaItems(localWb.agendaItems);
+  }
+}
+
+function normalizeAgendaItems(items) {
+  if (!items || !items.length) return [];
+  return items.map(a => {
+    if (typeof a === 'string') {
+      const lines = a.replace(/^\d+\.\s*/, '').split('\n');
+      return { id: uid(), title: (lines[0] || '').replace(/^#+\s*/, ''), body: lines.slice(1).join('\n') };
+    }
+    return { id: a.id || uid(), title: a.title || '', body: a.body || '' };
+  });
 }
 
 function pushWb() { send('setWorkbench', { workbench: localWb }); }
@@ -190,14 +232,19 @@ function updateCrumb() {
 function renderWorkbench() {
   const tpls = state.templates || [];
   const projs = state.projects || [];
-  const agendas = localWb.agendaItems || [];
+  const agendas = normalizeAgendaItems(localWb.agendaItems || []);
+  localWb.agendaItems = agendas;
   const acts = localWb.actionItems || [];
   const decs = localWb.decisions || [];
   const atts = localWb.attendees || [];
-  return `<div class="grid-wb">
-    <div class="card">
-      <div class="sec-title">📋 会议信息设置</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
+  const infoCls = ui.infoOpen ? '' : 'collapsed';
+  return `<div class="grid-wb ${ui.infoOpen ? '' : 'info-collapsed'}">
+    <div class="card col-info ${infoCls}">
+      <button type="button" class="collapse-hdr info-toggle" data-toggle="info" style="margin:0;padding:${ui.infoOpen?'0 0 8px':'12px 6px'};border-bottom:${ui.infoOpen?'1px solid var(--amber-bg)':'none'}">
+        <span style="font-size:12px;font-weight:800">📋 ${ui.infoOpen ? '会议信息设置' : '信息'}</span>
+        <span style="color:#94a3b8;font-size:11px">${ui.infoOpen ? '▼' : '▶'}</span>
+      </button>
+      <div class="info-body" style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
         <div><label class="lbl">主题</label><input class="inp" id="wbTitle" value="${esc(localWb.title)}"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div><label class="lbl">当前状态</label><select class="inp" id="wbStatus">${STATUS_OPTS.map(o=>`<option value="${o.v}" ${localWb.status===o.v?'selected':''}>${o.l}</option>`).join('')}</select></div>
@@ -210,49 +257,58 @@ function renderWorkbench() {
         <div style="border-top:1px solid var(--amber-bg);padding-top:10px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
             <span class="lbl" style="margin:0">参会人 (${atts.length})</span>
-            <button class="btn btn-sm" data-act="showUserModal">+ 添加</button>
+            <button type="button" class="btn-icon" data-act="showUserModal" title="添加参会人">＋</button>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">${atts.map((a,i)=>`<span class="tag" data-rm-att="${i}">${esc(a.role?a.name+' ('+a.role+')':a.name)} ✕</span>`).join('')}</div>
         </div>
       </div>
     </div>
-    <div class="card" style="display:flex;flex-direction:column">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div class="card col-agenda" style="display:flex;flex-direction:column;min-height:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-shrink:0">
         <div class="sec-title" style="margin:0;border:0;padding:0">📌 议程</div>
-        <button class="btn btn-sm" data-act="aiPrep">✨ AI 会前准备</button>
+        <button type="button" class="btn btn-sm" data-act="aiPrep">✨ AI 会前准备</button>
       </div>
-      <div style="flex:1;min-height:200px;overflow-y:auto;margin-bottom:8px" id="agendaList">
-        ${agendas.length ? agendas.map((a,i)=>`<div class="agenda-item"><span>${esc(a)}</span><button data-rm-agenda="${i}" style="border:none;background:none;cursor:pointer;color:#94a3b8">🗑</button></div>`).join('') : '<p style="text-align:center;color:#94a3b8;font-size:12px;padding:24px">暂无议程</p>'}
+      <div style="flex:1;overflow-y:auto;margin-bottom:8px;min-height:180px" id="agendaList">
+        ${agendas.length ? agendas.map((a,i)=>`<div class="agenda-block" data-agenda-idx="${i}">
+          <div class="agenda-block-hdr">
+            <input class="agenda-title" data-agenda-title="${i}" value="${esc(a.title)}" placeholder="## 议题标题">
+            <button type="button" data-rm-agenda="${i}" title="删除议题" style="border:none;background:none;cursor:pointer;color:#94a3b8;padding:4px 8px">🗑</button>
+          </div>
+          <textarea class="agenda-body" data-agenda-body="${i}" placeholder="在此输入该议题下的讨论内容…">${esc(a.body)}</textarea>
+        </div>`).join('') : '<p style="text-align:center;color:#94a3b8;font-size:12px;padding:24px">暂无议程，在下方添加议题</p>'}
       </div>
-      <div style="display:flex;gap:6px"><input class="inp" id="newAgenda" placeholder="添加议题…"><button class="btn btn-sm" data-act="addAgenda">添加</button></div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <input class="inp" id="newAgenda" placeholder="添加议题标题…" style="flex:1">
+        <button type="button" class="btn-icon primary" data-act="addAgenda" title="添加议题">＋</button>
+      </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:12px">
-      <div class="card">
+    <div class="col-right" style="display:flex;flex-direction:column;gap:12px;min-height:0">
+      <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
         <div class="sec-title">💬 会上手记 <span style="margin-left:auto;font-size:10px;background:#fffbeb;padding:2px 8px;border-radius:99px;border:1px solid #fde68a;color:#92400e">智能输入区</span></div>
-        <textarea class="inp" id="wbNotes" rows="8" style="resize:none;line-height:1.6" placeholder="随手记录…选中文字可转为行动项/决策项">${esc(localWb.quickNotes)}</textarea>
+        <textarea class="inp" id="wbNotes" style="flex:1;min-height:160px;resize:none;line-height:1.6" placeholder="随手记录…选中文字可转为行动项/决策项">${esc(localWb.quickNotes)}</textarea>
       </div>
-      <div class="card" style="padding:0;overflow:hidden">
-        <button class="collapse-hdr" data-toggle="actions">
+      <div class="card" style="padding:0;overflow:hidden;flex-shrink:0">
+        <button type="button" class="collapse-hdr" data-toggle="actions">
           <span style="font-size:12px;font-weight:800">⚡ 会议行动项 (${acts.length})</span>
           <span>${ui.actionsOpen ? '▲' : '▼'}</span>
         </button>
         ${ui.actionsOpen ? `<div class="collapse-body">
           <div style="display:flex;justify-content:space-between;margin-bottom:8px">
             <span style="font-size:10px;color:#94a3b8">同步状态：就绪</span>
-            <button class="btn btn-sm" data-act="syncZenTask">→ ZenTask</button>
+            <button type="button" class="btn btn-sm" data-act="syncZenTask">→ ZenTask</button>
           </div>
-          ${acts.map(a=>`<div class="action-row ${a.done?'done':''}"><div class="chk ${a.done?'on':''}" data-toggle-act="${a.id}">${a.done?'✓':''}</div><div style="flex:1"><div style="${a.done?'text-decoration:line-through;color:#94a3b8':''}">${esc(a.task)}</div><div style="font-size:10px;color:#64748b;margin-top:2px">👤 ${esc(a.owner||'待分派')} · 📅 ${esc(a.dueDate||'—')}</div></div><button data-rm-act="${a.id}" style="border:none;background:none;cursor:pointer">🗑</button></div>`).join('') || '<p style="text-align:center;color:#94a3b8;font-size:11px">暂无行动项</p>'}
-          <div style="display:flex;gap:6px;margin-top:8px"><input class="inp" id="newActTask" placeholder="新行动项"><input class="inp" id="newActOwner" style="width:90px" placeholder="负责人"><button class="btn btn-sm" data-act="addAction">+</button></div>
+          ${acts.map(a=>`<div class="action-row ${a.done?'done':''}"><div class="chk ${a.done?'on':''}" data-toggle-act="${a.id}">${a.done?'✓':''}</div><div style="flex:1"><div style="${a.done?'text-decoration:line-through;color:#94a3b8':''}">${esc(a.task)}</div><div style="font-size:10px;color:#64748b;margin-top:2px">👤 ${esc(a.owner||'待分派')} · 📅 ${esc(a.dueDate||'—')}</div></div><button type="button" data-rm-act="${a.id}" style="border:none;background:none;cursor:pointer">🗑</button></div>`).join('') || '<p style="text-align:center;color:#94a3b8;font-size:11px">暂无行动项</p>'}
+          <div style="display:flex;gap:6px;margin-top:8px"><input class="inp" id="newActTask" placeholder="新行动项" style="flex:1"><input class="inp" id="newActOwner" style="width:90px" placeholder="负责人"><button type="button" class="btn-icon" data-act="addAction" title="添加">＋</button></div>
         </div>` : ''}
       </div>
-      <div class="card" style="padding:0;overflow:hidden">
-        <button class="collapse-hdr" data-toggle="decisions">
+      <div class="card" style="padding:0;overflow:hidden;flex-shrink:0">
+        <button type="button" class="collapse-hdr" data-toggle="decisions">
           <span style="font-size:12px;font-weight:800">💡 决策项 (${decs.length})</span>
           <span>${ui.decisionsOpen ? '▲' : '▼'}</span>
         </button>
         ${ui.decisionsOpen ? `<div class="collapse-body">
-          ${decs.map((d,i)=>`<div class="agenda-item"><span><b style="color:#b45309">#${i+1}</b> ${esc(d.content)}</span><button data-rm-dec="${d.id}" style="border:none;background:none;cursor:pointer">🗑</button></div>`).join('') || '<p style="text-align:center;color:#94a3b8;font-size:11px">暂无决策</p>'}
-          <div style="display:flex;gap:6px;margin-top:8px"><input class="inp" id="newDec" placeholder="记录决策…"><button class="btn btn-sm" data-act="addDecision">+ 达成</button></div>
+          ${decs.map((d,i)=>`<div class="agenda-block" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px"><span><b style="color:#b45309">#${i+1}</b> ${esc(d.content)}</span><button type="button" data-rm-dec="${d.id}" style="border:none;background:none;cursor:pointer;margin-left:auto">🗑</button></div>`).join('') || '<p style="text-align:center;color:#94a3b8;font-size:11px">暂无决策</p>'}
+          <div style="display:flex;gap:6px;margin-top:8px"><input class="inp" id="newDec" placeholder="记录决策…" style="flex:1"><button type="button" class="btn-icon primary" data-act="addDecision" title="记录决策">✓</button></div>
         </div>` : ''}
       </div>
     </div>
@@ -319,7 +375,9 @@ function renderLibrary() {
         </div>
       </div>
       ${lib.editMode ? `<textarea class="inp" id="libEditor" rows="18" style="resize:vertical;font-family:monospace;font-size:11px">${esc(lib.editText||'')}</textarea>` :
-        `<pre style="white-space:pre-wrap;font-size:11px;line-height:1.6;max-height:480px;overflow:auto;margin:0;color:#334155">${esc(detail?.markdown || '（暂无内容）')}</pre>`}
+        (detail?.html
+          ? `<div class="md-body">${detail.html}</div>`
+          : `<p style="color:#94a3b8;font-size:12px">（暂无内容）</p>`)}
     </div>
   </div>`;
 }
@@ -457,6 +515,21 @@ function renderStats() {
   </div>`;
 }
 
+function collectAgendaFromDom() {
+  const items = [];
+  document.querySelectorAll('[data-agenda-title]').forEach(el => {
+    const i = +el.dataset.agendaTitle;
+    const bodyEl = document.querySelector(`[data-agenda-body="${i}"]`);
+    const existing = localWb.agendaItems?.[i];
+    items.push({
+      id: existing?.id || uid(),
+      title: el.value.trim(),
+      body: bodyEl ? bodyEl.value : (existing?.body || ''),
+    });
+  });
+  localWb.agendaItems = items;
+}
+
 function collectWbFromDom() {
   const g = id => document.getElementById(id);
   if (g('wbTitle')) localWb.title = g('wbTitle').value;
@@ -467,6 +540,7 @@ function collectWbFromDom() {
   if (g('wbEnd')) localWb.endTime = g('wbEnd').value;
   if (g('wbTags')) localWb.tags = g('wbTags').value;
   if (g('wbNotes')) localWb.quickNotes = g('wbNotes').value;
+  if (document.querySelector('[data-agenda-title]')) collectAgendaFromDom();
 }
 
 function bindEvents() {
@@ -483,9 +557,13 @@ function bindEvents() {
     });
     const notes = document.getElementById('wbNotes');
     if (notes) notes.onmouseup = onNotesSelect;
+    document.querySelectorAll('[data-agenda-title],[data-agenda-body]').forEach(el => {
+      el.oninput = () => { collectAgendaFromDom(); };
+    });
   }
 
   document.querySelectorAll('[data-rm-agenda]').forEach(el => el.onclick = () => {
+    collectAgendaFromDom();
     localWb.agendaItems.splice(+el.dataset.rmAgenda, 1);
     renderAll();
   });
@@ -507,6 +585,7 @@ function bindEvents() {
     renderAll();
   });
   document.querySelectorAll('[data-toggle]').forEach(el => el.onclick = () => {
+    if (el.dataset.toggle === 'info') { ui.infoOpen = !ui.infoOpen; }
     if (el.dataset.toggle === 'actions') { ui.actionsOpen = !ui.actionsOpen; ui.decisionsOpen = false; }
     if (el.dataset.toggle === 'decisions') { ui.decisionsOpen = !ui.decisionsOpen; ui.actionsOpen = false; }
     renderAll();
@@ -561,7 +640,18 @@ function handleAction(act) {
   if (act === 'syncZenTask') { pushWb(); send('syncZenTaskWorkbench'); return; }
   if (act === 'addAgenda') {
     const v = document.getElementById('newAgenda')?.value?.trim();
-    if (v) { localWb.agendaItems.push((localWb.agendaItems.length+1)+'. '+v); renderAll(); }
+    if (v) {
+      collectAgendaFromDom();
+      if (!localWb.agendaItems) localWb.agendaItems = [];
+      localWb.agendaItems.push({ id: uid(), title: v, body: '' });
+      const input = document.getElementById('newAgenda');
+      if (input) input.value = '';
+      renderAll();
+      setTimeout(() => {
+        const idx = (localWb.agendaItems?.length || 1) - 1;
+        document.querySelector(`[data-agenda-body="${idx}"]`)?.focus();
+      }, 0);
+    }
     return;
   }
   if (act === 'addAction') {

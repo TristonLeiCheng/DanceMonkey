@@ -16,6 +16,7 @@ public partial class MeetingAssistantView : UserControl
     private readonly MeetingHubService _hub = new();
     private bool _webReady;
     private bool _messageHooked;
+    private string? _pendingMeetingId;
 
     public MeetingAssistantView()
     {
@@ -24,6 +25,7 @@ public partial class MeetingAssistantView : UserControl
         {
             _hub.Initialize();
             await EnsureWebAsync();
+            await ApplyPendingMeetingSelectionAsync();
         };
     }
 
@@ -31,6 +33,16 @@ public partial class MeetingAssistantView : UserControl
     {
         _hub.Initialize();
         _ = PushStateAsync();
+    }
+
+    public void OpenMeetingById(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return;
+
+        _pendingMeetingId = id;
+        if (_webReady)
+            _ = ApplyPendingMeetingSelectionAsync();
     }
 
     private async Task EnsureWebAsync()
@@ -45,6 +57,7 @@ public partial class MeetingAssistantView : UserControl
             {
                 _webReady = true;
                 await PushStateAsync();
+                await ApplyPendingMeetingSelectionAsync();
             };
             _messageHooked = true;
         }
@@ -75,5 +88,17 @@ public partial class MeetingAssistantView : UserControl
         if (!_webReady || HubWeb.CoreWebView2 == null) return;
         var json = JsonSerializer.Serialize(_hub.BuildWebState(), WebJsonOptions);
         await HubWeb.ExecuteScriptAsync($"window.MeetingHub && window.MeetingHub.receiveState({json});");
+    }
+
+    private async Task ApplyPendingMeetingSelectionAsync()
+    {
+        if (!_webReady || string.IsNullOrWhiteSpace(_pendingMeetingId))
+            return;
+
+        var meetingId = _pendingMeetingId;
+        await _hub.HandleAsync(new HubWebMessage { Type = "setTab", Nav = "library" });
+        await _hub.HandleAsync(new HubWebMessage { Type = "libSelect", MeetingId = meetingId });
+        await PushStateAsync();
+        _pendingMeetingId = null;
     }
 }

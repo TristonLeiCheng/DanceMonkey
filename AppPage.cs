@@ -30,5 +30,6 @@ public enum AppPage
     /// <summary>Codex Responses API 本地中转站。</summary>
     CodexProxy = 20,
     /// <summary>定时提醒：喝水、久坐及自定义提醒。</summary>
-    ScheduledReminders = 21
+    ScheduledReminders = 21,
+    Today = 22
 }

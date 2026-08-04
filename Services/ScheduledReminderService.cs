@@ -35,7 +35,7 @@ public sealed class ScheduledReminderService
 
     public ReminderStore Store => _store;
 
-    public IReadOnlyList<ReminderDefinition> Reminders => _store.Data.Reminders;
+    public IReadOnlyList<ReminderDefinition> Reminders => _store.GetRemindersSnapshot();
 
     public void Reload(AppConfig config)
     {
@@ -77,11 +77,19 @@ public sealed class ScheduledReminderService
 
     public void SetReminderEnabled(string reminderId, bool enabled, AppConfig config)
     {
-        var reminder = _store.Find(reminderId);
-        if (reminder == null) return;
+        var found = false;
+        _store.MutateAndSave(data =>
+        {
+            var reminder = data.Reminders.FirstOrDefault(
+                item => string.Equals(item.Id, reminderId, StringComparison.OrdinalIgnoreCase));
+            if (reminder == null)
+                return;
 
-        reminder.Enabled = enabled;
-        _store.Save();
+            reminder.Enabled = enabled;
+            found = true;
+        });
+        if (!found)
+            return;
         _store.ApplyBuiltInsToConfig(config);
         App.Config.Save(config);
     }
@@ -122,49 +130,67 @@ public sealed class ScheduledReminderService
 
     public void Acknowledge(string reminderId)
     {
-        var reminder = _store.Find(reminderId);
-        var runtime = _store.GetRuntime(reminderId);
         var now = DateTime.Now;
-        ResetDailyStatsIfNeeded(runtime);
+        _store.MutateAndSave(data =>
+        {
+            var reminder = data.Reminders.FirstOrDefault(
+                item => string.Equals(item.Id, reminderId, StringComparison.OrdinalIgnoreCase));
+            var runtime = data.Runtime.First(
+                item => string.Equals(item.ReminderId, reminderId, StringComparison.OrdinalIgnoreCase));
+            ResetDailyStatsIfNeeded(runtime);
 
-        if (reminder?.TrackDailyStats == true)
-            runtime.TodayAckCount++;
+            if (reminder?.TrackDailyStats == true)
+                runtime.TodayAckCount++;
 
-        runtime.LastAcknowledgedAt = now;
-        runtime.LastTriggeredAt = now;
-        runtime.SnoozeUntil = null;
-        runtime.ContinuousUseStart = now;
+            runtime.LastAcknowledgedAt = now;
+            runtime.LastTriggeredAt = now;
+            runtime.SnoozeUntil = null;
+            runtime.ContinuousUseStart = now;
 
-        if (reminder?.Schedule.Kind == ReminderRepeatKind.Once)
-            reminder.Enabled = false;
-
-        _store.Save();
+            if (reminder?.Schedule.Kind == ReminderRepeatKind.Once)
+                reminder.Enabled = false;
+        });
     }
 
     public void Snooze(string reminderId, int? minutes = null)
     {
-        var reminder = _store.Find(reminderId);
-        var runtime = _store.GetRuntime(reminderId);
-        var snooze = minutes ?? reminder?.SnoozeMinutes ?? 10;
-        runtime.SnoozeUntil = DateTime.Now.AddMinutes(Math.Clamp(snooze, 1, 240));
-        runtime.LastTriggeredAt = DateTime.Now;
-        _store.Save();
+        var now = DateTime.Now;
+        _store.MutateAndSave(data =>
+        {
+            var reminder = data.Reminders.FirstOrDefault(
+                item => string.Equals(item.Id, reminderId, StringComparison.OrdinalIgnoreCase));
+            var runtime = data.Runtime.First(
+                item => string.Equals(item.ReminderId, reminderId, StringComparison.OrdinalIgnoreCase));
+            var snooze = minutes ?? reminder?.SnoozeMinutes ?? 10;
+            runtime.SnoozeUntil = now.AddMinutes(Math.Clamp(snooze, 1, 240));
+            runtime.LastTriggeredAt = now;
+        });
     }
 
     public int GetTodayAckCount(string reminderId)
     {
-        var runtime = _store.GetRuntime(reminderId);
-        ResetDailyStatsIfNeeded(runtime);
-        return runtime.TodayAckCount;
+        var count = 0;
+        _store.MutateAndSave(data =>
+        {
+            var runtime = data.Runtime.First(
+                item => string.Equals(item.ReminderId, reminderId, StringComparison.OrdinalIgnoreCase));
+            ResetDailyStatsIfNeeded(runtime);
+            count = runtime.TodayAckCount;
+        });
+        return count;
     }
 
     public void MarkTriggered(ReminderDefinition reminder, string? slotKey = null)
     {
-        var runtime = _store.GetRuntime(reminder.Id);
-        runtime.LastTriggeredAt = DateTime.Now;
-        if (!string.IsNullOrWhiteSpace(slotKey))
-            runtime.LastFiredSlotKey = slotKey;
-        _store.Save();
+        var now = DateTime.Now;
+        _store.MutateAndSave(data =>
+        {
+            var runtime = data.Runtime.First(
+                item => string.Equals(item.ReminderId, reminder.Id, StringComparison.OrdinalIgnoreCase));
+            runtime.LastTriggeredAt = now;
+            if (!string.IsNullOrWhiteSpace(slotKey))
+                runtime.LastFiredSlotKey = slotKey;
+        });
     }
 
     private void OnTick()
@@ -182,7 +208,10 @@ public sealed class ScheduledReminderService
         if (due.Count == 0) return;
 
         var next = due[0];
-        var slotKey = ReminderScheduleHelper.GetDueSlotKey(next, now, _store.GetRuntime(next.Id).LastFiredSlotKey);
+        var slotKey = ReminderScheduleHelper.GetDueSlotKey(
+            next,
+            now,
+            _store.GetRuntimeSnapshot(next.Id).LastFiredSlotKey);
         MarkTriggered(next, slotKey);
         ReminderDue?.Invoke(next);
     }
@@ -190,7 +219,7 @@ public sealed class ScheduledReminderService
     private List<ReminderDefinition> CollectDueReminders(DateTime now, double idleSeconds)
     {
         var due = new List<ReminderDefinition>();
-        foreach (var reminder in _store.Data.Reminders.Where(r => r.Enabled))
+        foreach (var reminder in _store.GetRemindersSnapshot().Where(r => r.Enabled))
         {
             if (ShouldFire(reminder, now, idleSeconds))
                 due.Add(reminder);
@@ -214,7 +243,7 @@ public sealed class ScheduledReminderService
         if (reminder.Trigger.SkipWhenIdle && idleSeconds > reminder.Trigger.IdleThresholdSeconds)
             return false;
 
-        var runtime = _store.GetRuntime(reminder.Id);
+        var runtime = _store.GetRuntimeSnapshot(reminder.Id);
         if (runtime.SnoozeUntil.HasValue && now < runtime.SnoozeUntil.Value)
             return false;
 
@@ -259,19 +288,27 @@ public sealed class ScheduledReminderService
         if (_wasIdle && !isIdle)
         {
             var now = DateTime.Now;
-            foreach (var reminder in _store.Data.Reminders.Where(r =>
-                         r.Enabled && r.Schedule.Kind == ReminderRepeatKind.ActiveUseInterval))
-            {
-                _store.GetRuntime(reminder.Id).ContinuousUseStart = now;
-            }
+            var reminderIds = _store.GetRemindersSnapshot()
+                .Where(reminder =>
+                    reminder.Enabled &&
+                    reminder.Schedule.Kind == ReminderRepeatKind.ActiveUseInterval)
+                .Select(reminder => reminder.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (reminderIds.Count == 0)
+                return;
 
-            _store.Save();
+            _store.MutateAndSave(data =>
+            {
+                foreach (var runtime in data.Runtime.Where(
+                             runtime => reminderIds.Contains(runtime.ReminderId)))
+                    runtime.ContinuousUseStart = now;
+            });
         }
     }
 
     private int GetActiveUseIdleThresholdSeconds()
     {
-        var thresholds = _store.Data.Reminders
+        var thresholds = _store.GetRemindersSnapshot()
             .Where(r => r.Enabled && r.Schedule.Kind == ReminderRepeatKind.ActiveUseInterval)
             .Select(r => r.Trigger.IdleThresholdSeconds)
             .DefaultIfEmpty(300)

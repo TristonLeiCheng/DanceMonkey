@@ -1,0 +1,94 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Scheme 1: cool white surfaces with a focused violet accent. -->
+    <Color x:Key="ColorAccent1">#6254F5</Color>
+    <Color x:Key="ColorAccent2">#786BFA</Color>
+    <Color x:Key="ColorAccent3">#9389FF</Color>
+
+    <SolidColorBrush x:Key="BrushPageBg" Color="#F7F8FC"/>
+    <SolidColorBrush x:Key="BrushBackground" Color="#F7F8FC"/>
+    <SolidColorBrush x:Key="BrushSurface" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="BrushSurfaceMuted" Color="#F4F4FA"/>
+    <SolidColorBrush x:Key="BrushSurfaceHover" Color="#F0EFFF"/>
+
+    <SolidColorBrush x:Key="BrushBorder" Color="#E2E4EE"/>
+    <SolidColorBrush x:Key="BrushBorderFocus" Color="#6254F5"/>
+    <SolidColorBrush x:Key="BrushBorderSubtle" Color="#ECEEF5"/>
+
+    <SolidColorBrush x:Key="BrushTextPrimary" Color="#171B34"/>
+    <SolidColorBrush x:Key="BrushTextSecondary" Color="#667085"/>
+    <SolidColorBrush x:Key="BrushTextMuted" Color="#98A0B3"/>
+    <SolidColorBrush x:Key="BrushTextOnAccent" Color="#FFFFFF"/>
+
+    <SolidColorBrush x:Key="BrushAccent" Color="#6254F5"/>
+    <SolidColorBrush x:Key="BrushAccentHover" Color="#5748EA"/>
+    <SolidColorBrush x:Key="BrushAccentPressed" Color="#493AD8"/>
+    <SolidColorBrush x:Key="BrushAccentMuted" Color="#EDEBFF"/>
+    <SolidColorBrush x:Key="BrushDanger" Color="#D92D20"/>
+    <SolidColorBrush x:Key="BrushDangerHover" Color="#B42318"/>
+    <SolidColorBrush x:Key="BrushDangerPressed" Color="#912018"/>
+    <SolidColorBrush x:Key="BrushSuccess" Color="#027A48"/>
+    <SolidColorBrush x:Key="BrushSuccessHover" Color="#05603A"/>
+    <SolidColorBrush x:Key="BrushSuccessPressed" Color="#054F31"/>
+
+    <LinearGradientBrush x:Key="BrushAccentGradient" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="{StaticResource ColorAccent1}" Offset="0"/>
+        <GradientStop Color="{StaticResource ColorAccent2}" Offset="1"/>
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="BrushSidebarBg" Color="#F5F5FB"/>
+    <SolidColorBrush x:Key="BrushSidebarSurface" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="BrushSidebarHover" Color="#F0EFFF"/>
+    <SolidColorBrush x:Key="BrushSidebarActive" Color="#EDEBFF"/>
+    <SolidColorBrush x:Key="BrushSidebarText" Color="#667085"/>
+    <SolidColorBrush x:Key="BrushSidebarTextActive" Color="#493AD8"/>
+    <SolidColorBrush x:Key="BrushSidebarMuted" Color="#667085"/>
+    <SolidColorBrush x:Key="BrushSidebarExpanderChevron" Color="#98A0B3"/>
+    <SolidColorBrush x:Key="BrushSidebarNavActiveBorder" Color="#D7D2FF"/>
+
+    <LinearGradientBrush x:Key="BrushSidebarRailBg" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#F8F8FD" Offset="0"/>
+        <GradientStop Color="#F5F5FB" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="BrushSidebarEdgeFade" StartPoint="1,0" EndPoint="0,0">
+        <GradientStop Color="#00000000" Offset="0"/>
+        <GradientStop Color="#08000000" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="BrushSidebarNavActiveBg" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#F1EFFF" Offset="0"/>
+        <GradientStop Color="#EDEBFF" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="BrushSidebarNavActiveAccent" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#786BFA" Offset="0"/>
+        <GradientStop Color="#6254F5" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="BrushSidebarNavActiveHover" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#ECE9FF" Offset="0"/>
+        <GradientStop Color="#E4E0FF" Offset="1"/>
+    </LinearGradientBrush>
+
+    <DropShadowEffect x:Key="EffectSidebarNavSelected"
+                      BlurRadius="10"
+                      ShadowDepth="1"
+                      Opacity="0.10"
+                      Color="#6254F5"/>
+    <SolidColorBrush x:Key="BrushSidebarGradient" Color="#F5F5FB"/>
+
+    <DropShadowEffect x:Key="EffectCard"
+                      BlurRadius="14"
+                      ShadowDepth="2"
+                      Direction="270"
+                      Opacity="0.08"
+                      Color="#171B34"/>
+    <DropShadowEffect x:Key="EffectCardSoft"
+                      BlurRadius="8"
+                      ShadowDepth="1"
+                      Direction="270"
+                      Opacity="0.05"
+                      Color="#171B34"/>
+
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuBrushKey}" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuTextBrushKey}" Color="#171B34"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuBarBrushKey}" Color="#F7F8FC"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.MenuHighlightBrushKey}" Color="#F0EFFF"/>
+</ResourceDictionary>

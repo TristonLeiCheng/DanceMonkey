@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Text;
 using System.Text.Json;
 using DesktopAssistant.Models;
 
@@ -12,6 +13,7 @@ public sealed class ConfigService
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
+    private readonly object _gate = new();
     private readonly string _configFilePath;
 
     public ConfigService()
@@ -21,6 +23,17 @@ public sealed class ConfigService
         Directory.CreateDirectory(dir);
         _configFilePath = Path.Combine(dir, "config.json");
         TryMigrateFromLegacyConfig(appData);
+    }
+
+    public ConfigService(string configFilePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configFilePath);
+        _configFilePath = Path.GetFullPath(configFilePath);
+        var directory = Path.GetDirectoryName(_configFilePath)
+                        ?? throw new ArgumentException(
+                            "Config file path must include a directory.",
+                            nameof(configFilePath));
+        Directory.CreateDirectory(directory);
     }
 
     /// <summary>从旧版 DesktopAssistant 目录复制配置，避免升级后丢失设置。</summary>
@@ -42,6 +55,12 @@ public sealed class ConfigService
     }
 
     public AppConfig Load()
+    {
+        lock (_gate)
+            return LoadUnsafe();
+    }
+
+    private AppConfig LoadUnsafe()
     {
         if (!File.Exists(_configFilePath))
             return DefaultConfig();
@@ -78,7 +97,7 @@ public sealed class ConfigService
                 try
                 {
                     var updated = JsonSerializer.Serialize(cfg, JsonOptions);
-                    File.WriteAllText(_configFilePath, updated);
+                    WriteAtomicallyUnsafe(updated);
                 }
                 catch { /* ignore write failure */ }
             }
@@ -116,16 +135,53 @@ public sealed class ConfigService
 
     public bool Save(AppConfig config)
     {
+        lock (_gate)
+        {
+            try
+            {
+                config.EnsureModelProfiles();
+                var json = JsonSerializer.Serialize(config, JsonOptions);
+                WriteAtomicallyUnsafe(json);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    private void WriteAtomicallyUnsafe(string content)
+    {
+        var directory = Path.GetDirectoryName(_configFilePath)
+                        ?? throw new InvalidOperationException("Config file path has no directory.");
+        var fileName = Path.GetFileName(_configFilePath);
+        var tempPath = Path.Combine(directory, $".{fileName}.{Guid.NewGuid():N}.tmp");
+
         try
         {
-            config.EnsureModelProfiles();
-            var json = JsonSerializer.Serialize(config, JsonOptions);
-            File.WriteAllText(_configFilePath, json);
-            return true;
+            using (var stream = new FileStream(
+                       tempPath,
+                       FileMode.CreateNew,
+                       FileAccess.Write,
+                       FileShare.None,
+                       bufferSize: 4096,
+                       FileOptions.WriteThrough))
+            using (var writer = new StreamWriter(
+                       stream,
+                       new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
+            {
+                writer.Write(content);
+                writer.Flush();
+                stream.Flush(flushToDisk: true);
+            }
+
+            File.Move(tempPath, _configFilePath, overwrite: true);
         }
-        catch
+        finally
         {
-            return false;
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
         }
     }
 

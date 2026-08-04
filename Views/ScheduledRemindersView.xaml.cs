@@ -14,6 +14,7 @@ public partial class ScheduledRemindersView : UserControl
 {
     private readonly ScheduledReminderService _service;
     private readonly Action<ReminderDefinition> _testReminder;
+    private string? _pendingReminderId;
 
     public ScheduledRemindersView(ScheduledReminderService service, Action<ReminderDefinition> testReminder)
     {
@@ -26,6 +27,7 @@ public partial class ScheduledRemindersView : UserControl
             AcrylicCheck.IsChecked = cfg.ReminderPopupAcrylic;
             InitPopupStyleCombo(cfg.DefaultReminderPopupStyle);
             Reload();
+            ApplyPendingReminderSelection();
         };
     }
 
@@ -57,6 +59,17 @@ public partial class ScheduledRemindersView : UserControl
 
         foreach (var reminder in _service.Reminders)
             ReminderListPanel.Children.Add(BuildCard(reminder));
+
+        ApplyPendingReminderSelection();
+    }
+
+    public void OpenReminderById(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return;
+
+        _pendingReminderId = id;
+        ApplyPendingReminderSelection();
     }
 
     private Border BuildCard(ReminderDefinition reminder)
@@ -65,7 +78,8 @@ public partial class ScheduledRemindersView : UserControl
         {
             Style = (Style)FindResource("UiCard"),
             Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(16, 14, 16, 14)
+            Padding = new Thickness(16, 14, 16, 14),
+            Tag = reminder.Id
         };
 
         var grid = new Grid();
@@ -138,6 +152,25 @@ public partial class ScheduledRemindersView : UserControl
 
         card.Child = grid;
         return card;
+    }
+
+    private void ApplyPendingReminderSelection()
+    {
+        if (string.IsNullOrWhiteSpace(_pendingReminderId))
+            return;
+
+        var card = ReminderListPanel.Children
+            .OfType<Border>()
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Tag as string, _pendingReminderId, StringComparison.Ordinal));
+        if (card is null)
+            return;
+
+        card.BorderBrush = (MediaBrush)FindResource("BrushAccent");
+        card.BorderThickness = new Thickness(2);
+        card.BringIntoView();
+        card.Focus();
+        _pendingReminderId = null;
     }
 
     private Button MakeActionButton(string text, RoutedEventHandler click)

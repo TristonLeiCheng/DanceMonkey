@@ -14,10 +14,10 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
-    <Version>1.3.12</Version>
-    <FileVersion>1.3.12.0</FileVersion>
-    <AssemblyVersion>1.3.12.0</AssemblyVersion>
-    <InformationalVersion>1.3.12</InformationalVersion>
+    <Version>1.3.19</Version>
+    <FileVersion>1.3.19.0</FileVersion>
+    <AssemblyVersion>1.3.19.0</AssemblyVersion>
+    <InformationalVersion>1.3.19</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -59,6 +59,11 @@
     <None Remove="DanceMonkey.Ppt\**" />
     <Page Remove="DanceMonkey.Ppt\**" />
     <ApplicationDefinition Remove="DanceMonkey.Ppt\**" />
+    <Compile Remove="DanceMonkey.Ui.Tests\**" />
+    <EmbeddedResource Remove="DanceMonkey.Ui.Tests\**" />
+    <None Remove="DanceMonkey.Ui.Tests\**" />
+    <Page Remove="DanceMonkey.Ui.Tests\**" />
+    <ApplicationDefinition Remove="DanceMonkey.Ui.Tests\**" />
   </ItemGroup>
 
   <!-- 使用 App.xaml.cs 中的自定义 Main（含启动诊断），避免与自动生成的入口重复 -->

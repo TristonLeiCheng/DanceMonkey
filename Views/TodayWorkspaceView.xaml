@@ -1,0 +1,530 @@
+<UserControl x:Class="DesktopAssistant.Views.TodayWorkspaceView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
+             Background="Transparent">
+    <UserControl.Resources>
+        <Style x:Key="TodaySectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextPrimary}"/>
+        </Style>
+        <Style x:Key="TodayBody" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextSecondary}"/>
+        </Style>
+        <Style x:Key="VisibleWhenTrue" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Path=Tag, RelativeSource={RelativeSource Self}}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
+                  Padding="4,4,10,24">
+        <Grid Margin="22,18,22,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="12"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="18"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="今天，专注当下"
+                               FontSize="25"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource BrushTextPrimary}"/>
+                    <TextBlock Text="{Binding DateLabel}"
+                               Style="{StaticResource TodayBody}"
+                               Margin="0,6,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Border Background="{DynamicResource BrushAccentMuted}"
+                            BorderBrush="{DynamicResource BrushBorderSubtle}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="12,8"
+                            Margin="0,0,8,0">
+                        <StackPanel>
+                            <TextBlock Text="本周进度"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource BrushTextSecondary}"/>
+                            <TextBlock Text="{Binding WeeklyProgressLabel}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource BrushAccentPressed}"/>
+                        </StackPanel>
+                    </Border>
+                    <Button x:Name="RefreshButton"
+                            Content="刷新"
+                            Style="{StaticResource UiBtnSecondary}"
+                            Click="RefreshButton_OnClick"
+                            ToolTip="立即刷新今日工作台"
+                            automation:AutomationProperties.Name="刷新今日工作台"/>
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Grid.Row="2">
+                <Border x:Name="LoadingState"
+                        Tag="{Binding IsLoading}"
+                        Style="{StaticResource VisibleWhenTrue}"
+                        Background="{DynamicResource BrushAccentMuted}"
+                        BorderBrush="{DynamicResource BrushBorderSubtle}"
+                        BorderThickness="1"
+                        CornerRadius="9"
+                        Padding="12,8"
+                        Margin="0,0,0,8">
+                    <TextBlock x:Name="LoadingStatusText"
+                               Text="{Binding RefreshStatusMessage}"
+                               Foreground="{DynamicResource BrushAccentPressed}"
+                               automation:AutomationProperties.AutomationId="LoadingStatusText"
+                               automation:AutomationProperties.LiveSetting="Polite"/>
+                </Border>
+                <Border x:Name="ErrorState"
+                        Tag="{Binding HasError}"
+                        Style="{StaticResource VisibleWhenTrue}"
+                        Background="{DynamicResource BrushSurface}"
+                        BorderBrush="{DynamicResource BrushDanger}"
+                        BorderThickness="1"
+                        CornerRadius="9"
+                        Padding="12,8"
+                        Margin="0,0,0,8">
+                    <TextBlock x:Name="ErrorStatusText"
+                               Text="{Binding ErrorMessage}"
+                               Foreground="{DynamicResource BrushDanger}"
+                               TextWrapping="Wrap"
+                               automation:AutomationProperties.AutomationId="ErrorStatusText"
+                               automation:AutomationProperties.LiveSetting="Polite"/>
+                </Border>
+                <Border x:Name="SourceWarningState"
+                        Tag="{Binding HasSourceWarnings}"
+                        Style="{StaticResource VisibleWhenTrue}"
+                        Background="{DynamicResource BrushSurfaceMuted}"
+                        BorderBrush="{DynamicResource BrushBorder}"
+                        BorderThickness="1"
+                        CornerRadius="9"
+                        Padding="12,8">
+                    <TextBlock x:Name="SourceWarningStatusText"
+                               Text="{Binding SourceWarningMessage}"
+                               Foreground="{DynamicResource BrushTextSecondary}"
+                               TextWrapping="Wrap"
+                               automation:AutomationProperties.AutomationId="SourceWarningStatusText"
+                               automation:AutomationProperties.LiveSetting="Polite"/>
+                </Border>
+            </StackPanel>
+
+            <Grid x:Name="TodayColumnsGrid" Grid.Row="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="TodayPrimaryColumn" Width="1.25*"/>
+                    <ColumnDefinition x:Name="TodayFirstGutter" Width="16"/>
+                    <ColumnDefinition x:Name="TodaySecondaryColumn" Width="1*"/>
+                    <ColumnDefinition x:Name="TodaySecondGutter" Width="16"/>
+                    <ColumnDefinition x:Name="TodayTertiaryColumn" Width="0.95*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel x:Name="TodayLeftColumn" Grid.Column="0">
+                    <Border Style="{StaticResource UiCard}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="14"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="14"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="当前专注" Style="{StaticResource TodaySectionTitle}"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding FocusTimeLabel}"
+                                           FontSize="24"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource BrushAccent}"/>
+                            </Grid>
+                            <StackPanel Grid.Row="2">
+                                <Border x:Name="FocusSourceErrorState"
+                                        Tag="{Binding HasFocusSourceError}"
+                                        Style="{StaticResource VisibleWhenTrue}"
+                                        Background="{DynamicResource BrushSurfaceMuted}"
+                                        BorderBrush="{DynamicResource BrushBorder}"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="9,7"
+                                        Margin="0,0,0,8">
+                                    <TextBlock x:Name="FocusSourceErrorStatusText"
+                                               Text="{Binding FocusSourceErrorMessage}"
+                                               Foreground="{DynamicResource BrushTextSecondary}"
+                                               TextWrapping="Wrap"
+                                               automation:AutomationProperties.AutomationId="FocusSourceErrorStatusText"
+                                               automation:AutomationProperties.LiveSetting="Polite"/>
+                                </Border>
+                                <StackPanel Tag="{Binding HasFocusTask}"
+                                            Style="{StaticResource VisibleWhenTrue}">
+                                <Button Content="{Binding Snapshot.FocusTask.Title}"
+                                        Tag="{Binding Snapshot.FocusTask}"
+                                        Style="{StaticResource UiBtnGhost}"
+                                        HorizontalContentAlignment="Left"
+                                        Padding="0"
+                                        FontSize="17"
+                                        FontWeight="SemiBold"
+                                        Click="TaskSourceButton_OnClick"
+                                        ToolTip="在 Zen Task 中打开"/>
+                                <TextBlock Text="{Binding FocusDetail}"
+                                           Style="{StaticResource TodayBody}"
+                                           Margin="0,6,0,0"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding Snapshot.FocusTask.NotesSummary}"
+                                           Foreground="{DynamicResource BrushTextSecondary}"
+                                           FontSize="12"
+                                           Margin="0,6,0,0"
+                                           TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <TextBlock x:Name="FocusEmptyState"
+                                           Tag="{Binding ShowFocusEmpty}"
+                                           Style="{StaticResource VisibleWhenTrue}"
+                                           Text="暂无待专注任务，可先从任务页安排今天。"
+                                           Foreground="{DynamicResource BrushTextSecondary}"
+                                           TextWrapping="Wrap"
+                                           automation:AutomationProperties.AutomationId="FocusEmptyState"
+                                           automation:AutomationProperties.LiveSetting="Polite"/>
+                            </StackPanel>
+                            <Grid Grid.Row="4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="10"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <ProgressBar Minimum="0"
+                                             Maximum="100"
+                                             Value="{Binding FocusProgressPercent, Mode=OneWay}"
+                                             Height="7"
+                                             Foreground="{DynamicResource BrushAccent}"
+                                             Background="{DynamicResource BrushAccentMuted}"/>
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="{Binding FocusStartPauseLabel}"
+                                            Style="{StaticResource UiBtnPrimary}"
+                                            Click="FocusStartPauseButton_OnClick"
+                                            Margin="0,0,8,0"/>
+                                    <Button Content="重置"
+                                            Style="{StaticResource UiBtnSecondary}"
+                                            Click="FocusResetButton_OnClick"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource UiCard}" Margin="0,16,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="今日时间线" Style="{StaticResource TodaySectionTitle}"/>
+                            <StackPanel Grid.Row="2">
+                                <Border x:Name="TimelineSourceErrorState"
+                                        Tag="{Binding HasTimelineSourceError}"
+                                        Style="{StaticResource VisibleWhenTrue}"
+                                        Background="{DynamicResource BrushSurfaceMuted}"
+                                        BorderBrush="{DynamicResource BrushBorder}"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="9,7"
+                                        Margin="0,0,0,8">
+                                    <TextBlock x:Name="TimelineSourceErrorStatusText"
+                                               Text="{Binding TimelineSourceErrorMessage}"
+                                               Foreground="{DynamicResource BrushTextSecondary}"
+                                               TextWrapping="Wrap"
+                                               automation:AutomationProperties.AutomationId="TimelineSourceErrorStatusText"
+                                               automation:AutomationProperties.LiveSetting="Polite"/>
+                                </Border>
+                                <ItemsControl ItemsSource="{Binding Snapshot.Timeline}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Tag="{Binding}"
+                                                Style="{StaticResource UiBtnGhost}"
+                                                HorizontalContentAlignment="Stretch"
+                                                Padding="4,7"
+                                                Click="SourceButton_OnClick"
+                                                ToolTip="打开来源"
+                                                automation:AutomationProperties.Name="{Binding Title}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="52"/>
+                                                    <ColumnDefinition Width="10"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Time, StringFormat={}{0:HH:mm}}"
+                                                           Foreground="{DynamicResource BrushTextSecondary}"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1"
+                                                           FontFamily="Segoe MDL2 Assets"
+                                                           FontSize="12"
+                                                           VerticalAlignment="Center"
+                                                           automation:AutomationProperties.Name="{Binding SourceLabel}">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value=""/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource BrushSuccess}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Source}" Value="Meeting">
+                                                                    <Setter Property="Text" Value=""/>
+                                                                    <Setter Property="Foreground" Value="{DynamicResource BrushAccent}"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Source}" Value="Reminder">
+                                                                    <Setter Property="Text" Value=""/>
+                                                                    <Setter Property="Foreground" Value="{DynamicResource BrushDanger}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <StackPanel Grid.Column="2" Margin="10,0,0,0">
+                                                    <TextBlock Text="{Binding Title}"
+                                                               Foreground="{DynamicResource BrushTextPrimary}"
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding SourceLabel}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource BrushTextSecondary}"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="TimelineEmptyState"
+                                           Tag="{Binding ShowTimelineEmpty}"
+                                           Style="{StaticResource VisibleWhenTrue}"
+                                           Text="今天还没有会议、提醒或已安排任务。"
+                                           Foreground="{DynamicResource BrushTextSecondary}"
+                                           TextWrapping="Wrap"
+                                           automation:AutomationProperties.AutomationId="TimelineEmptyState"
+                                           automation:AutomationProperties.LiveSetting="Polite"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
+
+                <Border x:Name="TodayTasksCard" Grid.Column="2" Style="{StaticResource UiCard}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="12"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="待处理任务" Style="{StaticResource TodaySectionTitle}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding TaskCountLabel}"
+                                       Style="{StaticResource TodayBody}"/>
+                        </Grid>
+                        <StackPanel Grid.Row="2">
+                            <Border x:Name="TasksSourceErrorState"
+                                    Tag="{Binding HasTasksSourceError}"
+                                    Style="{StaticResource VisibleWhenTrue}"
+                                    Background="{DynamicResource BrushSurfaceMuted}"
+                                    BorderBrush="{DynamicResource BrushBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="9,7"
+                                    Margin="0,0,0,8">
+                                <TextBlock x:Name="TasksSourceErrorStatusText"
+                                           Text="{Binding TasksSourceErrorMessage}"
+                                           Foreground="{DynamicResource BrushTextSecondary}"
+                                           TextWrapping="Wrap"
+                                           automation:AutomationProperties.AutomationId="TasksSourceErrorStatusText"
+                                           automation:AutomationProperties.LiveSetting="Polite"/>
+                            </Border>
+                            <ItemsControl ItemsSource="{Binding Snapshot.Tasks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox IsChecked="{Binding IsCompleted, Mode=OneTime}"
+                                                  Tag="{Binding Id}"
+                                                  Click="TaskCompletion_OnClick"
+                                                  VerticalAlignment="Top"
+                                                  automation:AutomationProperties.Name="{Binding Title}"/>
+                                        <Button Grid.Column="1"
+                                                Tag="{Binding}"
+                                                Style="{StaticResource UiBtnGhost}"
+                                                HorizontalContentAlignment="Left"
+                                                Padding="5,2"
+                                                Margin="5,0,0,0"
+                                                Click="TaskSourceButton_OnClick"
+                                                ToolTip="在 Zen Task 中打开"
+                                                automation:AutomationProperties.Name="{Binding Title}">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Title}"
+                                                           Foreground="{DynamicResource BrushTextPrimary}"
+                                                           TextWrapping="Wrap"/>
+                                                <WrapPanel Margin="0,3,0,0">
+                                                    <TextBlock Text="{Binding PriorityLabel}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource BrushTextSecondary}"
+                                                               Margin="0,0,8,0"/>
+                                                    <TextBlock Text="{Binding EnergyLabel}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource BrushTextSecondary}"
+                                                               Margin="0,0,8,0"/>
+                                                    <TextBlock Text="{Binding DueLabel}"
+                                                               FontSize="11"
+                                                               Foreground="{DynamicResource BrushTextSecondary}"/>
+                                                </WrapPanel>
+                                                <TextBlock Text="{Binding NotesSummary}"
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource BrushTextSecondary}"
+                                                           Margin="0,3,0,0"
+                                                           TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="TasksEmptyState"
+                                       Tag="{Binding ShowTasksEmpty}"
+                                       Style="{StaticResource VisibleWhenTrue}"
+                                       Text="今日待办已清空。"
+                                       Foreground="{DynamicResource BrushTextSecondary}"
+                                       automation:AutomationProperties.AutomationId="TasksEmptyState"
+                                       automation:AutomationProperties.LiveSetting="Polite"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <StackPanel x:Name="TodayRightColumn" Grid.Column="4">
+                    <Border Style="{StaticResource UiCard}">
+                        <StackPanel>
+                            <TextBlock Text="{Binding DigestTitle}" Style="{StaticResource TodaySectionTitle}"/>
+                            <TextBlock Text="{Binding DigestSubtitle}"
+                                       Style="{StaticResource TodayBody}"
+                                       Margin="0,4,0,0"/>
+                            <TextBlock Text="{Binding DigestBody}"
+                                       Margin="0,14,0,0"
+                                       Foreground="{DynamicResource BrushTextPrimary}"
+                                       TextWrapping="Wrap"
+                                       LineHeight="19"/>
+                            <Button Content="{Binding DigestActionLabel}"
+                                    Style="{StaticResource UiBtnPrimary}"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="0,14,0,0"
+                                    Click="AiButton_OnClick"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource UiCard}" Margin="0,16,0,0">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="最近笔记" Style="{StaticResource TodaySectionTitle}"/>
+                                <Button Grid.Column="1"
+                                        Content="全部笔记"
+                                        Style="{StaticResource UiBtnGhost}"
+                                        Click="NotesButton_OnClick"/>
+                            </Grid>
+                            <StackPanel Grid.Row="2">
+                                <Border x:Name="NotesSourceErrorState"
+                                        Tag="{Binding HasNotesSourceError}"
+                                        Style="{StaticResource VisibleWhenTrue}"
+                                        Background="{DynamicResource BrushSurfaceMuted}"
+                                        BorderBrush="{DynamicResource BrushBorder}"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="9,7"
+                                        Margin="0,0,0,8">
+                                    <TextBlock x:Name="NotesSourceErrorStatusText"
+                                               Text="{Binding NotesSourceErrorMessage}"
+                                               Foreground="{DynamicResource BrushTextSecondary}"
+                                               TextWrapping="Wrap"
+                                               automation:AutomationProperties.AutomationId="NotesSourceErrorStatusText"
+                                               automation:AutomationProperties.LiveSetting="Polite"/>
+                                </Border>
+                                <ItemsControl ItemsSource="{Binding Snapshot.RecentNotes}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Tag="{Binding FullPath}"
+                                                Style="{StaticResource UiBtnGhost}"
+                                                HorizontalContentAlignment="Stretch"
+                                                Padding="6,8"
+                                                Margin="0,0,0,6"
+                                                Click="NoteButton_OnClick"
+                                                ToolTip="打开笔记"
+                                                automation:AutomationProperties.Name="{Binding Title}">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource BrushTextPrimary}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Summary}"
+                                                           Style="{StaticResource TodayBody}"
+                                                           Margin="0,4,0,0"
+                                                           TextWrapping="Wrap"
+                                                           MaxHeight="42"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="NotesEmptyState"
+                                           Tag="{Binding ShowNotesEmpty}"
+                                           Style="{StaticResource VisibleWhenTrue}"
+                                           Text="暂无最近笔记。"
+                                           Foreground="{DynamicResource BrushTextSecondary}"
+                                           automation:AutomationProperties.AutomationId="NotesEmptyState"
+                                           automation:AutomationProperties.LiveSetting="Polite"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource UiCard}" Margin="0,16,0,0">
+                        <StackPanel>
+                            <TextBlock Text="快捷操作" Style="{StaticResource TodaySectionTitle}"/>
+                            <Button Content="新建或打开笔记"
+                                    Style="{StaticResource UiBtnSecondary}"
+                                    Margin="0,12,0,8"
+                                    Click="NotesButton_OnClick"/>
+                            <Button Content="快速截图"
+                                    Style="{StaticResource UiBtnSecondary}"
+                                    Click="CaptureButton_OnClick"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

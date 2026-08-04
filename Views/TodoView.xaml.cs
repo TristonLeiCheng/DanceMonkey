@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -17,10 +18,16 @@ public partial class TodoView : UserControl
     {
         PropertyNameCaseInsensitive = true
     };
+    private static readonly JsonSerializerOptions TaskJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true
+    };
 
     private string? _strategicTaskFilePath;
     private string? _projectFilePath;
     private readonly ObservableCollection<StrategicTaskItem> _strategicTasks = new();
+    private List<StrategicTaskItem> _strategicTaskBaseline = new();
     private readonly ObservableCollection<ProjectItem> _projects = new();
     private readonly DispatcherTimer _reminderTimer;
     private bool _webReady;
@@ -37,6 +44,7 @@ public partial class TodoView : UserControl
     private List<AiImportCandidate> _aiImportCandidates = new();
     private bool _focusModeActive;
     private DateTime? _focusModeStartedAtUtc;
+    private string? _pendingTaskId;
 
     public TodoView()
     {
@@ -49,6 +57,7 @@ public partial class TodoView : UserControl
         {
             await EnsureWebAsync();
             Reload();
+            await ApplyPendingTaskSelectionAsync();
         };
     }
 
@@ -77,6 +86,10 @@ public partial class TodoView : UserControl
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
         public DateTime? CompletedAt { get; set; }
         public List<string> AuditTrail { get; set; } = new();
+
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? AdditionalProperties { get; set; }
+
         public bool IsDone => WorkflowStatus == "Completed" || WorkflowStatus == "Done";
         public bool IsHighEnergy => EnergyLevel.Equals("High", StringComparison.OrdinalIgnoreCase);
         public string DueDateDisplay => DueDate?.ToString("yyyy-MM-dd") ?? "—";
@@ -95,6 +108,9 @@ public partial class TodoView : UserControl
         public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
         public string Text { get; set; } = "";
         public bool Done { get; set; } = false;
+
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? AdditionalProperties { get; set; }
     }
 
     public sealed class ProjectItem
@@ -123,6 +139,18 @@ public partial class TodoView : UserControl
         EnsureProjectLinks();
         ReloadReminderSettings();
         _ = PushStateToWebAsync();
+    }
+
+    public void OpenTaskById(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return;
+
+        _pendingTaskId = id;
+        _activeTab = "Inbox";
+        _searchText = "";
+        if (_webReady)
+            _ = ApplyPendingTaskSelectionAsync();
     }
 
     public void ReloadReminderSettings()
@@ -167,6 +195,7 @@ public partial class TodoView : UserControl
             {
                 _webReady = true;
                 await PushStateToWebAsync();
+                await ApplyPendingTaskSelectionAsync();
             };
             _messageHooked = true;
         }
@@ -281,6 +310,26 @@ public partial class TodoView : UserControl
         if (!_webReady || TodoWeb.CoreWebView2 == null) return;
         var json = JsonSerializer.Serialize(BuildWebState());
         await TodoWeb.ExecuteScriptAsync($"window.ZenTask && window.ZenTask.receiveState({json});");
+    }
+
+    private async Task ApplyPendingTaskSelectionAsync()
+    {
+        if (!_webReady
+            || TodoWeb.CoreWebView2 == null
+            || string.IsNullOrWhiteSpace(_pendingTaskId))
+        {
+            return;
+        }
+
+        var taskId = _pendingTaskId;
+        _activeTab = "Inbox";
+        _searchText = "";
+        await PushStateToWebAsync();
+        var idJson = JsonSerializer.Serialize(taskId);
+        var opened = await TodoWeb.ExecuteScriptAsync(
+            $"(() => {{ const id = {idJson}; const button = [...document.querySelectorAll('[data-edit]')].find(el => el.dataset.edit === id); if (!button) return false; button.click(); return true; }})()");
+        if (string.Equals(opened, "true", StringComparison.OrdinalIgnoreCase))
+            _pendingTaskId = null;
     }
 
     private object BuildWebState()
@@ -579,22 +628,19 @@ public partial class TodoView : UserControl
     private void LoadStrategicTasks()
     {
         _strategicTasks.Clear();
+        _strategicTaskBaseline.Clear();
         if (string.IsNullOrWhiteSpace(_strategicTaskFilePath) || !File.Exists(_strategicTaskFilePath))
             return;
         try
         {
             var json = File.ReadAllText(_strategicTaskFilePath, Encoding.UTF8);
-            List<StrategicTaskItem>? list = null;
-            var wrapped = JsonSerializer.Deserialize<TaskStoreEnvelope>(json);
-            if (wrapped?.Items != null)
-                list = wrapped.Items;
-            else
-                list = JsonSerializer.Deserialize<List<StrategicTaskItem>>(json);
-            if (list != null)
-            {
-                foreach (var task in list)
-                    _strategicTasks.Add(task);
-            }
+            var envelope = ZenTaskFileFormat.Deserialize<StrategicTaskItem>(
+                json,
+                TaskJsonOptions,
+                defaultSchemaVersion: TaskStoreSchemaVersion);
+            foreach (var task in envelope.Items)
+                _strategicTasks.Add(task);
+            _strategicTaskBaseline = CloneStrategicTasks(envelope.Items);
         }
         catch (Exception ex)
         {
@@ -607,13 +653,37 @@ public partial class TodoView : UserControl
         if (string.IsNullOrWhiteSpace(_strategicTaskFilePath)) return;
         try
         {
-            var env = new TaskStoreEnvelope
-            {
-                SchemaVersion = TaskStoreSchemaVersion,
-                Items = _strategicTasks.ToList()
-            };
-            var json = JsonSerializer.Serialize(env, new JsonSerializerOptions { WriteIndented = true });
-            AtomicWriteAllText(_strategicTaskFilePath, json);
+            var local = CloneStrategicTasks(_strategicTasks);
+            var merged = ZenTaskFileCoordinator.ExecuteLocked(
+                _strategicTaskFilePath,
+                () =>
+                {
+                    var latest = File.Exists(_strategicTaskFilePath)
+                        ? ZenTaskFileFormat.Deserialize<StrategicTaskItem>(
+                            File.ReadAllText(_strategicTaskFilePath, Encoding.UTF8),
+                            TaskJsonOptions,
+                            defaultSchemaVersion: TaskStoreSchemaVersion)
+                        : new ZenTaskFileEnvelope<StrategicTaskItem>
+                        {
+                            SchemaVersion = TaskStoreSchemaVersion
+                        };
+                    ZenTaskMergeHelper.MergeIntoLatestEnvelope(
+                        latest,
+                        _strategicTaskBaseline,
+                        local,
+                        task => task.Id,
+                        task => task.UpdatedAt,
+                        StrategicTasksEquivalent);
+                    var mergedSnapshot = CloneStrategicTasks(latest.Items);
+                    var json = ZenTaskFileFormat.Serialize(latest, TaskJsonOptions);
+                    AtomicWriteAllText(_strategicTaskFilePath, json);
+                    return mergedSnapshot;
+                });
+
+            _strategicTasks.Clear();
+            foreach (var task in merged)
+                _strategicTasks.Add(task);
+            _strategicTaskBaseline = CloneStrategicTasks(merged);
         }
         catch (Exception ex)
         {
@@ -622,19 +692,19 @@ public partial class TodoView : UserControl
     }
 
     private static void AtomicWriteAllText(string path, string content)
-    {
-        var dir = Path.GetDirectoryName(path);
-        if (string.IsNullOrWhiteSpace(dir))
-            throw new InvalidOperationException("目标目录无效。");
-        Directory.CreateDirectory(dir);
+        => ZenTaskFileCoordinator.AtomicWriteAllText(path, content);
 
-        var tmpPath = path + ".tmp";
-        File.WriteAllText(tmpPath, content, new UTF8Encoding(false));
-        if (File.Exists(path))
-            File.Replace(tmpPath, path, null, ignoreMetadataErrors: true);
-        else
-            File.Move(tmpPath, path);
-    }
+    private static List<StrategicTaskItem> CloneStrategicTasks(
+        IEnumerable<StrategicTaskItem> tasks) =>
+        JsonSerializer.Deserialize<List<StrategicTaskItem>>(
+            JsonSerializer.Serialize(tasks, TaskJsonOptions),
+            TaskJsonOptions) ?? new List<StrategicTaskItem>();
+
+    private static bool StrategicTasksEquivalent(StrategicTaskItem left, StrategicTaskItem right) =>
+        string.Equals(
+            JsonSerializer.Serialize(left, TaskJsonOptions),
+            JsonSerializer.Serialize(right, TaskJsonOptions),
+            StringComparison.Ordinal);
 
     private static void ReportIoError(string action, Exception ex, string? path)
     {
@@ -857,7 +927,7 @@ public partial class TodoView : UserControl
 
     private void ConvertMeetingActions(string? rawText)
     {
-        var lines = (rawText ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var lines = (rawText ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (lines.Length == 0) return;
         foreach (var line in lines)
         {
@@ -1106,7 +1176,7 @@ public partial class TodoView : UserControl
             return new List<AiImportCandidate>();
 
         return text
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(CleanAiTaskLine)
             .Where(static line => !string.IsNullOrWhiteSpace(line) && line.Length >= 4)
             .Where(static line => !line.Contains("原因：", StringComparison.OrdinalIgnoreCase))
@@ -1410,12 +1480,6 @@ public partial class TodoView : UserControl
         public string? Priority { get; set; }
         public string? Energy { get; set; }
         public string? Deadline { get; set; }
-    }
-
-    private sealed class TaskStoreEnvelope
-    {
-        public int SchemaVersion { get; set; } = TaskStoreSchemaVersion;
-        public List<StrategicTaskItem> Items { get; set; } = new();
     }
 
     private sealed class ProjectStoreEnvelope

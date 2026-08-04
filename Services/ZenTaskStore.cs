@@ -34,15 +34,7 @@ public sealed class ZenTaskStore
 
     public IReadOnlyList<ZenTaskRecord> LoadTasks()
     {
-        if (!File.Exists(_taskFilePath))
-            return Array.Empty<ZenTaskRecord>();
-
-        var json = File.ReadAllText(_taskFilePath, Encoding.UTF8);
-        var wrapped = JsonSerializer.Deserialize<TaskStoreEnvelope>(json, JsonOpts);
-        if (wrapped?.Items != null)
-            return wrapped.Items;
-
-        return JsonSerializer.Deserialize<List<ZenTaskRecord>>(json, JsonOpts) ?? new List<ZenTaskRecord>();
+        return LoadTaskEnvelope().Items;
     }
 
     public IReadOnlyList<ZenProjectRecord> LoadProjects()
@@ -94,17 +86,63 @@ public sealed class ZenTaskStore
             AuditTrail = new List<string> { $"{now:yyyy-MM-dd HH:mm} created via Agent" },
         };
 
-        var tasks = LoadTasks().ToList();
-        tasks.Insert(0, item);
-        SaveTasks(tasks);
+        ZenTaskFileCoordinator.ExecuteLocked(
+            _taskFilePath,
+            () =>
+            {
+                var envelope = LoadTaskEnvelope();
+                envelope.Items.Insert(0, item);
+                SaveTaskEnvelope(envelope);
+            });
         return item;
     }
 
     public void SaveTasks(IReadOnlyList<ZenTaskRecord> tasks)
     {
-        var env = new TaskStoreEnvelope { SchemaVersion = SchemaVersion, Items = tasks.ToList() };
-        var json = JsonSerializer.Serialize(env, JsonOpts);
-        AtomicWriteAllText(_taskFilePath, json);
+        var env = new ZenTaskFileEnvelope<ZenTaskRecord>
+        {
+            SchemaVersion = SchemaVersion,
+            Items = tasks.ToList()
+        };
+        SaveTaskEnvelope(env);
+    }
+
+    public bool SetCompletion(string taskId, bool completed, DateTime now) =>
+        ZenTaskFileCoordinator.ExecuteLocked(
+            _taskFilePath,
+            () =>
+            {
+                var envelope = LoadTaskEnvelope();
+                var task = envelope.Items.FirstOrDefault(
+                    item => string.Equals(item.Id, taskId, StringComparison.OrdinalIgnoreCase));
+                if (task == null)
+                    return false;
+
+                task.WorkflowStatus = completed ? "Completed" : "Todo";
+                task.CompletedAt = completed ? now : null;
+                task.UpdatedAt = now;
+                task.AuditTrail ??= new List<string>();
+                task.AuditTrail.Add($"{now:yyyy-MM-dd HH:mm} status -> {task.WorkflowStatus}");
+                SaveTaskEnvelope(envelope);
+                return true;
+            });
+
+    private ZenTaskFileEnvelope<ZenTaskRecord> LoadTaskEnvelope()
+    {
+        if (!File.Exists(_taskFilePath))
+            return new ZenTaskFileEnvelope<ZenTaskRecord> { SchemaVersion = SchemaVersion };
+
+        var json = File.ReadAllText(_taskFilePath, Encoding.UTF8);
+        return ZenTaskFileFormat.Deserialize<ZenTaskRecord>(
+            json,
+            JsonOpts,
+            defaultSchemaVersion: SchemaVersion);
+    }
+
+    private void SaveTaskEnvelope(ZenTaskFileEnvelope<ZenTaskRecord> envelope)
+    {
+        var json = ZenTaskFileFormat.Serialize(envelope, JsonOpts);
+        ZenTaskFileCoordinator.AtomicWriteAllText(_taskFilePath, json);
     }
 
     public static string FormatTaskLine(ZenTaskRecord t)
@@ -154,27 +192,6 @@ public sealed class ZenTaskStore
         _ => "Medium",
     };
 
-    private static void AtomicWriteAllText(string path, string content)
-    {
-        var dir = Path.GetDirectoryName(path);
-        if (string.IsNullOrWhiteSpace(dir))
-            throw new InvalidOperationException("目标目录无效。");
-        Directory.CreateDirectory(dir);
-
-        var tmpPath = path + ".tmp";
-        File.WriteAllText(tmpPath, content, new UTF8Encoding(false));
-        if (File.Exists(path))
-            File.Replace(tmpPath, path, null, ignoreMetadataErrors: true);
-        else
-            File.Move(tmpPath, path);
-    }
-
-    private sealed class TaskStoreEnvelope
-    {
-            public int SchemaVersion { get; set; } = ZenTaskStore.SchemaVersion;
-        public List<ZenTaskRecord> Items { get; set; } = new();
-    }
-
     private sealed class ProjectStoreEnvelope
     {
             public int SchemaVersion { get; set; } = ZenTaskStore.SchemaVersion;
@@ -196,11 +213,17 @@ public sealed class ZenTaskRecord
     public string EnergyLevel { get; set; } = "Medium";
     public string WorkflowStatus { get; set; } = "Todo";
     public DateTime? DueDate { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public DateTime? CompletedAt { get; set; }
     public string Notes { get; set; } = "";
     public string Tags { get; set; } = "";
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public List<string> AuditTrail { get; set; } = new();
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? AdditionalProperties { get; set; }
 }
 
 public sealed class ZenProjectRecord

@@ -35,7 +35,7 @@ public partial class NotesView : UserControl
     private bool _previewInited;
 
     // ── Inspector（右侧检视器）状态 ──
-    private bool _inspectorVisible;
+    private bool _inspectorVisible = false;
     private double _inspectorSavedWidth = 280;
     private bool _loadingInspector;
     private readonly DispatcherTimer _inspectorDebounce = new() { Interval = TimeSpan.FromMilliseconds(700) };
@@ -64,6 +64,10 @@ public partial class NotesView : UserControl
     /// <summary>首行一级标题 → 磁盘文件名：停顿后重命名，避免每个字符都碰文件系统。</summary>
     private readonly DispatcherTimer _firstHeadingRenameDebounce = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private readonly ObservableCollection<NoteTreeNode> _treeRoots = new();
+    private readonly ObservableCollection<NoteFileInfo> _recentNotes = new();
+    private readonly ObservableCollection<NoteOutlineEntry> _outlineItems = new();
+    private bool _outlineCollapsed;
+    private double _outlineSavedWidth = 176;
 
     // ── 异步搜索 ──
     private readonly DispatcherTimer _searchDebounce = new() { Interval = TimeSpan.FromMilliseconds(320) };
@@ -72,7 +76,7 @@ public partial class NotesView : UserControl
 
     // ── 左侧面板折叠状态 ──
     private bool _leftPanelCollapsed;
-    private double _leftPanelSavedWidth = 268;
+    private double _leftPanelSavedWidth = 280;
     private static readonly MarkdownPipeline MdPipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
         .Build();
@@ -98,6 +102,8 @@ public partial class NotesView : UserControl
     {
         InitializeComponent();
         NotesTree.ItemsSource = _treeRoots;
+        RecentNotesList.ItemsSource = _recentNotes;
+        OutlineList.ItemsSource = _outlineItems;
 
         // ── Command bindings for Ctrl+S / Ctrl+Z / Ctrl+Y ──
         CommandBindings.Add(new CommandBinding(ApplicationCommands.Save, (_, _) => PerformSave()));
@@ -118,6 +124,7 @@ public partial class NotesView : UserControl
             InitNoteAiCombo();
             LoadNotesPaneModeFromConfig();
             ApplyNotesEditorPaneLayout();
+            ApplyInspectorVisibility();
             _periodicAutoSaveTimer.Start();
             if (_paneMode == NotesEditorPaneMode.Live)
                 _ = EnsureLiveEditorThenPushAsync();
@@ -226,6 +233,7 @@ public partial class NotesView : UserControl
         NoteAiActionCombo.IsEnabled = enabled;
         NoteAiRunBtn.IsEnabled = enabled;
         NoteSttBtn.IsEnabled = enabled;
+        AiAssistantBtn.IsEnabled = enabled;
         GeneratePptBtn.IsEnabled = enabled;
         SendToPptWorkspaceBtn.IsEnabled = enabled;
         ExportHtmlBtn.IsEnabled = enabled;
@@ -248,6 +256,7 @@ public partial class NotesView : UserControl
                 ? _notes.BuildTree()
                 : _notes.BuildFilteredTree(searchText, searchContent);
             _treeRoots.Add(root);
+            RefreshRecentNotes();
 
             // 树未展开时子级 TreeViewItem 尚不存在，TrySelectPath 会失败；用 ApplicationIdle + 逐级展开。
             // 必须在 TrySelectPath* 之前解除抑制，否则 SelectedItemChanged 会跳过、编辑器不加载。
@@ -273,6 +282,16 @@ public partial class NotesView : UserControl
             _treeRefreshSuppressDepth--;
             throw;
         }
+    }
+
+    private void RefreshRecentNotes()
+    {
+        _recentNotes.Clear();
+        if (_notes == null)
+            return;
+
+        foreach (var note in NotesWorkspaceProjection.TakeRecentVisibleNotes(_notes.ListAllMarkdownRecursive()))
+            _recentNotes.Add(note);
     }
 
     private HashSet<string> CollectExpandedFolderPaths()
@@ -414,6 +433,7 @@ public partial class NotesView : UserControl
             EditorTitle.Text = Path.GetFileName(fullPath);
             _dirty = false;
             SaveBtn.IsEnabled = true;
+            WorkspaceSaveBtn.IsEnabled = true;
             RenameBtn.IsEnabled = true;
             DeleteBtn.IsEnabled = true;
             SetNoteAiControlsEnabled(true);
@@ -439,6 +459,15 @@ public partial class NotesView : UserControl
             foreach (var c in GetTreeViewItems(t))
                 yield return c;
         }
+    }
+
+    private void RecentNote_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string fullPath })
+            return;
+
+        if (RequestLoadNoteInEditorByPath(fullPath))
+            TrySelectPathByExpanding(fullPath);
     }
 
     private void SearchBox_OnTextChanged(object sender, TextChangedEventArgs e)
@@ -687,6 +716,7 @@ public partial class NotesView : UserControl
             RenameBtn.IsEnabled = false;
             DeleteBtn.IsEnabled = false;
             SaveBtn.IsEnabled = false;
+            WorkspaceSaveBtn.IsEnabled = false;
             SetNoteAiControlsEnabled(false);
             SchedulePreviewAfterTreeSelection();
             UpdateDirtyIndicator();
@@ -704,6 +734,7 @@ public partial class NotesView : UserControl
             EditorTitle.Text = $"文件夹：{node.Name}";
             _dirty = false;
             SaveBtn.IsEnabled = false;
+            WorkspaceSaveBtn.IsEnabled = false;
             SetNoteAiControlsEnabled(false);
             SchedulePreviewAfterTreeSelection();
             UpdateDirtyIndicator();
@@ -719,6 +750,7 @@ public partial class NotesView : UserControl
             EditorTitle.Text = node.Name;
             _dirty = false;
             SaveBtn.IsEnabled = true;
+            WorkspaceSaveBtn.IsEnabled = true;
             SetNoteAiControlsEnabled(true);
             SchedulePreviewAfterTreeSelection();
             UpdateDirtyIndicator();
@@ -751,6 +783,8 @@ public partial class NotesView : UserControl
 
     private void EditorBox_OnTextChanged(object sender, TextChangedEventArgs e)
     {
+        RefreshOutline(EditorBox.Text ?? "");
+
         if (_undoRedoInProgress)
             return; // undo/redo 操作不触发快照
 
@@ -794,6 +828,47 @@ public partial class NotesView : UserControl
         _previewDebounce.Stop();
         _previewDebounce.Start();
         ScheduleMaybeRenameFromFirstHeading();
+    }
+
+    private void RefreshOutline(string markdown)
+    {
+        _outlineItems.Clear();
+        foreach (var entry in NotesWorkspaceProjection.ExtractOutline(markdown))
+            _outlineItems.Add(entry);
+    }
+
+    private void OutlineItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: NoteOutlineEntry item })
+            return;
+
+        var text = EditorBox.Text ?? string.Empty;
+        EditorBox.Focus();
+        EditorBox.CaretIndex = Math.Min(item.CharacterIndex, text.Length);
+        EditorBox.ScrollToLine(EditorBox.GetLineIndexFromCharacterIndex(EditorBox.CaretIndex));
+    }
+
+    private void ToggleOutline_OnClick(object sender, RoutedEventArgs e)
+    {
+        _outlineCollapsed = !_outlineCollapsed;
+        if (_outlineCollapsed)
+        {
+            if (OutlineCol.ActualWidth > 0)
+                _outlineSavedWidth = OutlineCol.ActualWidth;
+            OutlineCol.MinWidth = 0;
+            OutlineCol.Width = new GridLength(0);
+            OutlineSplitterCol.Width = new GridLength(0);
+            OutlinePanel.Visibility = Visibility.Collapsed;
+            OutlineSplitter.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            OutlineCol.MinWidth = 120;
+            OutlineCol.Width = new GridLength(_outlineSavedWidth);
+            OutlineSplitterCol.Width = new GridLength(6);
+            OutlinePanel.Visibility = Visibility.Visible;
+            OutlineSplitter.Visibility = Visibility.Visible;
+        }
     }
 
     private void ScheduleMaybeRenameFromFirstHeading()
@@ -2206,10 +2281,10 @@ public partial class NotesView : UserControl
 
     private void Rename_OnClick(object sender, RoutedEventArgs e)
     {
-        if (_notes == null) return;
-        if (NotesTree.SelectedItem is not NoteTreeNode node) return;
+        if (_notes == null || string.IsNullOrEmpty(_currentPath)) return;
+        var currentPath = _currentPath;
         var owner = Window.GetWindow(this);
-        var dlg = new PromptDialog("重命名", "新名称", node.Name)
+        var dlg = new PromptDialog("重命名", "新名称", Path.GetFileName(currentPath))
         {
             Owner = owner
         };
@@ -2218,10 +2293,9 @@ public partial class NotesView : UserControl
         if (string.IsNullOrEmpty(newName)) return;
         try
         {
-            var target = _notes.Rename(node.FullPath, newName);
-            if (!node.IsFolder && string.Equals(_currentPath, node.FullPath, StringComparison.OrdinalIgnoreCase))
-                _currentPath = target;
-            RefreshTree(selectPath: node.IsFolder ? null : target);
+            var target = _notes.Rename(currentPath, newName);
+            _currentPath = target;
+            RefreshTree(selectPath: target);
         }
         catch (Exception ex)
         {
@@ -2243,19 +2317,19 @@ public partial class NotesView : UserControl
 
     private void Delete_OnClick(object sender, RoutedEventArgs e)
     {
-        if (_notes == null) return;
-        if (NotesTree.SelectedItem is not NoteTreeNode node) return;
-        var msg = node.IsFolder
-            ? $"确定删除整个文件夹及其中的全部内容？\n{node.FullPath}"
-            : "确定删除当前笔记？";
+        if (_notes == null || string.IsNullOrEmpty(_currentPath)) return;
+        var currentPath = _currentPath;
+        var msg = $"确定删除当前笔记？\n{currentPath}";
         if (MessageBox.Show(msg, "确认", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             return;
         try
         {
-            _notes.Delete(node.FullPath);
+            _notes.Delete(currentPath);
             _currentPath = null;
             SetEditorTextWithoutDirtyMark("");
             _dirty = false;
+            SaveBtn.IsEnabled = false;
+            WorkspaceSaveBtn.IsEnabled = false;
             SetNoteAiControlsEnabled(false);
             _ = RefreshPreviewAsync();
             RefreshTree();
@@ -2388,6 +2462,8 @@ public partial class NotesView : UserControl
             UpdateDirtyIndicator();
             if (refreshTree)
                 RefreshTree(selectPath: _currentPath);
+            else
+                RefreshRecentNotes();
             return true;
         }
         catch (Exception ex)
@@ -2433,7 +2509,7 @@ public partial class NotesView : UserControl
         else
         {
             LeftPanelCol.Width = new GridLength(_leftPanelSavedWidth);
-            LeftPanelCol.MinWidth = 200;
+            LeftPanelCol.MinWidth = 220;
 
             // 图标改为向左（ChevronLeft = 收起提示）
             CollapseLeftIcon.Text = "\uE76B";
@@ -3039,6 +3115,7 @@ public partial class NotesView : UserControl
         EditorTitle.Text = Path.GetFileName(fullPath);
         _dirty = false;
         SaveBtn.IsEnabled = true;
+        WorkspaceSaveBtn.IsEnabled = true;
         RenameBtn.IsEnabled = true;
         DeleteBtn.IsEnabled = true;
         SetNoteAiControlsEnabled(true);
@@ -3080,6 +3157,31 @@ public partial class NotesView : UserControl
     private void TbToday_OnClick(object sender, RoutedEventArgs e) => ExecuteTodayNote();
     private void TbQuickCapture_OnClick(object sender, RoutedEventArgs e) => ExecuteQuickCapture();
     private void TbSticky_OnClick(object sender, RoutedEventArgs e) => ExecuteNewSticky();
+    private void LibraryRefresh_OnClick(object sender, RoutedEventArgs e) => ReloadServiceAndList();
+    private void LibraryExportZip_OnClick(object sender, RoutedEventArgs e) => ExecuteExportZip();
+    private void LibraryImportZip_OnClick(object sender, RoutedEventArgs e) => ExecuteImportZip();
+    private void LibraryOpenFolder_OnClick(object sender, RoutedEventArgs e) => ExecuteOpenRootFolder();
+
+    private void OpenContextMenu_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { ContextMenu: { } menu } target)
+        {
+            menu.PlacementTarget = target;
+            menu.IsOpen = true;
+        }
+    }
+
+    private void AiAssistantAction_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string actionName }
+            || !Enum.TryParse<NoteAiAction>(actionName, out var action))
+            return;
+
+        NoteAiActionCombo.SelectedItem = NoteAiActionCombo.Items
+            .OfType<ComboBoxItem>()
+            .Single(item => item.Tag is NoteAiAction candidate && candidate == action);
+        NoteAiRun_OnClick(sender, e);
+    }
 
     /// <summary>顶部视图按钮：依次切换 实时 → 分栏 → 阅读 → 实时。</summary>
     private void TbReadMode_OnClick(object sender, RoutedEventArgs e)

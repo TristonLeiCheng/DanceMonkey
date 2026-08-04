@@ -12,115 +12,136 @@ public sealed class ReminderStore
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
+    private readonly object _gate = new();
     private readonly string _storePath;
-
-    public ReminderStoreFile Data { get; private set; } = new();
+    private ReminderStoreFile _data = new();
 
     public string StorePath => _storePath;
 
     public ReminderStore()
-    {
-        var dir = Path.Combine(
+        : this(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "DanceMonkey");
+            "DanceMonkey",
+            "reminders.json"))
+    {
+    }
+
+    public ReminderStore(string storePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(storePath);
+        _storePath = Path.GetFullPath(storePath);
+        var dir = Path.GetDirectoryName(_storePath)
+                  ?? throw new ArgumentException("Reminder store path must include a directory.", nameof(storePath));
         Directory.CreateDirectory(dir);
-        _storePath = Path.Combine(dir, "reminders.json");
     }
 
     public void EnsureLoaded(AppConfig config)
     {
-        if (!File.Exists(_storePath))
+        ArgumentNullException.ThrowIfNull(config);
+        lock (_gate)
         {
-            Data = CreateFromLegacyConfig(config);
-            Save();
-            return;
-        }
+            if (!File.Exists(_storePath))
+            {
+                _data = CreateFromLegacyConfig(config);
+                SaveUnsafe();
+                return;
+            }
 
-        try
-        {
-            var json = File.ReadAllText(_storePath);
-            var loaded = JsonSerializer.Deserialize<ReminderStoreFile>(json, JsonOptions);
-            Data = loaded ?? CreateFromLegacyConfig(config);
-        }
-        catch
-        {
-            Data = CreateFromLegacyConfig(config);
-        }
+            try
+            {
+                var json = File.ReadAllText(_storePath);
+                var loaded = JsonSerializer.Deserialize<ReminderStoreFile>(json, JsonOptions);
+                _data = loaded ?? CreateFromLegacyConfig(config);
+            }
+            catch
+            {
+                _data = CreateFromLegacyConfig(config);
+            }
 
-        EnsureBuiltInsExist();
-        EnsureRuntimeStates();
+            NormalizeDataUnsafe();
+            EnsureBuiltInsExistUnsafe();
+            EnsureRuntimeStatesUnsafe();
+        }
     }
 
     public void UpsertReminder(ReminderDefinition reminder)
     {
-        EnsureRuntimeStates();
-        var existing = Find(reminder.Id);
-        if (existing == null)
+        ArgumentNullException.ThrowIfNull(reminder);
+        lock (_gate)
         {
-            Data.Reminders.Add(reminder);
+            NormalizeDataUnsafe();
+            EnsureRuntimeStatesUnsafe();
+            UpsertReminderUnsafe(Clone(reminder));
+            EnsureRuntimeStatesUnsafe();
+            SaveUnsafe();
         }
-        else
-        {
-            var index = Data.Reminders.IndexOf(existing);
-            Data.Reminders[index] = reminder;
-        }
-
-        EnsureRuntimeStates();
-        Save();
     }
 
     public bool DeleteReminder(string id)
     {
-        var reminder = Find(id);
-        if (reminder == null || reminder.IsBuiltIn)
-            return false;
+        lock (_gate)
+        {
+            NormalizeDataUnsafe();
+            var reminder = FindUnsafe(id);
+            if (reminder == null || reminder.IsBuiltIn)
+                return false;
 
-        Data.Reminders.Remove(reminder);
-        Data.Runtime.RemoveAll(r => string.Equals(r.ReminderId, id, StringComparison.OrdinalIgnoreCase));
-        Save();
-        return true;
+            _data.Reminders.Remove(reminder);
+            _data.Runtime.RemoveAll(r => string.Equals(r.ReminderId, id, StringComparison.OrdinalIgnoreCase));
+            SaveUnsafe();
+            return true;
+        }
     }
 
     public void ResetBuiltIn(string id, AppConfig config)
     {
-        if (string.Equals(id, ReminderBuiltInIds.Water, StringComparison.OrdinalIgnoreCase))
+        lock (_gate)
         {
-            var fresh = CreateWaterReminder(config);
-            UpsertReminder(fresh);
-            return;
-        }
+            ReminderDefinition? fresh = null;
+            if (string.Equals(id, ReminderBuiltInIds.Water, StringComparison.OrdinalIgnoreCase))
+                fresh = CreateWaterReminder(config);
+            else if (string.Equals(id, ReminderBuiltInIds.Sedentary, StringComparison.OrdinalIgnoreCase))
+                fresh = CreateSedentaryReminder(config);
 
-        if (string.Equals(id, ReminderBuiltInIds.Sedentary, StringComparison.OrdinalIgnoreCase))
-        {
-            var fresh = CreateSedentaryReminder(config);
-            UpsertReminder(fresh);
+            if (fresh == null)
+                return;
+
+            NormalizeDataUnsafe();
+            UpsertReminderUnsafe(fresh);
+            EnsureRuntimeStatesUnsafe();
+            SaveUnsafe();
         }
     }
 
     public void ApplyBuiltInsToConfig(AppConfig config)
     {
-        var water = Find(ReminderBuiltInIds.Water);
-        var sedentary = Find(ReminderBuiltInIds.Sedentary);
-        if (water == null || sedentary == null)
-            return;
+        lock (_gate)
+        {
+            var water = FindUnsafe(ReminderBuiltInIds.Water);
+            var sedentary = FindUnsafe(ReminderBuiltInIds.Sedentary);
+            if (water == null || sedentary == null)
+                return;
 
-        config.HealthReminderEnabled = water.Enabled || sedentary.Enabled;
-        config.WaterReminderMinutes = Math.Clamp(water.Schedule.IntervalMinutes ?? 45, 5, 240);
-        config.MovementReminderMinutes = Math.Clamp(sedentary.Schedule.IntervalMinutes ?? 60, 5, 240);
+            config.HealthReminderEnabled = water.Enabled || sedentary.Enabled;
+            config.WaterReminderMinutes = Math.Clamp(water.Schedule.IntervalMinutes ?? 45, 5, 240);
+            config.MovementReminderMinutes = Math.Clamp(sedentary.Schedule.IntervalMinutes ?? 60, 5, 240);
+        }
     }
 
     public void Save()
     {
-        EnsureRuntimeStates();
-        var json = JsonSerializer.Serialize(Data, JsonOptions);
-        File.WriteAllText(_storePath, json);
+        lock (_gate)
+            SaveUnsafe();
     }
 
     public void ExportTo(string path)
     {
-        EnsureRuntimeStates();
-        var json = JsonSerializer.Serialize(Data, JsonOptions);
-        File.WriteAllText(path, json);
+        lock (_gate)
+        {
+            EnsureRuntimeStatesUnsafe();
+            var json = JsonSerializer.Serialize(_data, JsonOptions);
+            File.WriteAllText(path, json);
+        }
     }
 
     public static ReminderStoreFile? LoadFromFile(string path)
@@ -135,60 +156,104 @@ public sealed class ReminderStore
     /// <summary>替换当前全部提醒（保留内置项完整性）。</summary>
     public void ImportReplace(ReminderStoreFile imported, AppConfig config)
     {
-        Data = imported ?? new ReminderStoreFile();
-        Data.Reminders ??= [];
-        Data.Runtime ??= [];
-        EnsureBuiltInsExist();
-        EnsureRuntimeStates();
-        ApplyBuiltInsToConfig(config);
-        Save();
+        lock (_gate)
+        {
+            _data = imported == null ? new ReminderStoreFile() : Clone(imported);
+            NormalizeDataUnsafe();
+            EnsureBuiltInsExistUnsafe();
+            EnsureRuntimeStatesUnsafe();
+            ApplyBuiltInsToConfigUnsafe(config);
+            SaveUnsafe();
+        }
     }
 
     /// <summary>合并导入：按 id 更新/新增，不删除现有项，跳过覆盖内置项。</summary>
     public int ImportMerge(ReminderStoreFile imported)
     {
-        imported.Reminders ??= [];
-        var count = 0;
-        foreach (var reminder in imported.Reminders)
+        lock (_gate)
         {
-            if (string.IsNullOrWhiteSpace(reminder.Id))
-                reminder.Id = Guid.NewGuid().ToString("N");
+            imported.Reminders ??= [];
+            var count = 0;
+            foreach (var sourceReminder in imported.Reminders.Where(reminder => reminder != null))
+            {
+                var reminder = Clone(sourceReminder);
+                if (string.IsNullOrWhiteSpace(reminder.Id))
+                    reminder.Id = Guid.NewGuid().ToString("N");
 
-            var existing = Find(reminder.Id);
-            if (existing?.IsBuiltIn == true)
-                continue;
+                var existing = FindUnsafe(reminder.Id);
+                if (existing?.IsBuiltIn == true)
+                    continue;
 
-            UpsertReminder(reminder);
-            count++;
+                UpsertReminderUnsafe(reminder);
+                count++;
+            }
+
+            EnsureRuntimeStatesUnsafe();
+            SaveUnsafe();
+            return count;
         }
-
-        return count;
     }
 
-    public ReminderDefinition? Find(string id) =>
-        Data.Reminders.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.OrdinalIgnoreCase));
-
-    public ReminderRuntimeState GetRuntime(string reminderId)
+    public IReadOnlyList<ReminderDefinition> GetRemindersSnapshot()
     {
-        EnsureRuntimeStates();
-        return Data.Runtime.First(r => string.Equals(r.ReminderId, reminderId, StringComparison.OrdinalIgnoreCase));
+        lock (_gate)
+        {
+            NormalizeDataUnsafe();
+            return Clone(_data.Reminders).ToArray();
+        }
+    }
+
+    public ReminderDefinition? Find(string id)
+    {
+        lock (_gate)
+        {
+            var reminder = FindUnsafe(id);
+            return reminder == null ? null : Clone(reminder);
+        }
+    }
+
+    public ReminderRuntimeState GetRuntimeSnapshot(string reminderId)
+    {
+        lock (_gate)
+        {
+            EnsureRuntimeStatesUnsafe();
+            return Clone(_data.Runtime.First(
+                runtime => string.Equals(runtime.ReminderId, reminderId, StringComparison.OrdinalIgnoreCase)));
+        }
+    }
+
+    internal void MutateAndSave(Action<ReminderStoreFile> mutation)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+        lock (_gate)
+        {
+            NormalizeDataUnsafe();
+            EnsureRuntimeStatesUnsafe();
+            mutation(_data);
+            NormalizeDataUnsafe();
+            EnsureRuntimeStatesUnsafe();
+            SaveUnsafe();
+        }
     }
 
     public void SyncBuiltInsFromConfig(AppConfig config)
     {
-        EnsureBuiltInsExist();
-        var water = Find(ReminderBuiltInIds.Water);
-        var sedentary = Find(ReminderBuiltInIds.Sedentary);
-        if (water != null)
+        lock (_gate)
         {
-            water.Enabled = config.HealthReminderEnabled;
-            water.Schedule.IntervalMinutes = Math.Clamp(config.WaterReminderMinutes, 5, 240);
-        }
+            EnsureBuiltInsExistUnsafe();
+            var water = FindUnsafe(ReminderBuiltInIds.Water);
+            var sedentary = FindUnsafe(ReminderBuiltInIds.Sedentary);
+            if (water != null)
+            {
+                water.Enabled = config.HealthReminderEnabled;
+                water.Schedule.IntervalMinutes = Math.Clamp(config.WaterReminderMinutes, 5, 240);
+            }
 
-        if (sedentary != null)
-        {
-            sedentary.Enabled = config.HealthReminderEnabled;
-            sedentary.Schedule.IntervalMinutes = Math.Clamp(config.MovementReminderMinutes, 5, 240);
+            if (sedentary != null)
+            {
+                sedentary.Enabled = config.HealthReminderEnabled;
+                sedentary.Schedule.IntervalMinutes = Math.Clamp(config.MovementReminderMinutes, 5, 240);
+            }
         }
     }
 
@@ -203,25 +268,25 @@ public sealed class ReminderStore
             ]
         };
 
-    private void EnsureBuiltInsExist()
+    private void EnsureBuiltInsExistUnsafe()
     {
-        if (Find(ReminderBuiltInIds.Water) == null)
-            Data.Reminders.Insert(0, CreateWaterReminder(new AppConfig()));
+        if (FindUnsafe(ReminderBuiltInIds.Water) == null)
+            _data.Reminders.Insert(0, CreateWaterReminder(new AppConfig()));
 
-        if (Find(ReminderBuiltInIds.Sedentary) == null)
-            Data.Reminders.Insert(Find(ReminderBuiltInIds.Water) != null ? 1 : 0, CreateSedentaryReminder(new AppConfig()));
+        if (FindUnsafe(ReminderBuiltInIds.Sedentary) == null)
+            _data.Reminders.Insert(FindUnsafe(ReminderBuiltInIds.Water) != null ? 1 : 0, CreateSedentaryReminder(new AppConfig()));
     }
 
-    private void EnsureRuntimeStates()
+    private void EnsureRuntimeStatesUnsafe()
     {
-        Data.Runtime ??= new List<ReminderRuntimeState>();
+        NormalizeDataUnsafe();
         var now = DateTime.Now;
-        foreach (var reminder in Data.Reminders)
+        foreach (var reminder in _data.Reminders)
         {
-            if (Data.Runtime.Any(r => string.Equals(r.ReminderId, reminder.Id, StringComparison.OrdinalIgnoreCase)))
+            if (_data.Runtime.Any(r => string.Equals(r.ReminderId, reminder.Id, StringComparison.OrdinalIgnoreCase)))
                 continue;
 
-            Data.Runtime.Add(new ReminderRuntimeState
+            _data.Runtime.Add(new ReminderRuntimeState
             {
                 ReminderId = reminder.Id,
                 ContinuousUseStart = now,
@@ -229,8 +294,59 @@ public sealed class ReminderStore
             });
         }
 
-        Data.Runtime.RemoveAll(r =>
-            !Data.Reminders.Any(d => string.Equals(d.Id, r.ReminderId, StringComparison.OrdinalIgnoreCase)));
+        _data.Runtime.RemoveAll(r =>
+            !_data.Reminders.Any(d => string.Equals(d.Id, r.ReminderId, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private void NormalizeDataUnsafe()
+    {
+        _data.Reminders ??= [];
+        _data.Runtime ??= [];
+        _data.Reminders = _data.Reminders.Where(reminder => reminder != null).ToList();
+        _data.Runtime = _data.Runtime.Where(runtime => runtime != null).ToList();
+    }
+
+    private ReminderDefinition? FindUnsafe(string id) =>
+        _data.Reminders.FirstOrDefault(
+            reminder => string.Equals(reminder.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    private void UpsertReminderUnsafe(ReminderDefinition reminder)
+    {
+        var existing = FindUnsafe(reminder.Id);
+        if (existing == null)
+        {
+            _data.Reminders.Add(reminder);
+            return;
+        }
+
+        var index = _data.Reminders.IndexOf(existing);
+        _data.Reminders[index] = reminder;
+    }
+
+    private void ApplyBuiltInsToConfigUnsafe(AppConfig config)
+    {
+        var water = FindUnsafe(ReminderBuiltInIds.Water);
+        var sedentary = FindUnsafe(ReminderBuiltInIds.Sedentary);
+        if (water == null || sedentary == null)
+            return;
+
+        config.HealthReminderEnabled = water.Enabled || sedentary.Enabled;
+        config.WaterReminderMinutes = Math.Clamp(water.Schedule.IntervalMinutes ?? 45, 5, 240);
+        config.MovementReminderMinutes = Math.Clamp(sedentary.Schedule.IntervalMinutes ?? 60, 5, 240);
+    }
+
+    private void SaveUnsafe()
+    {
+        EnsureRuntimeStatesUnsafe();
+        var json = JsonSerializer.Serialize(_data, JsonOptions);
+        File.WriteAllText(_storePath, json);
+    }
+
+    private static T Clone<T>(T value)
+    {
+        var json = JsonSerializer.Serialize(value, JsonOptions);
+        return JsonSerializer.Deserialize<T>(json, JsonOptions)
+               ?? throw new InvalidDataException("Unable to clone reminder data.");
     }
 
     private static ReminderDefinition CreateWaterReminder(AppConfig config) => new()

@@ -32,6 +32,11 @@
     <sys:String x:Key="Nav.Collapse">Collapse</sys:String>
     <sys:String x:Key="Nav.ExpandSidebar">Expand sidebar</sys:String>
     <sys:String x:Key="Nav.CollapseSidebar">Collapse sidebar</sys:String>
+    <sys:String x:Key="Nav.Group.Workbench">Workbench</sys:String>
+    <sys:String x:Key="Nav.Group.Collaboration">Collaboration</sys:String>
+    <sys:String x:Key="Nav.Group.FileEfficiency">File efficiency</sys:String>
+    <sys:String x:Key="Nav.Group.SystemMaintenance">System maintenance</sys:String>
+    <sys:String x:Key="Nav.Group.Other">Other</sys:String>
     <!-- ══════ Title Bar ══════ -->
     <sys:String x:Key="TitleBar.Minimize">Minimize</sys:String>
     <sys:String x:Key="TitleBar.Maximize">Maximize</sys:String>

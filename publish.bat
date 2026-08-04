@@ -31,6 +31,7 @@ for /f %%i in ('powershell -NoProfile -Command "[xml]$proj = Get-Content -Litera
 
 REM Always publish to local disk (UNC cannot reliably hold exe/dll; Windows may block running from UNC).
 set "BUILD_DIR=C:\temp\DanceMonkey\%TS%"
+set "NUGET_TEMP=C:\temp\DanceMonkey\nuget-%TS%"
 set "OUT_DIR=%~dp0publish\win-x64\%TS%"
 set "CLI_BUILD_DIR=%BUILD_DIR%\cli"
 set "MAIN_EXE=%BUILD_DIR%\DanceMonkey.exe"
@@ -60,8 +61,12 @@ set NUGET_AUDIT=false
 set "NUGET_FALLBACK_PACKAGES="
 
 if not exist "C:\temp\DanceMonkey" mkdir "C:\temp\DanceMonkey" >nul 2>nul
+if not exist "%NUGET_TEMP%" mkdir "%NUGET_TEMP%" >nul 2>nul
+set "TEMP=%NUGET_TEMP%"
+set "TMP=%NUGET_TEMP%"
 
 echo [INFO] Publish output (run from here): %BUILD_DIR%
+echo [INFO] NuGet temporary directory: %NUGET_TEMP%
 echo.
 
 echo [1/7] Restoring solution...
@@ -117,6 +122,20 @@ echo %BUILD_DIR%> "%LAST_LOCAL_TXT%"
 
 echo.
 echo [5/7] Creating update package...
+set "PREVIOUS_MANIFEST_VERSION="
+if exist "%MANIFEST_PATH%" (
+  for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "$manifest = ConvertFrom-Json (Get-Content -Raw -LiteralPath '%MANIFEST_PATH%'); if ($manifest.version) { $manifest.version }"`) do set "PREVIOUS_MANIFEST_VERSION=%%i"
+)
+
+if defined PREVIOUS_MANIFEST_VERSION (
+  if /I not "%PUBLISH_ALLOW_SAME_VERSION%"=="1" (
+    powershell -NoProfile -Command "try { if ([version]'%APP_VERSION%' -le [version]'%PREVIOUS_MANIFEST_VERSION%') { exit 1 } } catch { exit 1 }"
+    if errorlevel 1 goto :version_not_bumped
+  ) else (
+    echo [WARN] PUBLISH_ALLOW_SAME_VERSION=1: overwriting update package without a version increase.
+  )
+)
+
 if not exist "%ARTIFACTS_DIR%" mkdir "%ARTIFACTS_DIR%"
 powershell -NoProfile -Command "Compress-Archive -Path (Get-ChildItem -LiteralPath '%BUILD_DIR%' -Force).FullName -DestinationPath '%PACKAGE_PATH%' -Force"
 if errorlevel 1 goto :zip_failed
@@ -164,5 +183,15 @@ exit /b 1
 :zip_failed
 echo.
 echo [ERROR] Failed to create update package.
+pause
+exit /b 1
+
+:version_not_bumped
+echo.
+echo [ERROR] A newer application version is required for an online update package.
+echo         Current version: %APP_VERSION%
+echo         Existing manifest version: %PREVIOUS_MANIFEST_VERSION%
+echo         Update Version, FileVersion, AssemblyVersion, and InformationalVersion before publishing.
+echo         Set PUBLISH_ALLOW_SAME_VERSION=1 only for a deliberate local test package overwrite.
 pause
 exit /b 1

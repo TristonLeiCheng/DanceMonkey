@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -14,6 +15,41 @@ using DesktopAssistant.Views;
 using Forms = System.Windows.Forms;
 
 namespace DesktopAssistant;
+
+public sealed class SidebarExpanderStateCoordinator
+{
+    private const int ExpanderCount = 5;
+    private bool[]? _expandedSnapshot;
+
+    public bool[] Apply(bool collapsed, IReadOnlyList<bool> current)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        if (current.Count != ExpanderCount)
+            throw new ArgumentException($"Expected {ExpanderCount} expander states.", nameof(current));
+
+        if (collapsed)
+        {
+            _expandedSnapshot ??= current.ToArray();
+            return [true, true, true, true, true];
+        }
+
+        if (_expandedSnapshot is null)
+            return current.ToArray();
+
+        var restored = _expandedSnapshot;
+        _expandedSnapshot = null;
+        return restored;
+    }
+
+    public void MarkExpanded(int groupIndex)
+    {
+        if ((uint)groupIndex >= ExpanderCount)
+            throw new ArgumentOutOfRangeException(nameof(groupIndex));
+
+        if (_expandedSnapshot is not null)
+            _expandedSnapshot[groupIndex] = true;
+    }
+}
 
 public partial class MainWindow : Window
 {
@@ -57,6 +93,7 @@ public partial class MainWindow : Window
     private readonly CleanupView _cleanupView = new();
     private readonly CodexProxyView _codexProxyView = new();
     private readonly QuickAccessView _quickAccessView = new();
+    private readonly TodayWorkspaceView _todayWorkspaceView;
     private readonly AiChatView _aiChatView = new();
     private readonly NotesView _notesView = new();
     private readonly PptWorkspaceView _pptWorkspaceView = new();
@@ -89,20 +126,28 @@ public partial class MainWindow : Window
     private TaskbarResourceStripWindow? _taskbarResourceStripWindow;
     private bool _networkTrayOk = true;
     private bool _sidebarCollapsed;
+    private readonly SidebarExpanderStateCoordinator _sidebarExpanderState = new();
 
     public MainWindow()
     {
         _scheduledReminderService = new ScheduledReminderService(_reminderStore);
         _scheduledRemindersView = new ScheduledRemindersView(_scheduledReminderService, TestReminderPresentation);
+        _todayWorkspaceView = new TodayWorkspaceView(TodayDashboardService.CreateProduction(_reminderStore));
         InitializeComponent();
         VersionLabel.Text = AppVersionService.GetSidebarVersionLabel();
 
         _navButtons =
         [
-            NavAiChat, NavNotes, NavPpt, NavTodo, NavReminders, NavQuickAccess, NavMeeting, NavFileManager, NavFileTools,
+            NavToday, NavAiChat, NavNotes, NavPpt, NavTodo, NavReminders, NavQuickAccess, NavMeeting, NavFileManager, NavFileTools,
             NavPdfTools, NavCleanup, NavCodexProxy, NavNetwork, NavPasswordVault, NavProcessDiag, NavDance, NavSettings
         ];
+        RefreshLocalizedShellText();
 
+        _todayWorkspaceView.AiRequested += TodayWorkspaceView_OnAiRequested;
+        _todayWorkspaceView.NotesRequested += TodayWorkspaceView_OnNotesRequested;
+        _todayWorkspaceView.NoteRequested += TodayWorkspaceView_OnNoteRequested;
+        _todayWorkspaceView.SourceRequested += TodayWorkspaceView_OnSourceRequested;
+        _todayWorkspaceView.CaptureRequested += TodayWorkspaceView_OnCaptureRequested;
 
         _danceView.PetModeChanged   += (_, _) => SyncPetMode();
 
@@ -195,7 +240,7 @@ public partial class MainWindow : Window
             RefreshProxyEnforcement();
         };
 
-        SwitchPage(AppPage.Notes);
+        SwitchPage(AppPage.Today);
 
         _tray.Start();
         SyncTrayResourceToggleMenuState();
@@ -204,6 +249,7 @@ public partial class MainWindow : Window
 
     private void OnSettingsSaved(object? sender, EventArgs e)
     {
+        RefreshLocalizedShellText();
         _floating?.ApplyPlacement();
         RefreshClipboardMonitorFlag();
         SyncPetMode();
@@ -220,7 +266,16 @@ public partial class MainWindow : Window
         RefreshResourceMonitorInterval();
         SyncTrayResourceToggleMenuState();
         UpdateTrayResourceMonitor();
+        _ = _todayWorkspaceView.RefreshAsync(TodayRefreshTrigger.Settings);
     }
+
+    private void RefreshLocalizedShellText() =>
+        NavProcessDiagLabel.Text = GetProcessDiagnosticsLabel(LocalizationManager.CurrentLanguage);
+
+    private static string GetProcessDiagnosticsLabel(string language) =>
+        language.Equals("en-US", StringComparison.OrdinalIgnoreCase)
+            ? "Process Diagnostics"
+            : "进程诊断";
 
     public void TogglePetMode()
     {
@@ -619,7 +674,9 @@ public partial class MainWindow : Window
             return;
         var max = WindowState == WindowState.Maximized;
         BtnCaptionMaximize.Content = max ? "\uE923" : "\uE922";
-        BtnCaptionMaximize.ToolTip = max ? L("TitleBar.Restore") : L("TitleBar.Maximize");
+        var captionResourceKey = max ? "TitleBar.Restore" : "TitleBar.Maximize";
+        BtnCaptionMaximize.SetResourceReference(FrameworkElement.ToolTipProperty, captionResourceKey);
+        BtnCaptionMaximize.SetResourceReference(AutomationProperties.NameProperty, captionResourceKey);
     }
 
     private void NavButton_OnClick(object sender, RoutedEventArgs e)
@@ -628,6 +685,40 @@ public partial class MainWindow : Window
         var page = ParseAppPage(btn.Tag);
         SwitchPage(page);
     }
+
+    private void TodayWorkspaceView_OnAiRequested(object? sender, TodayAiRequestedEventArgs e)
+    {
+        AgentHandoff.Request(e.DigestPrompt, enableAgent: false);
+        SwitchPage(AppPage.AiChat);
+    }
+
+    private void TodayWorkspaceView_OnNotesRequested(object? sender, EventArgs e) => SwitchPage(AppPage.Notes);
+
+    private void TodayWorkspaceView_OnNoteRequested(object? sender, TodayNoteRequestedEventArgs e)
+    {
+        SwitchPage(AppPage.Notes);
+        _notesView.ReloadAndSelectNote(e.FullPath);
+    }
+
+    private void TodayWorkspaceView_OnSourceRequested(object? sender, TodaySourceRequestedEventArgs e)
+    {
+        var route = TodaySourceRouter.Resolve(e.Source, e.Id);
+        SwitchPage(route.Page);
+        switch (route.Page)
+        {
+            case AppPage.Todo:
+                _todoView.OpenTaskById(route.Id);
+                break;
+            case AppPage.MeetingAssistant:
+                _meetingAssistantView.OpenMeetingById(route.Id);
+                break;
+            case AppPage.ScheduledReminders:
+                _scheduledRemindersView.OpenReminderById(route.Id);
+                break;
+        }
+    }
+
+    private void TodayWorkspaceView_OnCaptureRequested(object? sender, EventArgs e) => TrayQuickScreenshot();
 
     private static AppPage ParseAppPage(object? tag)
     {
@@ -651,10 +742,7 @@ public partial class MainWindow : Window
 
     private void ApplySidebarState()
     {
-        const double expandedWidth = 228;
-        const double collapsedWidth = 56;
-
-        SidebarColumn.Width = new GridLength(_sidebarCollapsed ? collapsedWidth : expandedWidth);
+        SidebarColumn.Width = new GridLength(_sidebarCollapsed ? 72 : 248);
 
         var vis = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
 
@@ -665,8 +753,8 @@ public partial class MainWindow : Window
             {
                 btn.Padding = _sidebarCollapsed ? new Thickness(0) : new Thickness(14, 0, 14, 0);
                 btn.HorizontalContentAlignment = _sidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
-                if (sp.Children.Count > 1)
-                    sp.Children[1].Visibility = vis;
+                if (sp.Children.Count > 1 && sp.Children[1] is TextBlock label)
+                    label.Visibility = vis;
                 if (sp.Children.Count > 0 && sp.Children[0] is TextBlock icon)
                 {
                     icon.Width = _sidebarCollapsed ? double.NaN : 24;
@@ -676,15 +764,22 @@ public partial class MainWindow : Window
             }
         }
 
-        // When collapsed: hide expander headers but keep children visible
-        if (_sidebarCollapsed)
-        {
-            NavWorkbenchExpander.IsExpanded = true;
-            NavFuncExpander.IsExpanded = true;
-            NavToolsExpander.IsExpanded = true;
-            NavSystemExpander.IsExpanded = true;
-            NavOtherExpander.IsExpanded = true;
-        }
+        // Collapsed mode shows every icon, then restores the exact expanded-state snapshot.
+        var expanderStates = _sidebarExpanderState.Apply(
+            _sidebarCollapsed,
+            [
+                NavWorkbenchExpander.IsExpanded,
+                NavFuncExpander.IsExpanded,
+                NavToolsExpander.IsExpanded,
+                NavSystemExpander.IsExpanded,
+                NavOtherExpander.IsExpanded
+            ]);
+        NavWorkbenchExpander.IsExpanded = expanderStates[0];
+        NavFuncExpander.IsExpanded = expanderStates[1];
+        NavToolsExpander.IsExpanded = expanderStates[2];
+        NavSystemExpander.IsExpanded = expanderStates[3];
+        NavOtherExpander.IsExpanded = expanderStates[4];
+
         // Collapse mode: hide expander headers via template trigger.
         NavWorkbenchExpander.Tag = _sidebarCollapsed ? "collapsed" : null;
         NavFuncExpander.Tag = _sidebarCollapsed ? "collapsed" : null;
@@ -704,8 +799,11 @@ public partial class MainWindow : Window
         // Version label
         VersionLabel.Visibility = vis;
 
-        // Update toggle button tooltip
-        BtnSidebarToggle.ToolTip = _sidebarCollapsed ? L("Nav.ExpandSidebar") : L("Nav.CollapseSidebar");
+        // Update toggle button presentation and tooltip
+        BtnSidebarToggle.Tag = _sidebarCollapsed ? "collapsed" : null;
+        var toggleResourceKey = _sidebarCollapsed ? "Nav.ExpandSidebar" : "Nav.CollapseSidebar";
+        BtnSidebarToggle.SetResourceReference(FrameworkElement.ToolTipProperty, toggleResourceKey);
+        BtnSidebarToggle.SetResourceReference(AutomationProperties.NameProperty, toggleResourceKey);
     }
 
     private void NotesToolbar_Today_OnClick(object sender, RoutedEventArgs e) => _notesView.ToolbarTodayNote();
@@ -739,6 +837,7 @@ public partial class MainWindow : Window
     {
         PageTitleBar.Text = page switch
         {
+            AppPage.Today => "今日工作台",
             AppPage.AiChat => L("Nav.AiChat"),
             AppPage.Notes => L("Nav.Notes"),
             AppPage.Ppt => L("Nav.Ppt"),
@@ -769,6 +868,7 @@ public partial class MainWindow : Window
     {
         PageHost.Content = page switch
         {
+            AppPage.Today => _todayWorkspaceView,
             AppPage.AiChat => _aiChatView,
             AppPage.Notes => _notesView,
             AppPage.Ppt => _pptWorkspaceView,
@@ -809,6 +909,8 @@ public partial class MainWindow : Window
 
         if (page == AppPage.Skills)
             _settingsView.ShowSkillsSettings();
+        if (page == AppPage.Today)
+            _ = _todayWorkspaceView.RefreshAsync(TodayRefreshTrigger.Navigation);
         if (page == AppPage.NetworkMonitor)
             _networkMonitorView.RequestRefresh();
         if (page == AppPage.QuickAccess)
@@ -838,41 +940,80 @@ public partial class MainWindow : Window
     /// <summary>进入某页时自动展开对应侧栏分组，避免子项被收起后找不到。</summary>
     private void SyncNavExpandersForPage(AppPage page)
     {
-        if (page is AppPage.AiChat or AppPage.Email or AppPage.Notes or AppPage.Ppt or AppPage.Todo or AppPage.ScheduledReminders or AppPage.QuickAccess)
-            NavWorkbenchExpander.IsExpanded = true;
-        if (page is AppPage.MeetingAssistant)
-            NavFuncExpander.IsExpanded = true;
-        if (page is AppPage.FileManager or AppPage.FileTools or AppPage.PdfTools)
-            NavToolsExpander.IsExpanded = true;
-        if (page is AppPage.NetworkMonitor or AppPage.Cleanup or AppPage.CodexProxy or AppPage.PasswordVault or AppPage.ProcessDiagnostics)
-            NavSystemExpander.IsExpanded = true;
-        if (page is AppPage.Dance)
-            NavOtherExpander.IsExpanded = true;
+        var groupIndex = GetSidebarGroupIndex(page);
+        if (groupIndex is null)
+            return;
+
+        if (_sidebarCollapsed)
+            _sidebarExpanderState.MarkExpanded(groupIndex.Value);
+
+        switch (groupIndex.Value)
+        {
+            case 0:
+                NavWorkbenchExpander.IsExpanded = true;
+                break;
+            case 1:
+                NavFuncExpander.IsExpanded = true;
+                break;
+            case 2:
+                NavToolsExpander.IsExpanded = true;
+                break;
+            case 3:
+                NavSystemExpander.IsExpanded = true;
+                break;
+            case 4:
+                NavOtherExpander.IsExpanded = true;
+                break;
+        }
     }
+
+    private static int? GetSidebarGroupIndex(AppPage page) => page switch
+    {
+        AppPage.Today
+            or AppPage.AiChat
+            or AppPage.Email
+            or AppPage.Notes
+            or AppPage.Ppt
+            or AppPage.Todo
+            or AppPage.ScheduledReminders
+            or AppPage.QuickAccess
+            or AppPage.Translate
+            or (AppPage)4 => 0,
+        AppPage.MeetingAssistant => 1,
+        AppPage.FileManager or AppPage.FileTools or AppPage.PdfTools => 2,
+        AppPage.NetworkMonitor
+            or AppPage.Cleanup
+            or AppPage.CodexProxy
+            or AppPage.PasswordVault
+            or AppPage.ProcessDiagnostics => 3,
+        AppPage.Dance => 4,
+        _ => null
+    };
 
     /// <summary>映射 AppPage → _navButtons 索引（跳过已废弃的 Chat=4）。</summary>
     private static readonly Dictionary<AppPage, int> NavButtonIndex = new()
     {
-        [AppPage.AiChat] = 0,
-        [AppPage.Notes] = 1,
-        [AppPage.Ppt] = 2,
-        [AppPage.Todo] = 3,
-        [AppPage.ScheduledReminders] = 4,
-        [AppPage.QuickAccess] = 5,
-        [AppPage.Email] = 0,
-        [AppPage.MeetingAssistant] = 6,
-        [AppPage.Translate] = 0,
-        [AppPage.FileManager] = 7,
-        [AppPage.FileTools] = 8,
-        [AppPage.PdfTools] = 9,
-        [AppPage.Cleanup] = 10,
-        [AppPage.CodexProxy] = 11,
-        [AppPage.NetworkMonitor] = 12,
-        [AppPage.PasswordVault] = 13,
-        [AppPage.ProcessDiagnostics] = 14,
-        [AppPage.Dance] = 15,
-        [AppPage.Settings] = 16,
-        [AppPage.Skills] = 16,
+        [AppPage.Today] = 0,
+        [AppPage.AiChat] = 1,
+        [AppPage.Notes] = 2,
+        [AppPage.Ppt] = 3,
+        [AppPage.Todo] = 4,
+        [AppPage.ScheduledReminders] = 5,
+        [AppPage.QuickAccess] = 6,
+        [AppPage.Email] = 1,
+        [AppPage.MeetingAssistant] = 7,
+        [AppPage.Translate] = 1,
+        [AppPage.FileManager] = 8,
+        [AppPage.FileTools] = 9,
+        [AppPage.PdfTools] = 10,
+        [AppPage.Cleanup] = 11,
+        [AppPage.CodexProxy] = 12,
+        [AppPage.NetworkMonitor] = 13,
+        [AppPage.PasswordVault] = 14,
+        [AppPage.ProcessDiagnostics] = 15,
+        [AppPage.Dance] = 16,
+        [AppPage.Settings] = 17,
+        [AppPage.Skills] = 17,
     };
 
     private void SetActiveNav(AppPage page)

@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:nav="clr-namespace:DesktopAssistant"
+        xmlns:automation="clr-namespace:System.Windows.Automation;assembly=PresentationCore"
         xmlns:swc="clr-namespace:System.Windows.Controls;assembly=PresentationFramework"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Icon="{StaticResource AppWindowIcon}"
@@ -26,23 +27,37 @@
         <!-- Caption bar buttons — minimal -->
         <Style x:Key="CaptionBarButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#9A9286"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushTextSecondary}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="Width" Value="46"/>
             <Setter Property="Height" Value="38"/>
-            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="Transparent">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#1A000000"/>
-                                <Setter Property="Foreground" Value="#2D2A26"/>
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource BrushSurfaceHover}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushTextPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource BrushAccentMuted}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushAccentPressed}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource BrushBorderFocus}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -53,13 +68,26 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="Transparent">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#E81123"/>
-                                <Setter Property="Foreground" Value="White"/>
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource BrushDanger}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushTextOnAccent}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource BrushDangerHover}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushTextOnAccent}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource BrushDanger}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -67,48 +95,44 @@
             </Setter>
         </Style>
 
-        <!-- Navigation：选中态用 Style.DataTrigger 绑定附加属性（模板内 Property=(nav:...) 无法编译）；左侧条单独一列避免被背景盖住 -->
+        <!-- Scheme 1 navigation: flat lavender pills with a violet active marker. -->
         <Style x:Key="NavButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{StaticResource BrushSidebarText}"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Effect" Value="{x:Null}"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Padding" Value="14,0,14,0"/>
-            <Setter Property="Margin" Value="4,2,8,2"/>
-            <Setter Property="Height" Value="38"/>
-            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Padding" Value="14,0,12,0"/>
+            <Setter Property="Margin" Value="12,2"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border x:Name="AccentBar"
-                                    Grid.Column="0"
-                                    Width="0"
-                                    CornerRadius="2"
-                                    Margin="0"
-                                    VerticalAlignment="Stretch"
-                                    Background="Transparent"
-                                    Visibility="Collapsed"/>
                             <Border x:Name="bd"
-                                    Grid.Column="1"
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="10"
+                                    CornerRadius="9"
                                     Padding="0"
                                     Effect="{TemplateBinding Effect}">
                                 <ContentPresenter VerticalAlignment="Center"
                                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                   Margin="{TemplateBinding Padding}"/>
                             </Border>
+                            <Border x:Name="AccentBar"
+                                    Width="3"
+                                    Margin="7,9,0,9"
+                                    HorizontalAlignment="Left"
+                                    CornerRadius="2"
+                                    Background="{StaticResource BrushAccent}"
+                                    Visibility="{Binding Path=(nav:NavButtonHelper.IsNavActive),
+                                                         RelativeSource={RelativeSource TemplatedParent},
+                                                         Converter={StaticResource NavBoolToVis}}"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsEnabled" Value="False">
@@ -120,9 +144,7 @@
             </Setter>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Path=(nav:NavButtonHelper.IsNavActive), RelativeSource={RelativeSource Self}}" Value="True">
-                    <Setter Property="Background" Value="{StaticResource BrushSidebarNavActiveBg}"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource BrushSidebarNavActiveBorder}"/>
-                    <Setter Property="BorderThickness" Value="1"/>
+                    <Setter Property="Background" Value="{StaticResource BrushSidebarActive}"/>
                     <Setter Property="Effect" Value="{x:Null}"/>
                     <Setter Property="Foreground" Value="{StaticResource BrushSidebarTextActive}"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>
@@ -133,6 +155,7 @@
                         <Condition Binding="{Binding Path=(nav:NavButtonHelper.IsNavActive), RelativeSource={RelativeSource Self}}" Value="False"/>
                     </MultiDataTrigger.Conditions>
                     <Setter Property="Background" Value="{StaticResource BrushSidebarHover}"/>
+                    <Setter Property="Foreground" Value="{StaticResource BrushSidebarTextActive}"/>
                 </MultiDataTrigger>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
@@ -141,10 +164,32 @@
                     </MultiDataTrigger.Conditions>
                     <Setter Property="Background" Value="{StaticResource BrushSidebarNavActiveHover}"/>
                 </MultiDataTrigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="{StaticResource BrushAccentMuted}"/>
+                    <Setter Property="Foreground" Value="{StaticResource BrushSidebarTextActive}"/>
+                </Trigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsPressed, RelativeSource={RelativeSource Self}}" Value="True"/>
+                        <Condition Binding="{Binding Path=(nav:NavButtonHelper.IsNavActive), RelativeSource={RelativeSource Self}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Background" Value="{StaticResource BrushAccentPressed}"/>
+                    <Setter Property="Foreground" Value="{StaticResource BrushTextOnAccent}"/>
+                </MultiDataTrigger>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="{StaticResource BrushBorderFocus}"/>
+                </Trigger>
             </Style.Triggers>
         </Style>
 
-        <!-- 侧栏分组：可展开/收起 -->
+        <Style x:Key="SidebarSectionHeading" TargetType="TextBlock">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushSidebarMuted}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- Compact, transparent section headings with subtle chevrons. -->
         <Style x:Key="SidebarExpanderStyle" TargetType="Expander">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -159,20 +204,44 @@
                                               DockPanel.Dock="Top"
                                               Background="Transparent"
                                               BorderThickness="0"
-                                              Padding="10,8,12,8"
+                                              Padding="16,7,16,5"
                                               HorizontalContentAlignment="Stretch"
-                                              Focusable="False"
+                                              Focusable="True"
+                                              automation:AutomationProperties.Name="{Binding Path=(automation:AutomationProperties.Name), RelativeSource={RelativeSource TemplatedParent}}"
                                               IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border x:Name="HeaderSurface"
+                                                    Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}">
+                                                <ContentPresenter Content="{TemplateBinding Content}"
+                                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                                  ContentTemplateSelector="{TemplateBinding ContentTemplateSelector}"
+                                                                  Margin="{TemplateBinding Padding}"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="HeaderSurface" Property="Background" Value="{StaticResource BrushSidebarHover}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                                    <Setter TargetName="HeaderSurface" Property="BorderBrush" Value="{StaticResource BrushBorderFocus}"/>
+                                                    <Setter TargetName="HeaderSurface" Property="BorderThickness" Value="1"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock x:Name="ExpArrow" Grid.Column="0" Text="▾" FontSize="10"
-                                                   Foreground="{StaticResource BrushSidebarExpanderChevron}"
-                                                   VerticalAlignment="Center" Margin="10,0,6,0"/>
-                                        <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center"
+                                        <ContentPresenter Grid.Column="0" ContentSource="Header" VerticalAlignment="Center"
                                                           HorizontalAlignment="Left"/>
+                                        <TextBlock x:Name="ExpArrow" Grid.Column="1" Text="&#xE70D;"
+                                                   FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                                   Foreground="{StaticResource BrushSidebarText}"
+                                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
                                     </Grid>
                                 </ToggleButton>
                                 <Border x:Name="ExpandSite" Background="Transparent" Visibility="Visible">
@@ -186,11 +255,11 @@
                             </Trigger>
                             <Trigger Property="IsExpanded" Value="False">
                                 <Setter TargetName="ExpandSite" Property="Visibility" Value="Collapsed"/>
-                                <Setter TargetName="ExpArrow" Property="Text" Value="▸"/>
+                                <Setter TargetName="ExpArrow" Property="Text" Value="&#xE76C;"/>
                             </Trigger>
                             <Trigger Property="IsExpanded" Value="True">
                                 <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
-                                <Setter TargetName="ExpArrow" Property="Text" Value="▾"/>
+                                <Setter TargetName="ExpArrow" Property="Text" Value="&#xE70D;"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -201,26 +270,24 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="SidebarColumn" Width="228"/>
+            <ColumnDefinition x:Name="SidebarColumn" Width="248"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
         <!-- ═══════════════ SIDEBAR ═══════════════ -->
-        <Border Grid.Column="0"
+        <Border x:Name="SidebarSurface"
+                Grid.Column="0"
+                Background="{StaticResource BrushSidebarBg}"
                 BorderBrush="{StaticResource BrushBorder}"
                 BorderThickness="0,0,1,0"
                 SnapsToDevicePixels="True">
             <Grid>
-                <!-- 底色：暖米黄渐变 -->
-                <Rectangle Fill="{StaticResource BrushSidebarRailBg}"/>
-                <!-- 方格纹理：极淡 -->
-                <Rectangle Fill="{StaticResource BrushSidebarGridOverlay}" IsHitTestVisible="False"/>
                 <DockPanel LastChildFill="True">
                 <!-- Brand header -->
-                <StackPanel x:Name="BrandHeaderPanel" DockPanel.Dock="Top" Margin="14,14,14,0">
+                <StackPanel x:Name="BrandHeaderPanel" DockPanel.Dock="Top" Margin="16,16,16,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Border x:Name="BrandLogo" Width="38" Height="38" CornerRadius="11" Margin="0,0,12,0"
-                                BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" Background="#FFFFFF"
+                                BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" Background="{StaticResource BrushSidebarSurface}"
                                 ClipToBounds="True" SnapsToDevicePixels="True">
                             <Image Source="{StaticResource LogoImageSource}"
                                    Stretch="Uniform"
@@ -256,6 +323,8 @@
                     <Button x:Name="BtnSidebarToggle" Click="BtnSidebarToggle_OnClick"
                             Background="Transparent" BorderThickness="0" Cursor="Hand" Height="32"
                             HorizontalAlignment="Stretch" Margin="8,0,8,4"
+                            AutomationProperties.Name="{DynamicResource Nav.CollapseSidebar}"
+                            ToolTip="{DynamicResource Nav.CollapseSidebar}"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
@@ -271,6 +340,13 @@
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter TargetName="tb" Property="Background" Value="{StaticResource BrushSidebarHover}"/>
                                     </Trigger>
+                                    <Trigger Property="IsKeyboardFocused" Value="True">
+                                        <Setter TargetName="tb" Property="BorderBrush" Value="{StaticResource BrushBorderFocus}"/>
+                                    </Trigger>
+                                    <Trigger Property="Tag" Value="collapsed">
+                                        <Setter TargetName="ToggleIcon" Property="Text" Value="▶"/>
+                                        <Setter TargetName="ToggleLabel" Property="Visibility" Value="Collapsed"/>
+                                    </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </Button.Template>
@@ -281,43 +357,56 @@
                 <!-- Navigation -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,12,0,0" Padding="0,0,4,0">
                     <StackPanel>
-                        <Expander x:Name="NavWorkbenchExpander" Style="{StaticResource SidebarExpanderStyle}" IsExpanded="True">
+                        <Expander x:Name="NavWorkbenchExpander" Style="{StaticResource SidebarExpanderStyle}" IsExpanded="True"
+                                  automation:AutomationProperties.Name="{DynamicResource Nav.Group.Workbench}">
                             <Expander.Header>
-                                <TextBlock Text="工 作 台" FontSize="10.5" FontWeight="SemiBold"
-                                           Foreground="{StaticResource BrushSidebarMuted}"/>
+                                <TextBlock Text="{DynamicResource Nav.Group.Workbench}" Style="{StaticResource SidebarSectionHeading}"/>
                             </Expander.Header>
                             <StackPanel>
-                                <Button x:Name="NavAiChat" Tag="AiChat" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavToday" Tag="Today" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Notes.Today}" ToolTip="{DynamicResource Notes.Today}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="☀" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{DynamicResource Notes.Today}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="NavAiChat" Tag="AiChat" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.AiChat}" ToolTip="{DynamicResource Nav.AiChat}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="💬" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.AiChat}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavNotes" Tag="Notes" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavNotes" Tag="Notes" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.Notes}" ToolTip="{DynamicResource Nav.Notes}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="📝" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.Notes}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavPpt" Tag="Ppt" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick" ToolTip="{DynamicResource Nav.PptTip}">
+                                <Button x:Name="NavPpt" Tag="Ppt" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.Ppt}" ToolTip="{DynamicResource Nav.PptTip}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="📊" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.Ppt}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavTodo" Tag="Todo" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavTodo" Tag="Todo" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.Todo}" ToolTip="{DynamicResource Nav.Todo}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="☑" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.Todo}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavReminders" Tag="ScheduledReminders" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavReminders" Tag="ScheduledReminders" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.ScheduledReminders}" ToolTip="{DynamicResource Nav.ScheduledReminders}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="⏰" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.ScheduledReminders}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavQuickAccess" Tag="QuickAccess" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavQuickAccess" Tag="QuickAccess" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.QuickAccess}" ToolTip="{DynamicResource Nav.QuickAccess}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="⚡" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.QuickAccess}" VerticalAlignment="Center"/>
@@ -326,13 +415,14 @@
                             </StackPanel>
                         </Expander>
 
-                        <Expander x:Name="NavFuncExpander" Style="{StaticResource SidebarExpanderStyle}" IsExpanded="True" Margin="0,4,0,0">
+                        <Expander x:Name="NavFuncExpander" Style="{StaticResource SidebarExpanderStyle}" IsExpanded="True" Margin="0,4,0,0"
+                                  automation:AutomationProperties.Name="{DynamicResource Nav.Group.Collaboration}">
                             <Expander.Header>
-                                <TextBlock Text="沟 通 协 作" FontSize="10.5" FontWeight="SemiBold"
-                                           Foreground="{StaticResource BrushSidebarMuted}"/>
+                                <TextBlock Text="{DynamicResource Nav.Group.Collaboration}" Style="{StaticResource SidebarSectionHeading}"/>
                             </Expander.Header>
                             <StackPanel>
-                                <Button x:Name="NavMeeting" Tag="MeetingAssistant" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavMeeting" Tag="MeetingAssistant" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.Meeting}" ToolTip="{DynamicResource Nav.Meeting}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="🎤" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.Meeting}" VerticalAlignment="Center"/>
@@ -341,25 +431,28 @@
                             </StackPanel>
                         </Expander>
 
-                        <Expander x:Name="NavToolsExpander" Style="{StaticResource SidebarExpanderStyle}" IsExpanded="False" Margin="0,4,0,0">
+                        <Expander x:Name="NavToolsExpander" Style="{StaticResource SidebarExpanderStyle}" IsExpanded="False" Margin="0,4,0,0"
+                                  automation:AutomationProperties.Name="{DynamicResource Nav.Group.FileEfficiency}">
                             <Expander.Header>
-                                <TextBlock Text="文 件 效 率" FontSize="10.5" FontWeight="SemiBold"
-                                           Foreground="{StaticResource BrushSidebarMuted}"/>
+                                <TextBlock Text="{DynamicResource Nav.Group.FileEfficiency}" Style="{StaticResource SidebarSectionHeading}"/>
                             </Expander.Header>
                             <StackPanel Margin="0,0,0,0">
-                                <Button x:Name="NavFileManager" Tag="FileManager" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavFileManager" Tag="FileManager" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.FileManager}" ToolTip="{DynamicResource Nav.FileManager}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="📂" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.FileManager}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavFileTools" Tag="FileTools" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavFileTools" Tag="FileTools" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.FileTools}" ToolTip="{DynamicResource Nav.FileTools}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="📁" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.FileTools}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavPdfTools" Tag="PdfTools" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavPdfTools" Tag="PdfTools" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.PdfTools}" ToolTip="{DynamicResource Nav.PdfTools}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="📄" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.PdfTools}" VerticalAlignment="Center"/>
@@ -368,52 +461,59 @@
                             </StackPanel>
                         </Expander>
 
-                        <Expander x:Name="NavSystemExpander" Style="{StaticResource SidebarExpanderStyle}" IsExpanded="False" Margin="0,4,0,0">
+                        <Expander x:Name="NavSystemExpander" Style="{StaticResource SidebarExpanderStyle}" IsExpanded="False" Margin="0,4,0,0"
+                                  automation:AutomationProperties.Name="{DynamicResource Nav.Group.SystemMaintenance}">
                             <Expander.Header>
-                                <TextBlock Text="系 统 维 护" FontSize="10.5" FontWeight="SemiBold"
-                                           Foreground="{StaticResource BrushSidebarMuted}"/>
+                                <TextBlock Text="{DynamicResource Nav.Group.SystemMaintenance}" Style="{StaticResource SidebarSectionHeading}"/>
                             </Expander.Header>
                             <StackPanel>
-                                <Button x:Name="NavCleanup" Tag="Cleanup" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavCleanup" Tag="Cleanup" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.Cleanup}" ToolTip="{DynamicResource Nav.Cleanup}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="🧹" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.Cleanup}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavCodexProxy" Tag="CodexProxy" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavCodexProxy" Tag="CodexProxy" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.CodexProxy}" ToolTip="{DynamicResource Nav.CodexProxy}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="🔁" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.CodexProxy}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavNetwork" Tag="NetworkMonitor" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavNetwork" Tag="NetworkMonitor" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.Network}" ToolTip="{DynamicResource Nav.Network}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="📡" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.Network}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavPasswordVault" Tag="PasswordVault" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavPasswordVault" Tag="PasswordVault" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.PasswordVault}" ToolTip="{DynamicResource Nav.PasswordVault}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="🔐" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.PasswordVault}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button x:Name="NavProcessDiag" Tag="ProcessDiagnostics" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavProcessDiag" Tag="ProcessDiagnostics" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{Binding Text, ElementName=NavProcessDiagLabel}"
+                                        ToolTip="{Binding Text, ElementName=NavProcessDiagLabel}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="🔬" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
-                                        <TextBlock Text="进程诊断" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="NavProcessDiagLabel" Text="进程诊断" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
                         </Expander>
 
-                        <Expander x:Name="NavOtherExpander" Style="{StaticResource SidebarExpanderStyle}" IsExpanded="False" Margin="0,4,0,0">
+                        <Expander x:Name="NavOtherExpander" Style="{StaticResource SidebarExpanderStyle}" IsExpanded="False" Margin="0,4,0,0"
+                                  automation:AutomationProperties.Name="{DynamicResource Nav.Group.Other}">
                             <Expander.Header>
-                                <TextBlock Text="其 他" FontSize="10.5" FontWeight="SemiBold"
-                                           Foreground="{StaticResource BrushSidebarMuted}"/>
+                                <TextBlock Text="{DynamicResource Nav.Group.Other}" Style="{StaticResource SidebarSectionHeading}"/>
                             </Expander.Header>
                             <StackPanel>
-                                <Button x:Name="NavDance" Tag="Dance" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                                <Button x:Name="NavDance" Tag="Dance" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                        AutomationProperties.Name="{DynamicResource Nav.Dance}" ToolTip="{DynamicResource Nav.Dance}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="💃" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                         <TextBlock Text="{DynamicResource Nav.Dance}" VerticalAlignment="Center"/>
@@ -432,7 +532,8 @@
                             </Border.Background>
                         </Border>
 
-                        <Button x:Name="NavSettings" Tag="Settings" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick">
+                        <Button x:Name="NavSettings" Tag="Settings" Style="{StaticResource NavButtonStyle}" Click="NavButton_OnClick"
+                                AutomationProperties.Name="{DynamicResource Nav.Settings}" ToolTip="{DynamicResource Nav.Settings}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="⚙" FontSize="14" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
                                 <TextBlock Text="{DynamicResource Nav.Settings}" VerticalAlignment="Center"/>
@@ -446,9 +547,8 @@
 
         <!-- ═══════════════ CONTENT AREA ═══════════════ -->
         <Grid Grid.Column="1">
-            <!-- 主内容区底层：暖米黄 + 极淡方格 -->
-            <Rectangle Fill="{StaticResource BrushPageBg}"/>
-            <Rectangle Fill="{StaticResource BrushPageGridOverlay}" IsHitTestVisible="False"/>
+            <!-- Main content background -->
+            <Rectangle x:Name="PageCanvas" Fill="{StaticResource BrushPageBg}"/>
 
             <Grid>
             <Grid.RowDefinitions>
@@ -457,8 +557,9 @@
             </Grid.RowDefinitions>
 
             <!-- Title bar — blends with content bg -->
-            <Grid Grid.Row="0"
-                  Background="Transparent"
+            <Grid x:Name="TitleBarSurface"
+                  Grid.Row="0"
+                  Background="{StaticResource BrushPageBg}"
                   MouseLeftButtonDown="TitleBar_OnMouseLeftButtonDown">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -473,14 +574,16 @@
                                VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                    <Button Style="{StaticResource CaptionBarButton}" Content="&#x2014;" ToolTip="{DynamicResource TitleBar.Minimize}" Click="CaptionMinimize_OnClick"
-                            Foreground="{StaticResource BrushTextMuted}"/>
+                    <Button Style="{StaticResource CaptionBarButton}" Content="&#x2014;"
+                            AutomationProperties.Name="{DynamicResource TitleBar.Minimize}"
+                            ToolTip="{DynamicResource TitleBar.Minimize}" Click="CaptionMinimize_OnClick"/>
                     <Button x:Name="BtnCaptionMaximize" Style="{StaticResource CaptionBarButton}"
                             FontFamily="Segoe MDL2 Assets" FontSize="10"
-                            ToolTip="{DynamicResource TitleBar.Maximize}" Click="CaptionMaximize_OnClick"
-                            Foreground="{StaticResource BrushTextMuted}"/>
-                    <Button Style="{StaticResource CaptionCloseButton}" Content="&#x2715;" ToolTip="{DynamicResource TitleBar.Close}" Click="CaptionClose_OnClick"
-                            Foreground="{StaticResource BrushTextMuted}"/>
+                            AutomationProperties.Name="{DynamicResource TitleBar.Maximize}"
+                            ToolTip="{DynamicResource TitleBar.Maximize}" Click="CaptionMaximize_OnClick"/>
+                    <Button Style="{StaticResource CaptionCloseButton}" Content="&#x2715;"
+                            AutomationProperties.Name="{DynamicResource TitleBar.Close}"
+                            ToolTip="{DynamicResource TitleBar.Close}" Click="CaptionClose_OnClick"/>
                 </StackPanel>
             </Grid>
 

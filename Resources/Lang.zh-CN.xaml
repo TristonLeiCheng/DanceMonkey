@@ -32,6 +32,11 @@
     <sys:String x:Key="Nav.Collapse">收起</sys:String>
     <sys:String x:Key="Nav.ExpandSidebar">展开侧栏</sys:String>
     <sys:String x:Key="Nav.CollapseSidebar">收起侧栏</sys:String>
+    <sys:String x:Key="Nav.Group.Workbench">工作台</sys:String>
+    <sys:String x:Key="Nav.Group.Collaboration">沟通协作</sys:String>
+    <sys:String x:Key="Nav.Group.FileEfficiency">文件效率</sys:String>
+    <sys:String x:Key="Nav.Group.SystemMaintenance">系统维护</sys:String>
+    <sys:String x:Key="Nav.Group.Other">其他</sys:String>
     <!-- ══════ Title Bar ══════ -->
     <sys:String x:Key="TitleBar.Minimize">最小化</sys:String>
     <sys:String x:Key="TitleBar.Maximize">最大化</sys:String>

@@ -59,7 +59,7 @@
                                 <Setter TargetName="Tri" Property="Fill" Value="#4F6EF7"/>
                             </Trigger>
                             <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=TreeViewItem}, Path=IsSelected}" Value="True">
-                                <Setter TargetName="Tri" Property="Fill" Value="#FFFFFF"/>
+                                <Setter TargetName="Tri" Property="Fill" Value="{StaticResource BrushAccent}"/>
                             </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -68,7 +68,7 @@
         </Style>
 
         <!-- ══════════════════════════════════════
-             TreeViewItem：紧凑行 + Finder 蓝色实底选中
+             TreeViewItem：紧凑行 + 浅紫整行选中
              ══════════════════════════════════════ -->
         <Style TargetType="TreeViewItem">
             <Setter Property="Padding" Value="0"/>
@@ -86,7 +86,7 @@
                                     Background="Transparent"
                                     CornerRadius="4"
                                     Margin="0,0,2,1"
-                                    MinHeight="24">
+                                    MinHeight="28">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="16"/>
@@ -126,9 +126,9 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="NodeRow" Property="Background" Value="#EEF1F8"/>
                             </Trigger>
-                            <!-- 选中态：实蓝底（覆盖悬停） -->
+                            <!-- 选中态：浅紫底（覆盖悬停） -->
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="NodeRow" Property="Background" Value="{StaticResource BrushAccent}"/>
+                                <Setter TargetName="NodeRow" Property="Background" Value="{StaticResource BrushSidebarActive}"/>
                             </Trigger>
                             <!-- 选中 + 悬停 -->
                             <MultiTrigger>
@@ -137,7 +137,7 @@
                                     <Condition Property="IsMouseOver" Value="True"/>
                                 </MultiTrigger.Conditions>
                                 <MultiTrigger.Setters>
-                                    <Setter TargetName="NodeRow" Property="Background" Value="{StaticResource BrushAccentHover}"/>
+                                    <Setter TargetName="NodeRow" Property="Background" Value="{StaticResource BrushSidebarActive}"/>
                                 </MultiTrigger.Setters>
                             </MultiTrigger>
                         </ControlTemplate.Triggers>
@@ -483,22 +483,22 @@
                 </DataTrigger>
 
                 <!-- ════════════════════════════════════════════════════════════
-                     选中态：白字 + 图标全部转白色描边、角标改为半透明白底
+                     选中态：深色文字 + 品牌色图标，适配浅紫整行背景
                      ════════════════════════════════════════════════════════════ -->
                 <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=TreeViewItem}, Path=IsSelected}" Value="True">
-                    <Setter TargetName="NodeName" Property="Foreground" Value="#FFFFFF"/>
+                    <Setter TargetName="NodeName" Property="Foreground" Value="{StaticResource BrushSidebarTextActive}"/>
                     <Setter TargetName="DocBody" Property="Fill" Value="Transparent"/>
-                    <Setter TargetName="DocBody" Property="Stroke" Value="#FFFFFF"/>
+                    <Setter TargetName="DocBody" Property="Stroke" Value="{StaticResource BrushAccent}"/>
                     <Setter TargetName="DocFold" Property="Fill" Value="Transparent"/>
-                    <Setter TargetName="DocFold" Property="Stroke" Value="#FFFFFF"/>
-                    <Setter TargetName="DocLines" Property="Stroke" Value="#FFFFFF"/>
-                    <Setter TargetName="FolderClosedBack" Property="Stroke" Value="#FFFFFF"/>
-                    <Setter TargetName="FolderClosedFront" Property="Stroke" Value="#FFFFFF"/>
-                    <Setter TargetName="FolderOpenBack" Property="Stroke" Value="#FFFFFF"/>
-                    <Setter TargetName="FolderOpenFront" Property="Stroke" Value="#FFFFFF"/>
-                    <Setter TargetName="KindBadgeBg" Property="Fill" Value="#FFFFFF"/>
-                    <Setter TargetName="KindBadgeBg" Property="Stroke" Value="#4F6EF7"/>
-                    <Setter TargetName="KindBadgeText" Property="Foreground" Value="#4F6EF7"/>
+                    <Setter TargetName="DocFold" Property="Stroke" Value="{StaticResource BrushAccent}"/>
+                    <Setter TargetName="DocLines" Property="Stroke" Value="{StaticResource BrushAccent}"/>
+                    <Setter TargetName="FolderClosedBack" Property="Stroke" Value="{StaticResource BrushAccent}"/>
+                    <Setter TargetName="FolderClosedFront" Property="Stroke" Value="{StaticResource BrushAccent}"/>
+                    <Setter TargetName="FolderOpenBack" Property="Stroke" Value="{StaticResource BrushAccent}"/>
+                    <Setter TargetName="FolderOpenFront" Property="Stroke" Value="{StaticResource BrushAccent}"/>
+                    <Setter TargetName="KindBadgeBg" Property="Fill" Value="{StaticResource BrushAccentMuted}"/>
+                    <Setter TargetName="KindBadgeBg" Property="Stroke" Value="{StaticResource BrushAccent}"/>
+                    <Setter TargetName="KindBadgeText" Property="Foreground" Value="{StaticResource BrushAccent}"/>
                 </DataTrigger>
             </HierarchicalDataTemplate.Triggers>
         </HierarchicalDataTemplate>
@@ -594,18 +594,112 @@
         <!-- ══════════════════════════════════════
              工具栏按钮样式
              ══════════════════════════════════════ -->
-        <Style x:Key="ToolbarMiniBtn" TargetType="Button" BasedOn="{StaticResource UiBtnSecondary}">
-            <Setter Property="Padding" Value="10,5"/>
+        <Style x:Key="ToolbarMiniBtn" TargetType="Button">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="7,3"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Margin" Value="0,0,4,0"/>
             <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushAccent}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="ButtonBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Border>
+                            <Border x:Name="FocusRing"
+                                    Margin="-2"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="2"
+                                    CornerRadius="8"
+                                    IsHitTestVisible="False"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource BrushAccentMuted}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource BrushSurfaceHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="BorderBrush" Value="{DynamicResource BrushBorderFocus}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.42"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
-        <Style x:Key="ToolbarMiniAccent" TargetType="Button" BasedOn="{StaticResource UiBtnAccentBlue}">
-            <Setter Property="Padding" Value="10,5"/>
+        <Style x:Key="ToolbarMiniAccent" TargetType="Button">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="10,3"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Margin" Value="0,0,4,0"/>
             <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushTextOnAccent}"/>
+            <Setter Property="Background" Value="{DynamicResource BrushAccent}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="ButtonBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                            </Border>
+                            <Border x:Name="FocusRing"
+                                    Margin="-2"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="2"
+                                    CornerRadius="8"
+                                    IsHitTestVisible="False"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource BrushAccentHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource BrushAccentPressed}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="BorderBrush" Value="{DynamicResource BrushBorderFocus}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.42"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- ══════════════════════════════════════
@@ -678,7 +772,9 @@
         <KeyBinding Gesture="Ctrl+Y" Command="{x:Static ApplicationCommands.Redo}"/>
     </UserControl.InputBindings>
 
-    <Grid Margin="0">
+    <Grid x:Name="NotesWorkspaceRoot"
+          Margin="0"
+          Background="{StaticResource BrushPageBg}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -686,6 +782,7 @@
 
         <!-- ═══════════════════ 顶部图标工具栏（macOS Scrivener 风） ═══════════════════ -->
         <Border Grid.Row="0"
+                Visibility="Collapsed"
                 Background="{StaticResource BrushSurface}"
                 BorderBrush="{StaticResource BrushBorderSubtle}"
                 BorderThickness="0,0,0,1"
@@ -916,29 +1013,30 @@
         <!-- ═══════════════════ 主内容区（树 / 编辑器 / 检视器） ═══════════════════ -->
         <Grid Grid.Row="1">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="LeftPanelCol" Width="268" MinWidth="200"/>
-            <ColumnDefinition Width="10"/>
-            <ColumnDefinition Width="*"/>
+            <ColumnDefinition x:Name="LeftPanelCol" Width="280" MinWidth="220"/>
+            <ColumnDefinition Width="0"/>
+            <ColumnDefinition Width="*" MinWidth="480"/>
             <ColumnDefinition x:Name="InspectorSplitterCol" Width="0"/>
-            <ColumnDefinition x:Name="InspectorCol" Width="0"/>
+            <ColumnDefinition x:Name="InspectorCol" Width="0" MinWidth="0"/>
         </Grid.ColumnDefinitions>
 
         <!-- ═══════════════════ 左侧面板：文件树 ═══════════════════ -->
-        <Border Grid.Column="0"
-                Background="{StaticResource BrushSurface}"
-                CornerRadius="14" Margin="0,0,4,0"
+        <Border x:Name="NotesLibraryPanel" Grid.Column="0" Width="280"
+                Background="{StaticResource BrushSurfaceMuted}"
+                CornerRadius="0" Margin="0"
                 BorderBrush="{StaticResource BrushBorderSubtle}"
-                BorderThickness="1">
+                BorderThickness="0,0,1,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <!-- 面板标题 + 操作按钮（紧凑 Binder 风） -->
-                <Border Grid.Row="0" Padding="12,9,8,7"
+                <Border Grid.Row="0" Height="40" Padding="12,0,8,0"
                         BorderBrush="#F0F1F5" BorderThickness="0,0,0,1">
                     <Grid>
                         <StackPanel VerticalAlignment="Center">
@@ -948,7 +1046,7 @@
                         </StackPanel>
                         <!-- 右侧工具按钮 -->
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                                    VerticalAlignment="Center">
+                                    VerticalAlignment="Center" Visibility="Collapsed">
                             <Button ToolTip="收起所有文件夹" Click="CollapseAll_OnClick"
                                     Style="{StaticResource ToolbarMiniBtn}"
                                     Padding="6,3" FontSize="12" Margin="0,0,2,0"
@@ -964,18 +1062,47 @@
                                     Style="{StaticResource ToolbarMiniBtn}"
                                     Padding="5,3" FontSize="13" Opacity="0.7"/>
                         </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                            <Button Content="新建" Click="TbNewNote_OnClick"
+                                    Style="{StaticResource ToolbarMiniBtn}"
+                                    Foreground="{StaticResource BrushAccent}"
+                                    FontWeight="SemiBold"
+                                    Padding="8,3" Margin="0,0,2,0" ToolTip="在当前文件夹新建笔记"/>
+                            <Button x:Name="LibraryMoreBtn" Content="&#xE712;"
+                                    FontFamily="Segoe MDL2 Assets" Click="OpenContextMenu_OnClick"
+                                    Style="{StaticResource ToolbarMiniBtn}" ToolTip="笔记库操作">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="新建文件夹" Click="TbNewFolder_OnClick"/>
+                                        <MenuItem Header="今日笔记" Click="TbToday_OnClick"/>
+                                        <MenuItem Header="快速记录" Click="TbQuickCapture_OnClick"/>
+                                        <MenuItem Header="新便签" Click="TbSticky_OnClick"/>
+                                        <Separator/>
+                                        <MenuItem Header="刷新笔记库" Click="LibraryRefresh_OnClick"/>
+                                        <MenuItem Header="导出笔记库" Click="LibraryExportZip_OnClick"/>
+                                        <MenuItem Header="导入笔记库" Click="LibraryImportZip_OnClick"/>
+                                        <MenuItem Header="打开笔记文件夹" Click="LibraryOpenFolder_OnClick"/>
+                                        <Separator/>
+                                        <MenuItem Header="收起所有文件夹" Click="CollapseAll_OnClick"/>
+                                        <MenuItem Header="展开一级目录" Click="ExpandTopLevel_OnClick"/>
+                                        <MenuItem Header="笔记库说明" Click="HelpBtn_OnClick"/>
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                        </StackPanel>
                     </Grid>
                 </Border>
 
                 <!-- 搜索框 + 状态 -->
-                <Border Grid.Row="1" Margin="10,8,10,4">
+                <Border Grid.Row="1" Margin="8,6,8,4">
                     <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="SearchBox" Grid.Column="0" Padding="8,6"
+                            <TextBox x:Name="SearchBox" Grid.Column="0" Height="30" Padding="8,4"
                                      FontSize="12" TextChanged="SearchBox_OnTextChanged">
                                 <TextBox.Style>
                                     <Style TargetType="TextBox" BasedOn="{StaticResource UiTextBox}">
@@ -1011,7 +1138,7 @@
 
                 <!-- 文件树（紧凑 Binder 风格） -->
                 <TreeView x:Name="NotesTree" Grid.Row="2"
-                          Margin="4,4,4,6"
+                          Margin="4,2,4,4"
                           SelectedItemChanged="NotesTree_OnSelectedItemChanged"
                           PreviewMouseRightButtonDown="NotesTree_PreviewMouseRightButtonDown"
                           BorderThickness="0"
@@ -1051,65 +1178,42 @@
                         </ScrollViewer>
                     </DockPanel>
                 </Border>
+                <Expander x:Name="RecentNotesExpander"
+                          Grid.Row="4"
+                          IsExpanded="True"
+                          Padding="8,4"
+                          Foreground="{StaticResource BrushTextSecondary}"
+                          BorderBrush="{StaticResource BrushBorderSubtle}"
+                          BorderThickness="0,1,0,0">
+                    <Expander.Header>
+                        <TextBlock Text="最近编辑" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{StaticResource BrushTextSecondary}"/>
+                    </Expander.Header>
+                    <ItemsControl x:Name="RecentNotesList" Margin="0,4,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Content="{Binding FileName}" Tag="{Binding FullPath}"
+                                        Style="{StaticResource ToolbarMiniBtn}"
+                                        HorizontalContentAlignment="Left" Margin="0,1"
+                                        ToolTip="{Binding FullPath}" Click="RecentNote_OnClick"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Expander>
 
             </Grid>
         </Border>
 
-        <!-- 折叠手柄 -->
-        <Border Grid.Column="1" Background="Transparent" VerticalAlignment="Stretch">
-            <Button x:Name="CollapseLeftBtn"
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Center"
-                    Click="CollapseLeft_OnClick"
-                    ToolTip="收起 / 展开笔记列表"
-                    Cursor="Hand"
-                    Width="10" Height="44"
-                    Padding="0">
-                <Button.Style>
-                    <Style TargetType="Button">
-                        <Setter Property="Background" Value="Transparent"/>
-                        <Setter Property="BorderThickness" Value="0"/>
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="Button">
-                                    <Border x:Name="Bd"
-                                            Background="{TemplateBinding Background}"
-                                            CornerRadius="5"
-                                            SnapsToDevicePixels="True">
-                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="#E8EBF5"/>
-                                        </Trigger>
-                                        <Trigger Property="IsPressed" Value="True">
-                                            <Setter TargetName="Bd" Property="Background" Value="#D8DCF0"/>
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </Button.Style>
-                <TextBlock x:Name="CollapseLeftIcon"
-                           Text="&#xE76B;"
-                           FontFamily="Segoe MDL2 Assets"
-                           FontSize="7"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           Foreground="#B8BDD0"/>
-            </Button>
-        </Border>
-
         <!-- ═══════════════════ 右侧面板：编辑 + 预览 ═══════════════════ -->
-        <Border Grid.Column="2"
+        <Border x:Name="DocumentWorkspacePanel" Grid.Column="2"
                 Background="{StaticResource BrushSurface}"
-                CornerRadius="14" Margin="4,0,0,0"
-                BorderBrush="{StaticResource BrushBorderSubtle}"
-                BorderThickness="1">
+                CornerRadius="0" Margin="0"
+                BorderThickness="0">
             <DockPanel LastChildFill="True" Margin="0">
                 <!-- 顶部标题栏（操作按钮已迁移至全局顶部工具栏） -->
-                <Border DockPanel.Dock="Top" Padding="16,10,16,10"
+                <Border x:Name="DocumentTitleBar"
+                        DockPanel.Dock="Top" Height="40" Padding="8,0"
+                        Background="{StaticResource BrushSurface}"
                         BorderBrush="{StaticResource BrushBorderSubtle}"
                         BorderThickness="0,0,0,1">
                     <Grid>
@@ -1118,6 +1222,18 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Orientation="Horizontal">
+                            <Button x:Name="CollapseLeftBtn"
+                                    Style="{StaticResource ToolbarMiniBtn}"
+                                    Click="CollapseLeft_OnClick"
+                                    ToolTip="收起笔记列表"
+                                    Margin="0,0,4,0"
+                                    Padding="6,3">
+                                <TextBlock x:Name="CollapseLeftIcon"
+                                           Text="&#xE76B;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="9"
+                                           Foreground="{StaticResource BrushTextMuted}"/>
+                            </Button>
                             <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets"
                                        FontSize="13" Foreground="#5B8AF5"
                                        VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -1127,10 +1243,52 @@
                                        TextTrimming="CharacterEllipsis" MaxWidth="500"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
-                        <TextBlock Grid.Column="1" x:Name="DirtyIndicator"
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock x:Name="DirtyIndicator"
                                    Text="● 未保存" FontSize="10.5"
                                    Foreground="#EAB308" VerticalAlignment="Center"
-                                   Visibility="Collapsed"/>
+                                    Visibility="Collapsed" Margin="0,0,8,0"/>
+                            <Button x:Name="WorkspaceSaveBtn" Content="保存" Click="Save_OnClick" IsEnabled="False"
+                                    Style="{StaticResource ToolbarMiniBtn}" ToolTip="保存 (Ctrl+S)"/>
+                            <Button x:Name="AiAssistantBtn" Content="AI 助手" Click="OpenContextMenu_OnClick" IsEnabled="False"
+                                    Style="{StaticResource ToolbarMiniAccent}" Margin="4,0,0,0" ToolTip="选择 AI 操作">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="内容整理" Tag="Organize" Click="AiAssistantAction_OnClick"/>
+                                        <MenuItem Header="内容总结" Tag="Summarize" Click="AiAssistantAction_OnClick"/>
+                                        <MenuItem Header="续写" Tag="Continue" Click="AiAssistantAction_OnClick"/>
+                                        <MenuItem Header="润色" Tag="Polish" Click="AiAssistantAction_OnClick"/>
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                            <Button x:Name="InspectorToggleBtn"
+                                    Content="&#xE7B5;"
+                                    FontFamily="Segoe MDL2 Assets"
+                                    Click="ToggleInspector_OnClick"
+                                    Style="{StaticResource ToolbarMiniBtn}"
+                                    Margin="4,0,0,0"
+                                    ToolTip="显示或隐藏检视器"/>
+                            <Button x:Name="MoreActionsBtn" Content="&#xE712;" FontFamily="Segoe MDL2 Assets"
+                                    Click="OpenContextMenu_OnClick" Style="{StaticResource ToolbarMiniBtn}"
+                                    Margin="4,0,0,0" ToolTip="更多笔记操作">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="切换编辑视图" Click="TbReadMode_OnClick"/>
+                                        <MenuItem Header="显示或隐藏大纲" Click="ToggleOutline_OnClick"/>
+                                        <MenuItem Header="显示或隐藏检视器" Click="ToggleInspector_OnClick"/>
+                                        <MenuItem Header="开始听写" Click="NoteStt_OnClick"/>
+                                        <Separator/>
+                                        <MenuItem Header="导出 HTML" Click="ExportHtml_OnClick"/>
+                                        <MenuItem Header="生成 PowerPoint" Click="GeneratePpt_OnClick"/>
+                                        <MenuItem Header="发送到 PPT 工作台" Click="SendToPptWorkspace_OnClick"/>
+                                        <MenuItem Header="版本历史" Click="VersionHistory_OnClick"/>
+                                        <Separator/>
+                                        <MenuItem Header="重命名" Click="Rename_OnClick"/>
+                                        <MenuItem Header="删除" Click="Delete_OnClick"/>
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                        </StackPanel>
                     </Grid>
                 </Border>
 
@@ -1142,11 +1300,10 @@
                     </Grid.RowDefinitions>
 
                     <!-- Markdown 工具条 -->
-                    <Border x:Name="EditorToolbarRow" Grid.Row="0"
-                            Background="{StaticResource BrushSurfaceMuted}"
-                            Padding="12,7" Margin="12,8,12,4"
-                            CornerRadius="8"
-                            BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1">
+                    <Border x:Name="EditorToolbarRow" Grid.Row="0" Height="32"
+                            Background="{StaticResource BrushSurface}"
+                            Padding="8,2" Margin="0"
+                            BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,0,1">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -1156,11 +1313,6 @@
 
                             <!-- 格式化 + 插入工具 -->
                             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Border Background="{StaticResource BrushAccentMuted}" CornerRadius="4"
-                                        Padding="6,2" Margin="0,0,6,0">
-                                    <TextBlock Text="格式" FontSize="10"
-                                               Foreground="{StaticResource BrushAccent}" FontWeight="Medium"/>
-                                </Border>
                                 <Button Content="B" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
                                         FontWeight="Bold" ToolTip="加粗 (Ctrl+B)" Click="InsertMdBold_OnClick"/>
                                 <Button Content="I" Style="{StaticResource ToolbarMiniBtn}" Padding="7,4"
@@ -1195,7 +1347,7 @@
                                     Background="{StaticResource BrushBorder}" VerticalAlignment="Center"/>
 
                             <!-- AI 工具 -->
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
                                 <Border Background="#F0EEFF" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
                                     <TextBlock Text="✨ AI" FontSize="10" Foreground="#7C5CFC" FontWeight="Medium"/>
                                 </Border>
@@ -1218,7 +1370,34 @@
                     </Border>
 
                     <!-- 编辑器 + 预览 / 或全宽实时编辑 -->
-                    <Grid Grid.Row="1" Margin="12,4,12,12" MinHeight="160">
+                    <Grid Grid.Row="1" Margin="0" MinHeight="160">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition x:Name="OutlineCol" Width="176" MinWidth="120"/>
+                            <ColumnDefinition x:Name="OutlineSplitterCol" Width="6"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border x:Name="OutlinePanel" Grid.Column="0" Padding="10,10,8,10"
+                                Background="{StaticResource BrushSurfaceMuted}"
+                                BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="0,0,1,0">
+                            <DockPanel>
+                                <Button x:Name="OutlineCollapseBtn" DockPanel.Dock="Top" Content="大纲"
+                                        Style="{StaticResource ToolbarMiniBtn}" HorizontalContentAlignment="Left"
+                                        Click="ToggleOutline_OnClick" ToolTip="显示或隐藏文档大纲"/>
+                                <ItemsControl x:Name="OutlineList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Content="{Binding Title}" Tag="{Binding}"
+                                                    Style="{StaticResource ToolbarMiniBtn}"
+                                                    Padding="8,2,4,2" HorizontalContentAlignment="Left"
+                                                    Click="OutlineItem_OnClick" ToolTip="跳转到此标题"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </DockPanel>
+                        </Border>
+                        <GridSplitter x:Name="OutlineSplitter" Grid.Column="1" Width="6"
+                                      Background="Transparent" Cursor="SizeWE"/>
+                        <Grid Grid.Column="2">
                         <Grid x:Name="ClassicEditorRoot">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition x:Name="EditorColumn" Width="*" MinWidth="140"/>
@@ -1227,9 +1406,10 @@
                         </Grid.ColumnDefinitions>
 
                         <!-- Markdown 编辑器 + 状态栏 -->
-                        <Border Grid.Column="0" CornerRadius="10" ClipToBounds="True"
-                                BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
-                                Background="{StaticResource BrushSurfaceMuted}">
+                        <Border x:Name="ClassicEditorSurface"
+                                Grid.Column="0" CornerRadius="0" ClipToBounds="True"
+                                BorderThickness="0"
+                                Background="{StaticResource BrushSurface}">
                             <DockPanel>
                                 <Border DockPanel.Dock="Bottom" Padding="12,4,12,4"
                                         Background="{StaticResource BrushSurface}"
@@ -1269,9 +1449,10 @@
                                       Background="Transparent" Cursor="SizeWE"/>
 
                         <!-- 预览面板 -->
-                        <Border Grid.Column="2" CornerRadius="10" ClipToBounds="True"
-                                BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
-                                Background="{StaticResource BrushSurfaceMuted}">
+                        <Border x:Name="PreviewSurface"
+                                Grid.Column="2" CornerRadius="0" ClipToBounds="True"
+                                BorderThickness="0"
+                                Background="{StaticResource BrushSurface}">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
@@ -1310,11 +1491,12 @@
                         </Border>
                         </Grid>
                         <Border x:Name="LiveEditorHost" Visibility="Collapsed"
-                                CornerRadius="10" ClipToBounds="True"
-                                BorderBrush="{StaticResource BrushBorderSubtle}" BorderThickness="1"
-                                Background="{StaticResource BrushSurfaceMuted}">
+                                CornerRadius="0" ClipToBounds="True"
+                                BorderThickness="0"
+                                Background="{StaticResource BrushSurface}">
                             <wv2:WebView2 x:Name="LiveEditorWeb"/>
                         </Border>
+                        </Grid>
                     </Grid>
                 </Grid>
             </DockPanel>
@@ -1329,10 +1511,10 @@
         <!-- ═══════════════════ Inspector 检视器面板 ═══════════════════ -->
         <Border x:Name="InspectorPanel" Grid.Column="4"
                 Visibility="Collapsed"
-                Background="{StaticResource BrushSurface}"
-                CornerRadius="14" Margin="4,0,0,0"
+                Background="{StaticResource BrushSurfaceMuted}"
+                CornerRadius="0" Margin="0"
                 BorderBrush="{StaticResource BrushBorderSubtle}"
-                BorderThickness="1">
+                BorderThickness="1,0,0,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>

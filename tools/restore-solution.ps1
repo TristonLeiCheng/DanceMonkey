@@ -27,6 +27,8 @@ $env:NUGET_AUDIT = "false"
 
 Write-Host "Restoring: $SolutionPath"
 & dotnet restore $SolutionPath `
+    --disable-parallel `
+    /m:1 `
     -p:NuGetAudit=false `
     -p:RestoreFallbackFolders="" `
     -p:DisableImplicitNuGetFallbackFolder=true

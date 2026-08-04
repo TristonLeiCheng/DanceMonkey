@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DanceMonkey.Cli", "DanceMon
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DanceMonkey.Ppt", "DanceMonkey.Ppt\DanceMonkey.Ppt.csproj", "{76F59E06-69FC-4093-BC4C-B064E0221A5C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DanceMonkey.Ui.Tests", "DanceMonkey.Ui.Tests\DanceMonkey.Ui.Tests.csproj", "{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,18 @@ Global
 		{76F59E06-69FC-4093-BC4C-B064E0221A5C}.Release|x64.Build.0 = Release|Any CPU
 		{76F59E06-69FC-4093-BC4C-B064E0221A5C}.Release|x86.ActiveCfg = Release|Any CPU
 		{76F59E06-69FC-4093-BC4C-B064E0221A5C}.Release|x86.Build.0 = Release|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Debug|x64.Build.0 = Debug|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Debug|x86.Build.0 = Debug|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Release|x64.ActiveCfg = Release|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Release|x64.Build.0 = Release|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Release|x86.ActiveCfg = Release|Any CPU
+		{349B764D-7BDF-4B91-A73A-7A3DDA42B4D2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -157,6 +157,9 @@ public sealed class MeetingHubService
             case "generateSummary":
                 await GenerateSummaryAsync();
                 break;
+            case "completeMeeting":
+                await CompleteMeetingAsync();
+                break;
             case "aiPrep":
                 await AiPrepAsync();
                 break;
@@ -425,6 +428,18 @@ public sealed class MeetingHubService
         }
         catch (Exception ex) { _lastError = $"摘要生成失败：{ex.Message}"; }
         finally { _isBusy = false; }
+    }
+
+    private async Task CompleteMeetingAsync()
+    {
+        if (_isBusy) return;
+
+        _workbench.Status = MeetingStatus.Completed;
+        _workbench.EndTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+        await GenerateSummaryAsync();
+        SaveMeeting();
+        if (_lastError == null)
+            _lastToast = "会议已结束并保存";
     }
 
     private async Task AiPrepAsync()

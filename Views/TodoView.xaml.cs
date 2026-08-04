@@ -857,7 +857,7 @@ public partial class TodoView : UserControl
 
     private void ConvertMeetingActions(string? rawText)
     {
-        var lines = (rawText ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var lines = (rawText ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (lines.Length == 0) return;
         foreach (var line in lines)
         {
@@ -1106,7 +1106,7 @@ public partial class TodoView : UserControl
             return new List<AiImportCandidate>();
 
         return text
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(CleanAiTaskLine)
             .Where(static line => !string.IsNullOrWhiteSpace(line) && line.Length >= 4)
             .Where(static line => !line.Contains("原因：", StringComparison.OrdinalIgnoreCase))

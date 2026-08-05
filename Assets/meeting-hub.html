@@ -102,13 +102,23 @@
     .err { color: #dc2626; font-size: 11px; margin-top: 6px; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
     @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+    /* Lifecycle workspace overrides: the application-level sidebar remains in WPF. */
+    :root { --bg:#F7F8FC; --card:#fff; --line:#E2E4EE; --line2:#E2E4EE; --text:#171B34; --muted:#667085; --amber:#6254F5; --amber-bg:#EDEBFF; --amber-light:#F4F3FF; --input-bg:#F9FAFF; }
+    .hdr { display:none; } .nav { padding:8px 20px; gap:4px; } .nav-btn.active,.nav-btn:hover { background:var(--amber-bg); color:#493AD8; box-shadow:none; }
+    .toolbar { padding:12px 24px; background:#fff; } .btn-primary,.btn-blue { background:#6254F5; } .btn-primary:hover,.btn-icon.primary { background:#5748EA; } .main { padding:0 24px 20px; } .footer { padding:10px 24px; }
+    .lifecycle-stepper { display:flex; align-items:center; justify-content:center; gap:18px; padding:16px 24px; background:#fff; border-bottom:1px solid var(--line); }
+    .lifecycle-step { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; font-weight:700; }.lifecycle-step::after { content:""; width:90px; height:2px; background:#E5E7F5; margin-left:10px; }.lifecycle-step:last-child::after{display:none}.lifecycle-step.active{color:#493AD8}.lifecycle-step.active .step-num,.lifecycle-step.done .step-num{background:#6254F5;color:#fff;border-color:#6254F5}.step-num{width:24px;height:24px;display:grid;place-items:center;border:1px solid #C9C5FF;border-radius:50%;font-size:12px}
+    .meeting-meta{display:flex;flex-wrap:wrap;align-items:center;gap:18px;padding:18px 0 12px;border-bottom:1px solid var(--line)}.meeting-meta h1{margin:0 auto 0 0;font-size:27px;letter-spacing:-.02em}.meeting-meta-item{font-size:13px;color:var(--muted)}.autosave{color:#027A48;font-weight:700}
+    .workbench-shell{display:grid;grid-template-columns:220px minmax(0,1fr) 320px;gap:14px;padding-top:16px;min-height:calc(100vh - 226px)}.workbench-panel{background:var(--card);border:1px solid var(--line);border-radius:14px;min-width:0}.agenda-navigation{padding:14px 10px}.agenda-navigation h2,.notes-header h2,.insight-header h2{margin:0;font-size:14px}.agenda-nav-list{display:flex;flex-direction:column;gap:4px;margin-top:12px}.agenda-nav-item{width:100%;text-align:left;border:0;border-radius:8px;background:transparent;padding:10px;color:var(--muted);cursor:pointer;font-size:13px}.agenda-nav-item.active{background:var(--amber-bg);color:#493AD8;font-weight:800}.agenda-add{margin-top:12px;display:flex;gap:6px}.agenda-add .inp{min-width:0}.notes-workspace{display:flex;flex-direction:column;overflow:hidden}.notes-header,.insight-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}.notes-actions{display:flex;gap:6px}.notes-actions .btn{padding:5px 8px;color:#493AD8;border-color:#D7D2FF}.agenda-editor-title{width:100%;border:0;outline:0;padding:18px 20px 8px;font-size:19px;font-weight:800;color:var(--text)}.manual-notes-editor{border:0;border-top:1px solid var(--line);outline:0;resize:none;width:100%;flex:1;min-height:420px;padding:18px 20px;font-size:14px;line-height:1.8;color:#344054;background:#fff}.notes-hint{padding:10px 16px;color:var(--muted);background:#FAFAFF;border-top:1px solid var(--line);font-size:12px}.insight-rail{display:flex;flex-direction:column;gap:12px;padding:12px}.notes-source{color:#667085;font-size:12px;padding:0 4px}.insight-section{border:1px solid var(--line);border-radius:10px;padding:12px}.insight-section h3{margin:0 0 10px;font-size:13px}.insight-row{padding:9px 0;border-top:1px solid #F0F1F7;font-size:13px;line-height:1.5}.insight-row:first-of-type{border-top:0}.insight-meta{margin-top:4px;color:var(--muted);font-size:11px}.meeting-settings{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}@media(max-width:1050px){.workbench-shell{grid-template-columns:190px minmax(0,1fr)}.insight-rail{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:720px){.workbench-shell{grid-template-columns:1fr}.agenda-navigation{display:none}.insight-rail{display:block}.meeting-meta h1{width:100%}.lifecycle-stepper{justify-content:flex-start;overflow:auto}}
   </style>
 </head>
 <body>
 <div class="app">
-  <header class="hdr">
-    <div class="brand"><span class="brand-icon">🧠</span><span>会议中心</span><span style="color:#94a3b8;font-size:11px">|</span><span id="versionLabel" style="font-size:11px;color:#94a3b8;font-family:monospace">Workspace</span></div>
-  </header>
+  <div class="lifecycle-stepper" id="lifecycleStepper">
+    <div class="lifecycle-step done"><span class="step-num">1</span>会前准备</div>
+    <div class="lifecycle-step active"><span class="step-num">2</span>会中记录</div>
+    <div class="lifecycle-step"><span class="step-num">3</span>会后跟进</div>
+  </div>
   <nav class="nav" id="nav"></nav>
   <div class="toolbar" id="toolbar">
     <div style="display:flex;gap:8px">
@@ -120,7 +130,7 @@
   <main class="main" id="main"></main>
   <footer class="footer hidden" id="footer">
     <div style="display:flex;gap:8px">
-      <button class="btn btn-primary btn-sm" data-act="generateSummary">✨ 生成纪要</button>
+      <button class="btn btn-primary btn-sm" data-act="completeMeeting">结束会议并整理纪要</button>
       <button class="btn btn-sm" data-act="saveMeeting">💾 保存</button>
       <button class="btn btn-sm" data-act="copyDraft">📋 复制草稿</button>
       <button class="btn btn-danger btn-sm" data-act="clearWorkbench">🗑 清空面板</button>
@@ -151,7 +161,7 @@ const STATUS_OPTS = [
 
 let state = {};
 let localWb = {};
-let ui = { actionsOpen: false, decisionsOpen: false, infoOpen: true, showUserModal: false, showSummaryModal: false, summaryText: '' };
+let ui = { actionsOpen: false, decisionsOpen: false, infoOpen: false, activeAgenda: 0, selectedNoteText: '' };
 
 function send(type, payload = {}) {
   if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage({ type, ...payload });
@@ -198,7 +208,8 @@ window.MeetingHub = {
 };
 
 function renderAll() {
-  document.getElementById('versionLabel').textContent = 'Workspace ' + (state.version || '');
+  const versionLabel = document.getElementById('versionLabel');
+  if (versionLabel) versionLabel.textContent = 'Workspace ' + (state.version || '');
   renderNav();
   document.getElementById('toolbar').classList.toggle('hidden', state.activeNav !== 'workbench');
   document.getElementById('footer').classList.toggle('hidden', state.activeNav !== 'workbench');
@@ -237,82 +248,15 @@ function renderWorkbench() {
   const acts = localWb.actionItems || [];
   const decs = localWb.decisions || [];
   const atts = localWb.attendees || [];
-  const infoCls = ui.infoOpen ? '' : 'collapsed';
-  return `<div class="grid-wb ${ui.infoOpen ? '' : 'info-collapsed'}">
-    <div class="card col-info ${infoCls}">
-      <button type="button" class="collapse-hdr info-toggle" data-toggle="info" style="margin:0;padding:${ui.infoOpen?'0 0 8px':'12px 6px'};border-bottom:${ui.infoOpen?'1px solid var(--amber-bg)':'none'}">
-        <span style="font-size:12px;font-weight:800">📋 ${ui.infoOpen ? '会议信息设置' : '信息'}</span>
-        <span style="color:#94a3b8;font-size:11px">${ui.infoOpen ? '▼' : '▶'}</span>
-      </button>
-      <div class="info-body" style="display:flex;flex-direction:column;gap:10px;padding-top:4px">
-        <div><label class="lbl">主题</label><input class="inp" id="wbTitle" value="${esc(localWb.title)}"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div><label class="lbl">当前状态</label><select class="inp" id="wbStatus">${STATUS_OPTS.map(o=>`<option value="${o.v}" ${localWb.status===o.v?'selected':''}>${o.l}</option>`).join('')}</select></div>
-          <div><label class="lbl">套用模板</label><select class="inp" id="wbTemplate">${tpls.map(t=>`<option value="${t.id}" ${localWb.templateId===t.id?'selected':''}>${esc(t.icon)} ${esc(t.name)}</option>`).join('')}</select></div>
-        </div>
-        <div><label class="lbl">关联项目</label><select class="inp" id="wbProject"><option value="">（无项目）</option>${projs.map(p=>`<option value="${p.id}" ${localWb.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
-        <div><label class="lbl">开始时间</label><input class="inp" id="wbStart" value="${esc(localWb.startTime)}"></div>
-        <div><label class="lbl">结束时间 (可选)</label><input class="inp" id="wbEnd" value="${esc(localWb.endTime||'')}"></div>
-        <div><label class="lbl">标签</label><input class="inp" id="wbTags" value="${esc(localWb.tags||'')}"></div>
-        <div style="border-top:1px solid var(--amber-bg);padding-top:10px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <span class="lbl" style="margin:0">参会人 (${atts.length})</span>
-            <button type="button" class="btn-icon" data-act="showUserModal" title="添加参会人">＋</button>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">${atts.map((a,i)=>`<span class="tag" data-rm-att="${i}">${esc(a.role?a.name+' ('+a.role+')':a.name)} ✕</span>`).join('')}</div>
-        </div>
-      </div>
-    </div>
-    <div class="card col-agenda" style="display:flex;flex-direction:column;min-height:0">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-shrink:0">
-        <div class="sec-title" style="margin:0;border:0;padding:0">📌 议程</div>
-        <button type="button" class="btn btn-sm" data-act="aiPrep">✨ AI 会前准备</button>
-      </div>
-      <div style="flex:1;overflow-y:auto;margin-bottom:8px;min-height:180px" id="agendaList">
-        ${agendas.length ? agendas.map((a,i)=>`<div class="agenda-block" data-agenda-idx="${i}">
-          <div class="agenda-block-hdr">
-            <input class="agenda-title" data-agenda-title="${i}" value="${esc(a.title)}" placeholder="## 议题标题">
-            <button type="button" data-rm-agenda="${i}" title="删除议题" style="border:none;background:none;cursor:pointer;color:#94a3b8;padding:4px 8px">🗑</button>
-          </div>
-          <textarea class="agenda-body" data-agenda-body="${i}" placeholder="在此输入该议题下的讨论内容…">${esc(a.body)}</textarea>
-        </div>`).join('') : '<p style="text-align:center;color:#94a3b8;font-size:12px;padding:24px">暂无议程，在下方添加议题</p>'}
-      </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        <input class="inp" id="newAgenda" placeholder="添加议题标题…" style="flex:1">
-        <button type="button" class="btn-icon primary" data-act="addAgenda" title="添加议题">＋</button>
-      </div>
-    </div>
-    <div class="col-right" style="display:flex;flex-direction:column;gap:12px;min-height:0">
-      <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
-        <div class="sec-title">💬 会上手记 <span style="margin-left:auto;font-size:10px;background:#fffbeb;padding:2px 8px;border-radius:99px;border:1px solid #fde68a;color:#92400e">智能输入区</span></div>
-        <textarea class="inp" id="wbNotes" style="flex:1;min-height:160px;resize:none;line-height:1.6" placeholder="随手记录…选中文字可转为行动项/决策项">${esc(localWb.quickNotes)}</textarea>
-      </div>
-      <div class="card" style="padding:0;overflow:hidden;flex-shrink:0">
-        <button type="button" class="collapse-hdr" data-toggle="actions">
-          <span style="font-size:12px;font-weight:800">⚡ 会议行动项 (${acts.length})</span>
-          <span>${ui.actionsOpen ? '▲' : '▼'}</span>
-        </button>
-        ${ui.actionsOpen ? `<div class="collapse-body">
-          <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-            <span style="font-size:10px;color:#94a3b8">同步状态：就绪</span>
-            <button type="button" class="btn btn-sm" data-act="syncZenTask">→ ZenTask</button>
-          </div>
-          ${acts.map(a=>`<div class="action-row ${a.done?'done':''}"><div class="chk ${a.done?'on':''}" data-toggle-act="${a.id}">${a.done?'✓':''}</div><div style="flex:1"><div style="${a.done?'text-decoration:line-through;color:#94a3b8':''}">${esc(a.task)}</div><div style="font-size:10px;color:#64748b;margin-top:2px">👤 ${esc(a.owner||'待分派')} · 📅 ${esc(a.dueDate||'—')}</div></div><button type="button" data-rm-act="${a.id}" style="border:none;background:none;cursor:pointer">🗑</button></div>`).join('') || '<p style="text-align:center;color:#94a3b8;font-size:11px">暂无行动项</p>'}
-          <div style="display:flex;gap:6px;margin-top:8px"><input class="inp" id="newActTask" placeholder="新行动项" style="flex:1"><input class="inp" id="newActOwner" style="width:90px" placeholder="负责人"><button type="button" class="btn-icon" data-act="addAction" title="添加">＋</button></div>
-        </div>` : ''}
-      </div>
-      <div class="card" style="padding:0;overflow:hidden;flex-shrink:0">
-        <button type="button" class="collapse-hdr" data-toggle="decisions">
-          <span style="font-size:12px;font-weight:800">💡 决策项 (${decs.length})</span>
-          <span>${ui.decisionsOpen ? '▲' : '▼'}</span>
-        </button>
-        ${ui.decisionsOpen ? `<div class="collapse-body">
-          ${decs.map((d,i)=>`<div class="agenda-block" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px"><span><b style="color:#b45309">#${i+1}</b> ${esc(d.content)}</span><button type="button" data-rm-dec="${d.id}" style="border:none;background:none;cursor:pointer;margin-left:auto">🗑</button></div>`).join('') || '<p style="text-align:center;color:#94a3b8;font-size:11px">暂无决策</p>'}
-          <div style="display:flex;gap:6px;margin-top:8px"><input class="inp" id="newDec" placeholder="记录决策…" style="flex:1"><button type="button" class="btn-icon primary" data-act="addDecision" title="记录决策">✓</button></div>
-        </div>` : ''}
-      </div>
-    </div>
-  </div>${state.error ? `<p class="err">${esc(state.error)}</p>` : ''}${state.busy ? '<p style="text-align:center;color:#b45309;font-size:12px">处理中…</p>' : ''}`;
+  const selectedIndex = Math.min(ui.activeAgenda || 0, Math.max(agendas.length - 1, 0));
+  ui.activeAgenda = selectedIndex;
+  const selected = agendas[selectedIndex] || { title: '', body: '' };
+  return `<div class="meeting-meta"><h1>${esc(localWb.title || '会议记录')}</h1><span class="meeting-meta-item">${esc(localWb.startTime || '待安排')}</span><span class="meeting-meta-item">${atts.length} 人参会</span><span class="meeting-meta-item">${esc(projs.find(p=>p.id===localWb.projectId)?.name || '未关联项目')}</span><span class="meeting-meta-item autosave">✓ 已自动保存</span></div>
+  <div class="workbench-shell">
+    <aside class="workbench-panel agenda-navigation"><h2>议程导航</h2><div class="agenda-nav-list">${agendas.map((a,i)=>`<button class="agenda-nav-item ${i===selectedIndex?'active':''}" data-focus-agenda="${i}">${i+1}. ${esc(a.title || '未命名议题')}</button>`).join('') || '<p class="notes-source">先添加一个议题开始记录</p>'}</div><div class="agenda-add"><input class="inp" id="newAgenda" placeholder="添加议题"><button class="btn btn-sm" data-act="addAgenda">＋</button></div><div class="meeting-settings"><button class="btn btn-sm" data-toggle="info">会议设置 ${ui.infoOpen?'▲':'▼'}</button>${ui.infoOpen?`<div style="display:grid;gap:8px;margin-top:10px"><input class="inp" id="wbTitle" value="${esc(localWb.title)}" placeholder="会议主题"><select class="inp" id="wbTemplate">${tpls.map(t=>`<option value="${t.id}" ${localWb.templateId===t.id?'selected':''}>${esc(t.icon)} ${esc(t.name)}</option>`).join('')}</select><select class="inp" id="wbProject"><option value="">关联项目</option>${projs.map(p=>`<option value="${p.id}" ${localWb.projectId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select></div>`:''}</div></aside>
+    <section class="workbench-panel notes-workspace"><div class="notes-header"><h2>会议笔记</h2><div class="notes-actions"><button class="btn btn-sm" data-act="convertSelectionAction">转为行动项</button><button class="btn btn-sm" data-act="convertSelectionDecision">转为决策项</button></div></div><input class="agenda-editor-title" data-agenda-title="${selectedIndex}" value="${esc(selected.title)}" placeholder="议题标题"><textarea id="agendaEditor" class="manual-notes-editor" data-agenda-body="${selectedIndex}" placeholder="在此记录讨论内容、结论与待确认事项…">${esc(selected.body)}</textarea><div class="notes-hint">选中文字可转为行动项或决策；AI 仅依据当前议程与手工笔记整理内容。</div></section>
+    <aside class="workbench-panel insight-rail"><div class="insight-header"><h2>AI 助手</h2><button class="btn btn-sm" data-act="generateSummary">整理当前笔记</button></div><div class="notes-source">根据当前笔记整理 · 不使用录音或转写</div><section class="insight-section"><h3>关键决策 (${decs.length})</h3>${decs.map((d,i)=>`<div class="insight-row"><b>${i+1}.</b> ${esc(d.content)}</div>`).join('') || '<div class="notes-source">选中笔记文字后即可沉淀决策</div>'}</section><section class="insight-section"><h3>行动项 (${acts.length})</h3>${acts.map(a=>`<div class="insight-row">${esc(a.task)}<div class="insight-meta">${esc(a.owner||'待分派')} · ${esc(a.dueDate||'待确定')}</div></div>`).join('') || '<div class="notes-source">暂无行动项</div>'}</section><section class="insight-section"><h3>待确认问题</h3><div class="notes-source">生成纪要后会从笔记中提取待确认事项。</div></section></aside>
+  </div>${state.error ? `<p class="err">${esc(state.error)}</p>` : ''}${state.busy ? '<p style="text-align:center;color:#493AD8;font-size:12px">正在整理文字笔记…</p>' : ''}`;
 }
 
 function renderCalendar() {
@@ -516,18 +460,12 @@ function renderStats() {
 }
 
 function collectAgendaFromDom() {
-  const items = [];
-  document.querySelectorAll('[data-agenda-title]').forEach(el => {
-    const i = +el.dataset.agendaTitle;
-    const bodyEl = document.querySelector(`[data-agenda-body="${i}"]`);
-    const existing = localWb.agendaItems?.[i];
-    items.push({
-      id: existing?.id || uid(),
-      title: el.value.trim(),
-      body: bodyEl ? bodyEl.value : (existing?.body || ''),
-    });
-  });
-  localWb.agendaItems = items;
+  const titleEl = document.querySelector('[data-agenda-title]');
+  const bodyEl = document.querySelector('[data-agenda-body]');
+  if (!titleEl || !bodyEl) return;
+  const i = +titleEl.dataset.agendaTitle;
+  const existing = localWb.agendaItems?.[i] || { id: uid() };
+  localWb.agendaItems[i] = { id: existing.id || uid(), title: titleEl.value.trim(), body: bodyEl.value };
 }
 
 function collectWbFromDom() {
@@ -555,8 +493,8 @@ function bindEvents() {
       el.onchange = () => { collectWbFromDom(); if (id === 'wbTemplate') { send('setWorkbench', { workbench: localWb }); send('applyTemplate', { templateId: localWb.templateId }); } else pushWb(); updateCrumb(); };
       if (el.tagName === 'INPUT' && el.type === 'text') el.oninput = () => { collectWbFromDom(); updateCrumb(); };
     });
-    const notes = document.getElementById('wbNotes');
-    if (notes) notes.onmouseup = onNotesSelect;
+    const notes = document.getElementById('agendaEditor');
+    if (notes) { notes.onmouseup = onNotesSelect; notes.onkeyup = onNotesSelect; }
     document.querySelectorAll('[data-agenda-title],[data-agenda-body]').forEach(el => {
       el.oninput = () => { collectAgendaFromDom(); };
     });
@@ -597,10 +535,13 @@ function bindEvents() {
   document.querySelectorAll('[data-cal-day]').forEach(el => el.onclick = () => send('calSelectDay', { value: el.dataset.calDay }));
   document.querySelectorAll('[data-series-select]').forEach(el => el.onclick = () => send('seriesSelect', { seriesId: el.dataset.seriesSelect }));
   document.querySelectorAll('[data-tpl-select]').forEach(el => el.onclick = () => send('tplSelect', { templateId: el.dataset.tplSelect }));
+  document.querySelectorAll('[data-focus-agenda]').forEach(el => el.onclick = () => { collectAgendaFromDom(); ui.activeAgenda = +el.dataset.focusAgenda; renderAll(); });
 }
 
 function onNotesSelect(e) {
-  const text = window.getSelection().toString().trim();
+  const target = e.currentTarget || e.target;
+  const text = target?.value?.slice(target.selectionStart, target.selectionEnd).trim() || '';
+  ui.selectedNoteText = text;
   const bubble = document.getElementById('bubble');
   if (text.length < 2) { bubble.classList.add('hidden'); return; }
   bubble.classList.remove('hidden');
@@ -612,20 +553,24 @@ function onNotesSelect(e) {
     <button data-convert="close">✕</button>`;
   bubble.querySelectorAll('button').forEach(btn => btn.onclick = () => {
     if (btn.dataset.convert === 'close') { bubble.classList.add('hidden'); return; }
-    collectWbFromDom();
-    if (btn.dataset.convert === 'action') {
-      localWb.actionItems.push({ id: uid(), task: text, owner: '待分派', dueDate: new Date(Date.now()+3*864e5).toISOString().slice(0,10), done: false, syncedToTodo: false });
-      ui.actionsOpen = true;
-      showToast('已转为行动项');
-    } else {
-      localWb.decisions.push({ id: uid(), content: text, owner: '' });
-      ui.decisionsOpen = true;
-      showToast('已转为决策项');
-    }
-    bubble.classList.add('hidden');
-    window.getSelection().removeAllRanges();
-    renderAll();
+    convertSelection(btn.dataset.convert, text);
   });
+}
+
+function convertSelection(kind, text = ui.selectedNoteText) {
+  const value = (text || '').trim();
+  if (!value) { showToast('请先选中一段会议笔记'); return; }
+  collectWbFromDom();
+  if (kind === 'action') {
+    localWb.actionItems.push({ id: uid(), task: value, owner: '待分派', dueDate: '', done: false, syncedToTodo: false });
+    showToast('已转为行动项');
+  } else {
+    localWb.decisions.push({ id: uid(), content: value, owner: '' });
+    showToast('已转为决策项');
+  }
+  document.getElementById('bubble').classList.add('hidden');
+  ui.selectedNoteText = '';
+  renderAll();
 }
 
 function handleAction(act) {
@@ -634,6 +579,9 @@ function handleAction(act) {
   if (act === 'openFromLib') { send('setTab', { nav: 'library' }); return; }
   if (act === 'saveMeeting') { pushWb(); send('saveMeeting'); return; }
   if (act === 'generateSummary') { pushWb(); send('generateSummary'); return; }
+  if (act === 'completeMeeting') { pushWb(); send('completeMeeting'); return; }
+  if (act === 'convertSelectionAction') { convertSelection('action'); return; }
+  if (act === 'convertSelectionDecision') { convertSelection('decision'); return; }
   if (act === 'aiPrep') { pushWb(); send('aiPrep'); return; }
   if (act === 'copyDraft') { pushWb(); send('copyDraft'); return; }
   if (act === 'clearWorkbench') { if (confirm('确认清空？')) { pushWb(); send('clearWorkbench'); } return; }

@@ -1,5 +1,8 @@
 const fs = require("node:fs");
+const fsp = require("node:fs/promises");
+const os = require("node:os");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const { clipboard, desktopCapturer, nativeImage, screen } = require("electron");
 
 function stamp() {
@@ -14,12 +17,26 @@ function resolveScreenshotsDir(notesRoot) {
   return dir;
 }
 
+function toFileUrl(filePath) {
+  return pathToFileURL(path.resolve(filePath)).href;
+}
+
 function savePngAndClipboard(image, notesRoot, prefix = "DM") {
   const dir = resolveScreenshotsDir(notesRoot);
   const filePath = path.join(dir, `${prefix}_${stamp()}.png`);
+  clipboard.writeImage(image);
   const png = image.toPNG();
   fs.writeFileSync(filePath, png);
+  return filePath;
+}
+
+/** 先写剪贴板立即返回，磁盘写入异步，显著降低主进程阻塞感 */
+async function savePngAndClipboardFast(image, notesRoot, prefix = "DM") {
+  const dir = resolveScreenshotsDir(notesRoot);
+  const filePath = path.join(dir, `${prefix}_${stamp()}.png`);
   clipboard.writeImage(image);
+  const png = image.toPNG();
+  await fsp.writeFile(filePath, png);
   return filePath;
 }
 
@@ -101,6 +118,35 @@ function loadNativeImage(filePath) {
   return image;
 }
 
+function watermarkMeta() {
+  let username = "";
+  try {
+    username = os.userInfo().username || "";
+  } catch {
+    username = process.env.USERNAME || process.env.USER || "";
+  }
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  return {
+    timestamp,
+    hostname: os.hostname() || "",
+    username,
+    account: process.env.USERDOMAIN
+      ? `${process.env.USERDOMAIN}\\${username}`
+      : username,
+  };
+}
+
+function saveEditedPng(base64OrDataUrl, notesRoot, prefix = "DM_edit") {
+  const raw = String(base64OrDataUrl || "");
+  const base64 = raw.includes(",") ? raw.split(",")[1] : raw;
+  const buffer = Buffer.from(base64, "base64");
+  const image = nativeImage.createFromBuffer(buffer);
+  if (image.isEmpty()) throw new Error("编辑结果无效。");
+  return savePngAndClipboard(image, notesRoot, prefix);
+}
+
 module.exports = {
   captureDisplayImage,
   cropImage,
@@ -108,6 +154,10 @@ module.exports = {
   loadNativeImage,
   readImageAsDataUrl,
   savePngAndClipboard,
+  savePngAndClipboardFast,
   saveScreenshotAsNote,
+  saveEditedPng,
   resolveScreenshotsDir,
+  toFileUrl,
+  watermarkMeta,
 };

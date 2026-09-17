@@ -594,6 +594,17 @@ app.whenReady().then(() => {
     screenshotController.continueWithAnalysis(markdown);
   });
   ipcMain.on("screenshot-result:close", () => screenshotController.closeResultWindow());
+  ipcMain.handle("screenshot-choice:action", (_event, action) =>
+    screenshotController.handleChoice(action),
+  );
+  ipcMain.handle("screenshot-editor:save", (_event, payload) =>
+    screenshotController.saveEditorImage(payload || {}),
+  );
+  ipcMain.handle("screenshot-editor:copy", (_event, payload) =>
+    screenshotController.copyEditorImage(payload || {}),
+  );
+  ipcMain.on("screenshot-editor:close", () => screenshotController.closeEditorWindow());
+  ipcMain.handle("screenshot-editor:watermark", () => screenshotController.getWatermarkMeta());
   ipcMain.handle("settings:get", () => appSettings.get());
   ipcMain.handle("settings:save", async (_event, payload) => {
     try {

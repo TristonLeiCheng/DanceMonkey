@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>截图编辑</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: rgba(16, 17, 20, 0.95);
+        --panel: rgba(255, 255, 255, 0.04);
+        --line: rgba(255, 255, 255, 0.1);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.52);
+        --accent: #bea16f;
+        --accent-bg: rgba(190, 161, 111, 0.2);
+        --danger: #d98078;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        color: var(--text);
+        font: 13px/1.4 "Segoe UI", "Microsoft YaHei", sans-serif;
+        overflow: hidden;
+      }
+      .frame {
+        height: calc(100% - 16px);
+        margin: 8px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--bg);
+        backdrop-filter: blur(24px);
+        display: grid;
+        grid-template-rows: 44px 48px 1fr 40px;
+        overflow: hidden;
+      }
+      .titlebar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--line);
+        -webkit-app-region: drag;
+      }
+      .titlebar strong {
+        font: 500 15px/1 Palatino Linotype, Palatino, KaiTi, serif;
+      }
+      .titlebar span { color: var(--muted); font-size: 12px; }
+      .close {
+        margin-left: auto;
+        -webkit-app-region: no-drag;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .close:hover { background: rgba(217, 128, 120, 0.16); color: var(--danger); }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--line);
+        overflow-x: auto;
+        -webkit-app-region: no-drag;
+      }
+      .toolbar button, .toolbar label.chip {
+        height: 30px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        font: inherit;
+      }
+      .toolbar button.active, .toolbar button.primary {
+        background: var(--accent-bg);
+        color: var(--accent);
+      }
+      .toolbar button:hover, .toolbar label.chip:hover { filter: brightness(1.08); }
+      .toolbar input[type="color"] {
+        width: 28px;
+        height: 28px;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        cursor: pointer;
+      }
+      .toolbar input[type="range"] { width: 88px; }
+      .sep {
+        width: 1px;
+        height: 18px;
+        background: var(--line);
+        margin: 0 4px;
+      }
+      .stage {
+        min-height: 0;
+        background: #0b0c0f;
+        display: grid;
+        place-items: center;
+        overflow: auto;
+        padding: 16px;
+      }
+      .canvas-wrap {
+        position: relative;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+      }
+      canvas {
+        display: block;
+        max-width: 100%;
+        cursor: crosshair;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 14px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .status .right { margin-left: auto; }
+      .status.error { color: var(--danger); }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <header class="titlebar">
+        <strong>截图编辑</strong>
+        <span id="fileName"></span>
+        <button class="close" data-act="close" title="关闭">×</button>
+      </header>
+      <div class="toolbar">
+        <button class="active" data-tool="pen">画笔</button>
+        <button data-tool="mosaic">马赛克</button>
+        <button data-tool="rect">矩形</button>
+        <button data-tool="arrow">箭头</button>
+        <button data-act="undo">撤销</button>
+        <span class="sep"></span>
+        <input id="color" type="color" value="#ff4d4f" title="颜色" />
+        <label>粗细 <input id="size" type="range" min="2" max="40" value="6" /></label>
+        <span class="sep"></span>
+        <label class="chip"><input id="wmTime" type="checkbox" checked /> 时间戳</label>
+        <label class="chip"><input id="wmHost" type="checkbox" checked /> 电脑名</label>
+        <label class="chip"><input id="wmUser" type="checkbox" checked /> 账号</label>
+        <button data-act="apply-wm">应用水印</button>
+        <span class="sep"></span>
+        <button class="primary" data-act="copy">复制</button>
+        <button class="primary" data-act="save">保存图片</button>
+        <button data-act="note">保存到笔记</button>
+        <button data-act="analyze">AI 分析</button>
+      </div>
+      <div class="stage">
+        <div class="canvas-wrap">
+          <canvas id="board"></canvas>
+        </div>
+      </div>
+      <div class="status" id="status">
+        <span id="statusText">已加载</span>
+        <span class="right" id="metaText"></span>
+      </div>
+    </div>
+    <script>
+      const api = window.screenshotEditor;
+      const board = document.getElementById("board");
+      const ctx = board.getContext("2d");
+      const colorEl = document.getElementById("color");
+      const sizeEl = document.getElementById("size");
+      const statusText = document.getElementById("statusText");
+      const metaText = document.getElementById("metaText");
+
+      let tool = "pen";
+      let drawing = false;
+      let start = null;
+      let baseImage = null;
+      let history = [];
+      let imagePath = "";
+      let watermark = { timestamp: "", hostname: "", username: "", account: "" };
+      let snapshotBeforeShape = null;
+
+      function setStatus(text, isError = false) {
+        statusText.textContent = text || "";
+        statusText.parentElement.classList.toggle("error", Boolean(isError));
+      }
+
+      function pushHistory() {
+        try {
+          history.push(board.toDataURL("image/png"));
+          if (history.length > 30) history.shift();
+        } catch {}
+      }
+
+      function restoreHistory() {
+        if (!history.length) return;
+        const url = history.pop();
+        const img = new Image();
+        img.onload = () => {
+          ctx.clearRect(0, 0, board.width, board.height);
+          ctx.drawImage(img, 0, 0);
+          setStatus("已撤销");
+        };
+        img.src = url;
+      }
+
+      function drawWatermarkOverlay() {
+        const lines = [];
+        if (document.getElementById("wmTime").checked && watermark.timestamp) lines.push(watermark.timestamp);
+        if (document.getElementById("wmHost").checked && watermark.hostname) lines.push(`PC: ${watermark.hostname}`);
+        if (document.getElementById("wmUser").checked && (watermark.account || watermark.username)) {
+          lines.push(`User: ${watermark.account || watermark.username}`);
+        }
+        if (!lines.length) {
+          setStatus("请至少勾选一项水印", true);
+          return;
+        }
+        pushHistory();
+        const pad = 14;
+        const lineH = 18;
+        const boxW = Math.min(board.width - 24, 420);
+        const boxH = lines.length * lineH + pad * 2;
+        const x = board.width - boxW - 16;
+        const y = board.height - boxH - 16;
+        ctx.save();
+        ctx.fillStyle = "rgba(0,0,0,0.45)";
+        ctx.fillRect(x, y, boxW, boxH);
+        ctx.strokeStyle = "rgba(255,255,255,0.25)";
+        ctx.strokeRect(x + 0.5, y + 0.5, boxW - 1, boxH - 1);
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.font = "13px Segoe UI, Microsoft YaHei, sans-serif";
+        lines.forEach((line, index) => {
+          ctx.fillText(line, x + pad, y + pad + (index + 1) * lineH - 4);
+        });
+        ctx.restore();
+        setStatus("已添加水印");
+      }
+
+      function mosaicAt(x, y, brush) {
+        const size = Math.max(8, Math.round(brush * 2));
+        const block = Math.max(4, Math.round(brush / 1.5));
+        const left = Math.max(0, Math.round(x - size / 2));
+        const top = Math.max(0, Math.round(y - size / 2));
+        const w = Math.min(size, board.width - left);
+        const h = Math.min(size, board.height - top);
+        if (w <= 0 || h <= 0) return;
+        const sample = ctx.getImageData(left, top, w, h);
+        for (let by = 0; by < h; by += block) {
+          for (let bx = 0; bx < w; bx += block) {
+            const i = ((by * w) + bx) * 4;
+            const r = sample.data[i];
+            const g = sample.data[i + 1];
+            const b = sample.data[i + 2];
+            const bw = Math.min(block, w - bx);
+            const bh = Math.min(block, h - by);
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(left + bx, top + by, bw, bh);
+          }
+        }
+      }
+
+      function canvasPoint(event) {
+        const rect = board.getBoundingClientRect();
+        const scaleX = board.width / rect.width;
+        const scaleY = board.height / rect.height;
+        return {
+          x: (event.clientX - rect.left) * scaleX,
+          y: (event.clientY - rect.top) * scaleY,
+        };
+      }
+
+      function strokeLine(from, to) {
+        const size = Number(sizeEl.value) || 6;
+        if (tool === "mosaic") {
+          const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / (size / 2)));
+          for (let i = 0; i <= steps; i += 1) {
+            const t = i / steps;
+            mosaicAt(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t, size);
+          }
+          return;
+        }
+        ctx.save();
+        ctx.strokeStyle = colorEl.value;
+        ctx.lineWidth = size;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawShape(from, to) {
+        const size = Number(sizeEl.value) || 6;
+        ctx.save();
+        ctx.strokeStyle = colorEl.value;
+        ctx.lineWidth = size;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        if (tool === "rect") {
+          ctx.strokeRect(from.x, from.y, to.x - from.x, to.y - from.y);
+        } else if (tool === "arrow") {
+          const angle = Math.atan2(to.y - from.y, to.x - from.x);
+          const head = 12 + size;
+          ctx.beginPath();
+          ctx.moveTo(from.x, from.y);
+          ctx.lineTo(to.x, to.y);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(to.x, to.y);
+          ctx.lineTo(to.x - head * Math.cos(angle - 0.4), to.y - head * Math.sin(angle - 0.4));
+          ctx.lineTo(to.x - head * Math.cos(angle + 0.4), to.y - head * Math.sin(angle + 0.4));
+          ctx.closePath();
+          ctx.fillStyle = colorEl.value;
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function loadImage(fileUrl) {
+        const img = new Image();
+        img.onload = () => {
+          baseImage = img;
+          board.width = img.naturalWidth;
+          board.height = img.naturalHeight;
+          ctx.drawImage(img, 0, 0);
+          history = [];
+          setStatus("可开始标注");
+        };
+        img.onerror = () => setStatus("无法加载截图", true);
+        img.src = fileUrl;
+      }
+
+      board.addEventListener("mousedown", (event) => {
+        const point = canvasPoint(event);
+        drawing = true;
+        start = point;
+        if (tool === "pen" || tool === "mosaic") {
+          pushHistory();
+          strokeLine(point, point);
+        } else {
+          pushHistory();
+          snapshotBeforeShape = board.toDataURL("image/png");
+        }
+      });
+
+      window.addEventListener("mousemove", (event) => {
+        if (!drawing || !start) return;
+        const point = canvasPoint(event);
+        if (tool === "pen" || tool === "mosaic") {
+          strokeLine(start, point);
+          start = point;
+          return;
+        }
+        if (!snapshotBeforeShape) return;
+        const img = new Image();
+        img.onload = () => {
+          ctx.clearRect(0, 0, board.width, board.height);
+          ctx.drawImage(img, 0, 0);
+          drawShape(start, point);
+        };
+        img.src = snapshotBeforeShape;
+      });
+
+      window.addEventListener("mouseup", (event) => {
+        if (!drawing) return;
+        const point = canvasPoint(event);
+        if ((tool === "rect" || tool === "arrow") && start) {
+          if (snapshotBeforeShape) {
+            const img = new Image();
+            img.onload = () => {
+              ctx.clearRect(0, 0, board.width, board.height);
+              ctx.drawImage(img, 0, 0);
+              drawShape(start, point);
+            };
+            img.src = snapshotBeforeShape;
+          } else {
+            drawShape(start, point);
+          }
+        }
+        drawing = false;
+        start = null;
+        snapshotBeforeShape = null;
+      });
+
+      document.querySelectorAll("[data-tool]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          tool = btn.dataset.tool;
+          document.querySelectorAll("[data-tool]").forEach((el) => el.classList.toggle("active", el === btn));
+        });
+      });
+
+      async function exportDataUrl() {
+        return board.toDataURL("image/png");
+      }
+
+      document.body.addEventListener("click", async (event) => {
+        const btn = event.target.closest("[data-act]");
+        if (!btn) return;
+        const act = btn.dataset.act;
+        if (act === "close") return api.close();
+        if (act === "undo") return restoreHistory();
+        if (act === "apply-wm") return drawWatermarkOverlay();
+        if (act === "copy") {
+          const result = await api.copyImage({ dataUrl: await exportDataUrl() });
+          setStatus(result?.success ? "已复制到剪贴板" : result?.error || "复制失败", !result?.success);
+        }
+        if (act === "save") {
+          const result = await api.saveImage({ dataUrl: await exportDataUrl() });
+          if (result?.success) {
+            imagePath = result.imagePath;
+            document.getElementById("fileName").textContent = result.fileName || "";
+            setStatus(`已保存：${result.fileName}`);
+          } else {
+            setStatus(result?.error || "保存失败", true);
+          }
+        }
+        if (act === "note") {
+          const saved = await api.saveImage({ dataUrl: await exportDataUrl() });
+          if (!saved?.success) {
+            setStatus(saved?.error || "保存失败", true);
+            return;
+          }
+          imagePath = saved.imagePath;
+          const result = await api.saveNote();
+          setStatus(result?.success ? `已保存笔记：${result.relativeNotePath}` : result?.error || "保存笔记失败", !result?.success);
+        }
+        if (act === "analyze") {
+          const saved = await api.saveImage({ dataUrl: await exportDataUrl() });
+          if (!saved?.success) {
+            setStatus(saved?.error || "保存失败", true);
+            return;
+          }
+          setStatus("AI 正在分析…");
+          const result = await api.analyze();
+          if (!result?.success) {
+            setStatus(result?.error || "分析失败", true);
+            return;
+          }
+          setStatus("分析完成，已可继续对话");
+          if (confirm("分析完成，是否把结果发到 AI 对话？")) {
+            api.continueChat(result.text || "");
+          }
+        }
+      });
+
+      api.onInit((payload) => {
+        imagePath = payload.imagePath || "";
+        watermark = payload.watermark || watermark;
+        document.getElementById("fileName").textContent = payload.fileName || "";
+        metaText.textContent = [watermark.account || watermark.username, watermark.hostname]
+          .filter(Boolean)
+          .join(" · ");
+        loadImage(payload.fileUrl || payload.dataUrl || "");
+      });
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") api.close();
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") restoreHistory();
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+          event.preventDefault();
+          document.querySelector('[data-act="save"]')?.click();
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -53,6 +53,7 @@ $notes = @"
 "@
 
 Write-Host "[INFO] Creating release $tag on $Repo"
+# 公司代理下 TLS 吊销检查常失败，curl 上传脚本请加 --ssl-no-revoke
 gh release view $tag --repo $Repo 2>$null
 if ($LASTEXITCODE -eq 0) {
   Write-Host "[INFO] Release exists, uploading assets..."
@@ -62,4 +63,5 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 Write-Host "[OK] Release published: https://github.com/$Repo/releases/tag/$tag"
-Write-Host "[OK] 旧版默认会检查该仓库 latest release（资源名含 win-x64）。"
+Write-Host "[OK] 旧版默认检查该仓库 latest（资源名含 win-x64）。设置里也可填清单："
+Write-Host "     https://github.com/$Repo/releases/download/$tag/update-manifest.json"

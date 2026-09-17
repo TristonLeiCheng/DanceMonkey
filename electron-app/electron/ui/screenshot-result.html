@@ -183,7 +183,7 @@
 
       api.onInit((payload) => {
         imagePath = payload.imagePath || "";
-        preview.src = payload.dataUrl || "";
+        preview.src = payload.fileUrl || payload.dataUrl || "";
         pathEl.textContent = payload.fileName || "";
         if (payload.autoAnalyze) {
           void runAnalyze();

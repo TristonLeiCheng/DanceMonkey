@@ -68,8 +68,9 @@
     <div class="hint">拖拽选择区域 · Enter 完成 · Esc 取消</div>
     <canvas id="board"></canvas>
     <div class="toolbar" id="toolbar">
-      <button class="primary" data-act="done">完成截图</button>
-      <button data-act="ai">AI 分析</button>
+      <button class="primary" data-act="done">完成</button>
+      <button data-act="edit">编辑</button>
+      <button data-act="ai">AI</button>
       <button data-act="cancel">取消</button>
     </div>
     <script>
@@ -111,7 +112,7 @@
 
       function placeToolbar(rect) {
         toolbar.style.display = "flex";
-        const left = Math.min(window.innerWidth - 280, Math.max(12, rect.x));
+        const left = Math.min(window.innerWidth - 320, Math.max(12, rect.x));
         const top = Math.min(window.innerHeight - 48, rect.y + rect.height + 10);
         toolbar.style.left = `${left}px`;
         toolbar.style.top = `${Math.max(12, top)}px`;
@@ -149,14 +150,26 @@
         if (act) finish(act);
       });
 
-      api.onImage((dataUrl) => {
+      function loadPreview(payload) {
         image.onload = () => {
           canvas.width = window.innerWidth;
           canvas.height = window.innerHeight;
           paint();
         };
-        image.src = dataUrl;
-      });
+        if (typeof payload === "string") {
+          image.src = payload;
+          return;
+        }
+        if (payload?.jpeg) {
+          const bytes = payload.jpeg instanceof Uint8Array ? payload.jpeg : new Uint8Array(payload.jpeg);
+          const blob = new Blob([bytes], { type: payload.mime || "image/jpeg" });
+          image.src = URL.createObjectURL(blob);
+          return;
+        }
+        if (payload?.dataUrl) image.src = payload.dataUrl;
+      }
+
+      api.onImage(loadPreview);
       window.addEventListener("resize", () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;

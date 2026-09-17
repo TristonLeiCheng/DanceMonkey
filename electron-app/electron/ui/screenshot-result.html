@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>截图完成</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #17181c;
+        --panel: rgba(255, 255, 255, 0.04);
+        --line: rgba(255, 255, 255, 0.1);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.5);
+        --accent: #bea16f;
+        --accent-bg: rgba(190, 161, 111, 0.18);
+        --danger: #d98078;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        color: var(--text);
+        font: 13px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      .frame {
+        height: 100%;
+        margin: 8px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(16, 17, 20, 0.92);
+        backdrop-filter: blur(24px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .titlebar {
+        height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--line);
+        -webkit-app-region: drag;
+      }
+      .titlebar strong {
+        font-family: Palatino Linotype, Palatino, KaiTi, serif;
+        font-weight: 500;
+      }
+      .titlebar span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .close {
+        margin-left: auto;
+        -webkit-app-region: no-drag;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .close:hover {
+        background: rgba(217, 128, 120, 0.16);
+        color: var(--danger);
+      }
+      .body {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-rows: 1fr auto;
+        gap: 12px;
+        padding: 12px;
+      }
+      .preview {
+        min-height: 0;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #0d0e11;
+        display: grid;
+        place-items: center;
+        overflow: auto;
+      }
+      .preview img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
+      .analysis {
+        display: none;
+        min-height: 0;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px 14px;
+        background: var(--panel);
+      }
+      .analysis.visible {
+        display: block;
+      }
+      .analysis h1,
+      .analysis h2,
+      .analysis h3 {
+        font-family: Palatino Linotype, Palatino, KaiTi, serif;
+        font-weight: 500;
+      }
+      .status {
+        color: var(--muted);
+        font-size: 12px;
+        min-height: 18px;
+      }
+      .status.error {
+        color: var(--danger);
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      button {
+        height: 32px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent-bg);
+        color: var(--accent);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      button:hover:not(:disabled) {
+        filter: brightness(1.08);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <header class="titlebar">
+        <strong>截图完成</strong>
+        <span id="path"></span>
+        <button class="close" data-act="close" title="关闭">×</button>
+      </header>
+      <div class="body">
+        <div class="preview"><img id="preview" alt="截图预览" /></div>
+        <div class="analysis" id="analysis"></div>
+        <div class="status" id="status">已复制到剪贴板</div>
+        <div class="actions">
+          <button data-act="copy">复制图片</button>
+          <button data-act="note">保存到笔记</button>
+          <button class="primary" data-act="analyze" id="analyzeBtn">AI 分析</button>
+          <button data-act="continue" id="continueBtn" disabled>继续对话</button>
+          <button data-act="close">关闭</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      const api = window.screenshotResult;
+      const preview = document.getElementById("preview");
+      const analysis = document.getElementById("analysis");
+      const status = document.getElementById("status");
+      const pathEl = document.getElementById("path");
+      const analyzeBtn = document.getElementById("analyzeBtn");
+      const continueBtn = document.getElementById("continueBtn");
+      let imagePath = "";
+      let markdown = "";
+
+      function setStatus(text, isError = false) {
+        status.textContent = text || "";
+        status.classList.toggle("error", Boolean(isError));
+      }
+
+      api.onInit((payload) => {
+        imagePath = payload.imagePath || "";
+        preview.src = payload.dataUrl || "";
+        pathEl.textContent = payload.fileName || "";
+        if (payload.autoAnalyze) {
+          void runAnalyze();
+        }
+      });
+
+      async function runAnalyze() {
+        analyzeBtn.disabled = true;
+        continueBtn.disabled = true;
+        setStatus("AI 正在分析截图…");
+        analysis.classList.remove("visible");
+        const result = await api.analyze();
+        analyzeBtn.disabled = false;
+        if (!result?.success) {
+          setStatus(result?.error || "分析失败", true);
+          return;
+        }
+        markdown = result.text || "";
+        analysis.innerHTML = result.html || "";
+        analysis.classList.add("visible");
+        continueBtn.disabled = false;
+        setStatus("分析完成");
+      }
+
+      document.body.addEventListener("click", async (event) => {
+        const act = event.target.closest("[data-act]")?.dataset.act;
+        if (!act) return;
+        if (act === "close") return api.close();
+        if (act === "copy") {
+          const result = await api.copy();
+          setStatus(result?.success ? "已复制到剪贴板" : result?.error || "复制失败", !result?.success);
+        }
+        if (act === "note") {
+          const result = await api.saveNote();
+          setStatus(result?.success ? `已保存笔记：${result.relativeNotePath}` : result?.error || "保存失败", !result?.success);
+        }
+        if (act === "analyze") void runAnalyze();
+        if (act === "continue") api.continueChat(markdown);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,842 @@
+[
+  {
+    "name": "通讯录",
+    "path": "https://bayergroup.sharepoint.com/sites/021012/BJ/SiteService/DocLib/Forms/Reception%20service.aspx",
+    "category": "sharepoint",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "CIMS UP跃",
+    "path": "https://cims-up.bayer.cn/",
+    "category": "web",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "中国IT导览",
+    "path": "https://bayergroup.sharepoint.com/sites/ChinaITCommunication",
+    "category": "sharepoint",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "会议室列表",
+    "path": "https://bayergroup.sharepoint.com/sites/021012/BJ/SiteService/DocLib/Forms/Meeting%20service.aspx",
+    "category": "sharepoint",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "班车",
+    "path": "https://apps.powerapps.com/play/e/df502657-dcfb-4824-8754-89c173477118/a/727624a4-a10d-4ac2-9b6c-3ce7732e6da0?tenantId=fcb2b37b-5da0-466b-9b83-0014b67a7c78&source=teamsLinkUnfurling&hidenavbar=true",
+    "category": "web",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "工会",
+    "path": "https://www.bhclaborunion.com.cn/bhc",
+    "category": "web",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "访客管理系统",
+    "path": "https://newvisitors.intranet.cnb/vms_web/order",
+    "category": "web",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "工作餐系统",
+    "path": "https://apps.powerapps.com/play/e/df502657-dcfb-4824-8754-89c173477118/a/774977db-b5f6-4f59-a9a0-07f69c2c15ab?tenantId=fcb2b37b-5da0-466b-9b83-0014b67a7c78&source=portal&hidenavbar=true",
+    "category": "web",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "非工作时间入厂&订餐申请",
+    "path": "https://apps.powerapps.com/play/e/df502657-dcfb-4824-8754-89c173477118/a/42957528-9444-49cd-b30b-6e5813ef153e?tenantId=fcb2b37b-5da0-466b-9b83-0014b67a7c78",
+    "category": "web",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "门禁权限申请",
+    "path": "https://apps.powerapps.com/play/e/f9dcc569-b256-e0cd-b589-f210c7c5795b/a/57c5a8e5-a1f1-4b9f-a9a9-c8c0c5a80930?tenantId=fcb2b37b-5da0-466b-9b83-0014b67a7c78",
+    "category": "web",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "群发邮件组地址",
+    "path": "https://bayergroup.sharepoint.com/sites/021012/BJ/SitePages/Group-Email-Addresses---SCBJ.aspx",
+    "category": "sharepoint",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "公租房排名公示",
+    "path": "https://apps.powerapps.com/play/e/8dd1b106-2efd-e01b-8d61-9c86a3392a4e/a/4ce7babc-d850-4220-b818-a6e37339a3f7?tenantId=fcb2b37b-5da0-466b-9b83-0014b67a7c78",
+    "category": "web",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "想法收集-持续改进数字化",
+    "path": "https://bayergroup.sharepoint.com/sites/021012/BJ/SitePages/QR-Code-for-Idea-Collection.aspx",
+    "category": "sharepoint",
+    "group": "公共服务",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "拜耳内联网",
+    "path": "https://bayernet.int.bayer.com/zh-cn/",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "My Services",
+    "path": "https://myservicesprod.launchpad.cfapps.eu20.hana.ondemand.com/site#Shell-home",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "组织架构查询",
+    "path": "https://myservicesprod.launchpad.cfapps.eu20.hana.ondemand.com/site#GLSE_ORG_PLUS-display",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "微信内部企业号管理",
+    "path": "https://wechat.bayer.cn/index/",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "IT服务入口",
+    "path": "https://bayersi.service-now.com/sp",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Your-Docs",
+    "path": "https://yd-awf.intranet.cnb",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "IT Service Now",
+    "path": "https://bayersi.service-now.com/",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "SmartDesk",
+    "path": "https://bayer-s2p.topdesk.net/tas/public/ssp/",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "SmartBuy",
+    "path": "https://s1-eu.ariba.com/Buyer/Main/aw?awh=r&realm=bayer&dard=1",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "爱福利",
+    "path": "https://www.jiafuhui.com/shop/bayer/index.htm",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Concur",
+    "path": "http://go/concur",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "携程商旅",
+    "path": "https://ct.ctrip.com/pcsaml/SAML/AssertionConsumerService/Bayer",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "拜耳差旅门户",
+    "path": "https://new.bayernet.cnb/zh-cn/greater-china/home/services/mobility-portal",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "eTrip",
+    "path": "https://eworkflow.ap.bayer.cnb/login.jsp?action=logout",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "拜耳员工激励平台",
+    "path": "https://bayer.ecosaas.com/",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "北京侨福办公室",
+    "path": "https://bayergroup.sharepoint.com/sites/020856/004/001/BJ/default.aspx",
+    "category": "sharepoint",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "CSRM",
+    "path": "https://bayergroup.sharepoint.com/sites/csrm",
+    "category": "sharepoint",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Docusign",
+    "path": "https://account.docusign.com/#/username",
+    "category": "web",
+    "group": "拜耳中国",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "谷歌",
+    "path": "https://www.google.com",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "百度",
+    "path": "https://www.baidu.com",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "拜耳翻译",
+    "path": "https://translate.int.bayer.com/translation",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "大文件传输",
+    "path": "https://mytransfer-lev.bayer.biz/",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Outlook网页版",
+    "path": "http://outlook.com/owa/bayergroup.mail.onmicrosoft.com",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "无线密码",
+    "path": "https://inet-account-mgt.intranet.cnb/en",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Chat",
+    "path": "https://chat.int.bayer.com/",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "知识库",
+    "path": "https://bcnbejs0250/",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": true,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "USB权限申请",
+    "path": "https://bayersi.service-now.com/sp?id=sc_cat_item&sys_id=1d2d3cb61b82f9507a9ba868b04bcbc0",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "SAP Password Reset Hub",
+    "path": "https://myservicesprod.launchpad.cfapps.eu20.hana.ondemand.com/site#1A_GW_PWR-display",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "特殊权限申请",
+    "path": "https://myaccess.microsoft.com/@bayergroup.onmicrosoft.com#/access-packages",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Delve",
+    "path": "https://eur.delve.office.com/",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "科力普商城",
+    "path": "https://www.colipu.com",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "离职申请",
+    "path": "https://apps.powerapps.com/play/e/default-fcb2b37b-5da0-466b-9b83-0014b67a7c78/a/abf9b436-7a88-4874-9126-ee955b343dde?tenantId=fcb2b37b-5da0-466b-9b83-0014b67a7c78",
+    "category": "web",
+    "group": "其他链接",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "MES D&Q&P系统",
+    "path": "https://citrix.bej.prod.cnb/vpn/index.html",
+    "category": "web",
+    "group": "制造",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "防火墙登录",
+    "path": "https://byfwbejpeclx.ap.bayer.cnb:950",
+    "category": "web",
+    "group": "制造",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "MES BASE Showroom",
+    "path": "https://by-lea.de.bayer.cnb/Citrix/StoreSSOWeb/",
+    "category": "web",
+    "group": "制造",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "OEE数据库",
+    "path": "https://hcnbejs0047.bayer.cnb/Login.aspx",
+    "category": "web",
+    "group": "制造",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "进入生产区许可登记表",
+    "path": "https://bayergroup.sharepoint.com/sites/021012/BJ/ProdAdmittance/default.aspx",
+    "category": "sharepoint",
+    "group": "制造",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "库房管理系统",
+    "path": "https://wmsbj.bayer.biz/cgi-bin/web_om_bayer.exe#scr=iconhome",
+    "category": "web",
+    "group": "制造",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "CIMS UP跃(制造)",
+    "path": "https://bcnbejs0102.bayer.cnb/Account/Login",
+    "category": "web",
+    "group": "制造",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "IQMS",
+    "path": "https://bayer-iqms.veevavault.com",
+    "category": "web",
+    "group": "质量",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "LifeDoc",
+    "path": "https://lifedoc.intranet.cnb/cara/index.jsp",
+    "category": "web",
+    "group": "质量",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Valgenesis",
+    "path": "https://vgeuprd.valgenesis.net/BAYER-PRD/login/login.aspx",
+    "category": "web",
+    "group": "质量",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Pharmdoss",
+    "path": "https://pd-prod.intranet.cnb/cara/",
+    "category": "web",
+    "group": "质量",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "偏差(DevCom)",
+    "path": "https://devacom.intranet.cnb/en_US/login/index.jsp",
+    "category": "web",
+    "group": "质量",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "GMP eLearning",
+    "path": "http://www.gmpx.de/logon.aspx",
+    "category": "web",
+    "group": "质量",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Engineering Portal",
+    "path": "https://bayergroup.sharepoint.com/sites/EngineeringPortal/SitePages/Homepage.aspx",
+    "category": "sharepoint",
+    "group": "工程",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "行政",
+    "path": "https://bayergroup.sharepoint.com/sites/021012/BJ/SiteService/SitePages/Home.aspx",
+    "category": "sharepoint",
+    "group": "工程",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "项目管理系统",
+    "path": "http://pms.bayer.cnb/",
+    "category": "web",
+    "group": "工程",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "设施综合看板",
+    "path": "https://app.powerbi.com/reportEmbed?reportId=013b6ef9-9df4-47ab-967d-f20b99007504&autoAuth=true&ctid=fcb2b37b-5da0-466b-9b83-0014b67a7c78",
+    "category": "web",
+    "group": "工程",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "EDMS",
+    "path": "https://bay08-sdx.intergraphsmartcloud.com/edmspop/",
+    "category": "web",
+    "group": "工程",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "IDNow权限管理",
+    "path": "https://bayer.identitynow.com/ui/d/mysailpoint",
+    "category": "web",
+    "group": "工程",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "User Info",
+    "path": "https://userinfo.intranet.cnb",
+    "category": "web",
+    "group": "工程",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "网络监控",
+    "path": "https://bcnshgs0302.bayer.cnb/Orion/Login.aspx",
+    "category": "web",
+    "group": "工程",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "仓库管理系统",
+    "path": "https://wmsbj.bayer.biz/cgi-bin/web_om_bayer.exe",
+    "category": "web",
+    "group": "物流",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "仓库管理系统PDA",
+    "path": "https://wmsbj.bayer.biz/cgi-bin/web_moi_bayer.exe",
+    "category": "web",
+    "group": "物流",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Supply Chain KM",
+    "path": "http://sp-appl-bhc.bayer-ag.com/sites/220001/learning/SitePages/Home.aspx",
+    "category": "web",
+    "group": "物流",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "改善Kaizen",
+    "path": "https://bayergroup.sharepoint.com/sites/021012/BJ/Kaizen/default.aspx",
+    "category": "sharepoint",
+    "group": "战略卓越",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "5S",
+    "path": "https://bayergroup.sharepoint.com/sites/002630/SitePages/5S.aspx",
+    "category": "sharepoint",
+    "group": "战略卓越",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "问题解决卡流程PSS",
+    "path": "https://bcnbejs0102.bayer.cnb/ipmsdatainput/gembaactionlist",
+    "category": "web",
+    "group": "战略卓越",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "改善建议收集",
+    "path": "https://bayergroup.sharepoint.com/sites/020075/SitePages/Home.aspx",
+    "category": "sharepoint",
+    "group": "战略卓越",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "访客信息库",
+    "path": "https://bayergroup.sharepoint.com/sites/021012/BJ/SiteVisit/_layouts/15/viewlsts.aspx",
+    "category": "sharepoint",
+    "group": "战略卓越",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "投资项目交付系统",
+    "path": "https://capexds.int.bayer.com/gateprocess",
+    "category": "web",
+    "group": "投资项目管理",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "中国在线规章制度",
+    "path": "https://chinaregulationonline.bayer.cnb/Regulation/MyRegulation",
+    "category": "web",
+    "group": "投资项目管理",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "GRC 消防中断通知系统",
+    "path": "https://grcconnect.globalriskconsultants.com/ins/app/Main/Registry.aspx?q=0",
+    "category": "web",
+    "group": "投资项目管理",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "合同管理",
+    "path": "http://sp-coll-bhc.ap.bayer.cnb/sites/200212/General_Services/Seal/SitePages/Contract_CN.aspx",
+    "category": "web",
+    "group": "投资项目管理",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "北京市政务服务网",
+    "path": "http://banshi.beijing.gov.cn/newhall/villages.html",
+    "category": "web",
+    "group": "投资项目管理",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Dev@com",
+    "path": "https://devacom.intranet.cnb/en_US/login/index.jsp",
+    "category": "web",
+    "group": "质量国家平台",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "AIDa",
+    "path": "https://trackwise.bhc.cnb/Production/",
+    "category": "web",
+    "group": "质量国家平台",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "Dido",
+    "path": "https://forms-app.prod.dido.int.bayer.com/?tenant=CQ01",
+    "category": "web",
+    "group": "质量国家平台",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "国家药品监督管理局",
+    "path": "https://www.nmpa.gov.cn/",
+    "category": "web",
+    "group": "质量国家平台",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  },
+  {
+    "name": "北京市市场监管理局",
+    "path": "http://scjgj.beijing.gov.cn/",
+    "category": "web",
+    "group": "质量国家平台",
+    "pinned": false,
+    "description": "",
+    "clickCount": 0,
+    "lastClicked": null
+  }
+]

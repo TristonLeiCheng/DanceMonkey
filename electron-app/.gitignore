@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-electron
+publish
+.DS_Store
+*.log
+vendor/node/
+vendor/_extract/
+.env
+.env.*
+*.pem
+*.key
+credentials.json

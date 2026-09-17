@@ -1,0 +1,206 @@
+﻿# DM launcher
+[CmdletBinding()]
+param()
+
+$ErrorActionPreference = "Stop"
+try { chcp 65001 | Out-Null } catch {}
+$OutputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$Host.UI.RawUI.WindowTitle = "DM 启动器"
+Set-Location -LiteralPath $PSScriptRoot
+
+$script:MinNodeMajor = 22
+
+function Write-Banner {
+  Write-Host ""
+  Write-Host "  ==========================================" -ForegroundColor DarkYellow
+  Write-Host "                   D M" -ForegroundColor Yellow
+  Write-Host "              DanceMonkey" -ForegroundColor DarkYellow
+  Write-Host "  ==========================================" -ForegroundColor DarkYellow
+  Write-Host ""
+}
+
+function Write-Step([string]$Message, [string]$Status = "INFO") {
+  $color = switch ($Status) {
+    "OK"   { "Green" }
+    "WAIT" { "Cyan" }
+    "WARN" { "Yellow" }
+    "ERR"  { "Red" }
+    default { "Gray" }
+  }
+  Write-Host ("  [{0}] {1}" -f $Status.PadRight(4), $Message) -ForegroundColor $color
+}
+
+function Test-NodeExe([string]$Exe) {
+  if (-not $Exe -or -not (Test-Path -LiteralPath $Exe)) { return $false }
+  try {
+    $ver = & $Exe -p "process.versions.node" 2>$null
+    if (-not $ver) { return $false }
+    $major = [int](($ver -split "\.")[0])
+    return ($major -ge $script:MinNodeMajor)
+  } catch {
+    return $false
+  }
+}
+
+function Use-NodeDir([string]$Dir) {
+  $exe = Join-Path $Dir "node.exe"
+  if (-not (Test-NodeExe $exe)) { return $null }
+  $env:Path = "$Dir;$env:Path"
+  $env:npm_config_scripts_prepend_node_path = "true"
+  return $exe
+}
+
+function Find-BundledZip {
+  $vendor = Join-Path $PSScriptRoot "vendor"
+  if (-not (Test-Path -LiteralPath $vendor)) { return $null }
+  $zip = Get-ChildItem -LiteralPath $vendor -Filter "node-v*-win-x64.zip" -File -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending |
+    Select-Object -First 1
+  if ($zip) { return $zip.FullName }
+  return $null
+}
+
+function Install-BundledNode {
+  $zip = Find-BundledZip
+  if (-not $zip) { return $null }
+
+  $runtimeRoot = Join-Path $env:LOCALAPPDATA "DanceMonkey\runtime"
+  $nodeDir = Join-Path $runtimeRoot "node"
+  $marker = Join-Path $nodeDir ".dm-runtime-from"
+  $zipName = [System.IO.Path]::GetFileName($zip)
+
+  if ((Test-Path -LiteralPath (Join-Path $nodeDir "node.exe")) -and (Test-Path -LiteralPath $marker)) {
+    $prev = Get-Content -LiteralPath $marker -Raw -ErrorAction SilentlyContinue
+    if ($prev -and $prev.Trim() -eq $zipName -and (Test-NodeExe (Join-Path $nodeDir 'node.exe'))) {
+      return (Use-NodeDir $nodeDir)
+    }
+  }
+
+  Write-Step ("正在安装内置 Node.js（{0}）…" -f $zipName) "WAIT"
+  New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
+  $stage = Join-Path $runtimeRoot "_extract"
+  if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+  try {
+    tar.exe -xf $zip -C $stage
+    if ($LASTEXITCODE -ne 0) { throw "解压失败（代码 $LASTEXITCODE）" }
+
+    $extracted = Get-ChildItem -LiteralPath $stage -Directory | Select-Object -First 1
+    if (-not $extracted) { throw '压缩包内容无效' }
+
+    if (Test-Path -LiteralPath $nodeDir) { Remove-Item -LiteralPath $nodeDir -Recurse -Force }
+    Move-Item -LiteralPath $extracted.FullName -Destination $nodeDir
+    Set-Content -LiteralPath $marker -Value $zipName -Encoding ASCII
+    Write-Step "内置 Node.js 安装完成" "OK"
+    return (Use-NodeDir $nodeDir)
+  } catch {
+    Write-Step ("安装内置 Node.js 失败：{0}" -f $_.Exception.Message) "ERR"
+    return $null
+  } finally {
+    if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue }
+  }
+}
+
+function Find-Node {
+  $cmd = Get-Command node -ErrorAction SilentlyContinue
+  if ($cmd -and (Test-NodeExe $cmd.Source)) {
+    $dir = Split-Path -Parent $cmd.Source
+    $env:Path = "$dir;$env:Path"
+    return $cmd.Source
+  }
+
+  $localRuntime = Join-Path $env:LOCALAPPDATA "DanceMonkey\runtime\node"
+  $fromLocal = Use-NodeDir $localRuntime
+  if ($fromLocal) { return $fromLocal }
+
+  $vendorNode = Join-Path $PSScriptRoot "vendor\node"
+  $fromVendor = Use-NodeDir $vendorNode
+  if ($fromVendor) { return $fromVendor }
+
+  $piNode = Join-Path $env:LOCALAPPDATA "pi-node\current"
+  $fromPi = Use-NodeDir $piNode
+  if ($fromPi) { return $fromPi }
+
+  return (Install-BundledNode)
+}
+
+function Wait-ForElectron([int]$Seconds = 12) {
+  for ($i = 1; $i -le $Seconds; $i++) {
+    Start-Sleep -Seconds 1
+    if (Get-Process -Name "electron" -ErrorAction SilentlyContinue) {
+      Write-Host ""
+      return $true
+    }
+    Write-Host ("`r  [WAIT] 正在拉起窗口… {0}/{1} 秒 " -f $i, $Seconds) -NoNewline -ForegroundColor Cyan
+  }
+  Write-Host ""
+  return $false
+}
+
+Write-Banner
+
+$node = Find-Node
+if (-not $node) {
+  Write-Step "未找到可用的 Node.js（需要 v22+）。" "ERR"
+  Write-Host "  请确认项目 vendor 目录中有 node-v*-win-x64.zip" -ForegroundColor DarkGray
+  Write-Host ""
+  Write-Host "  按任意键退出…" -ForegroundColor DarkGray
+  $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+  exit 1
+}
+
+try { $nodeVer = & $node -p "process.versions.node" } catch { $nodeVer = "?" }
+Write-Step ("已就绪 Node.js v{0}" -f $nodeVer) "OK"
+
+$electronPkg = Join-Path $PSScriptRoot "node_modules\electron\package.json"
+if (-not (Test-Path -LiteralPath $electronPkg)) {
+  Write-Step "首次运行，正在安装依赖…" "WAIT"
+  try {
+    $npm = Join-Path (Split-Path -Parent $node) "npm.cmd"
+    if (-not (Test-Path -LiteralPath $npm)) { $npm = "npm" }
+    & $npm install --prefix $PSScriptRoot
+    if ($LASTEXITCODE -ne 0) { throw "npm install 失败（代码 $LASTEXITCODE）" }
+    Write-Step "依赖安装完成" "OK"
+  } catch {
+    Write-Step $_.Exception.Message "ERR"
+    Write-Host ""
+    Write-Host "  按任意键退出…" -ForegroundColor DarkGray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+  }
+} else {
+  Write-Step "依赖已就绪" "OK"
+}
+
+$logOut = Join-Path $env:TEMP "dm-start.log"
+$logErr = Join-Path $env:TEMP "dm-start.err.log"
+Write-Step "正在后台启动 DM…" "WAIT"
+
+try {
+  Start-Process -FilePath $node -ArgumentList @("desktop.mjs") -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput $logOut -RedirectStandardError $logErr | Out-Null
+} catch {
+  Write-Step ("启动失败：{0}" -f $_.Exception.Message) "ERR"
+  Write-Host ""
+  Write-Host "  按任意键退出…" -ForegroundColor DarkGray
+  $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+  exit 1
+}
+
+if (-not (Wait-ForElectron -Seconds 12)) {
+  Write-Step "未检测到窗口，启动可能失败。" "ERR"
+  Write-Host ("  日志：{0}" -f $logOut) -ForegroundColor DarkGray
+  Write-Host ("  错误：{0}" -f $logErr) -ForegroundColor DarkGray
+  Write-Host ""
+  Write-Host "  按任意键退出…" -ForegroundColor DarkGray
+  $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+  exit 1
+}
+
+Write-Host ""
+Write-Step "DM 已启动" "OK"
+Write-Host "  · 退出请点面板右上角电源键（连点两次）" -ForegroundColor DarkGray
+Write-Host "  · 本窗口可直接关闭，不影响程序运行" -ForegroundColor DarkGray
+Write-Host ""
+Start-Sleep -Seconds 2
+exit 0

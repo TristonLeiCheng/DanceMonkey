@@ -27,7 +27,7 @@ npm run dev
 - 可调整宽度的文件树，以及可拖动的编辑/预览分栏
 - 玻璃、纯色、纸张三种界面效果及深浅主题
 - **Zen Task**：读写旧版 `Journal/task-module.json`，支持优先级、RACI、能量、截止日期
-- **项目管理**：项目详情、目标与完成标准、下一步行动、截止日期、任务列表/四列看板、归档恢复和 Markdown 笔记关联
+- **项目管理**：里程碑及任务进度、生命周期与健康度、每周进展记录、风险提醒、任务列表/看板、归档恢复和 Markdown 笔记关联；可从笔记选段批量生成带来源的任务
 - **快速访问**：系统路径探测 + 旧版 `config.json` 的 `quickLinks`
 
 桌面知识库与旧版 DanceMonkey 共用 `%AppData%\DanceMonkey\config.json` 中的
@@ -66,6 +66,8 @@ AI 请求会跟随系统代理，但不写入系统代理；应用内更新暂�
 
 Windows 可用 `npm run package:win` 生成 Forge ZIP。`npm run publish:win` 仍保留旧版
 `v1.3.x` 升级器所需的 `win-x64` ZIP 与升级清单，供迁移老用户使用。
+在 macOS 交叉打包 Windows ZIP 后运行 `npm run prepare:win-release`，可在
+`out/make/release/` 生成兼容 GitHub Latest 更新和旧版清单更新的 `win-x64` ZIP 与 `update-manifest.json`。
 
 以下 Windows 启动器说明仍适用于 Windows：
 

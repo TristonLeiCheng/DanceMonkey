@@ -55,11 +55,13 @@ contextBridge.exposeInMainWorld("lumen", {
   zenTask: {
     load: () => ipcRenderer.invoke("zentask:load"),
     addTask: (input) => ipcRenderer.invoke("zentask:addTask", input),
+    addTasksBatch: (inputs) => ipcRenderer.invoke("zentask:addTasksBatch", inputs),
     updateTask: (id, input) => ipcRenderer.invoke("zentask:updateTask", id, input),
     toggleTask: (id) => ipcRenderer.invoke("zentask:toggleTask", id),
     deleteTask: (id) => ipcRenderer.invoke("zentask:deleteTask", id),
     addProject: (input) => ipcRenderer.invoke("zentask:addProject", input),
     updateProject: (id, input) => ipcRenderer.invoke("zentask:updateProject", id, input),
+    deleteMilestone: (projectId, milestoneId, reassignTo) => ipcRenderer.invoke("zentask:deleteMilestone", projectId, milestoneId, reassignTo),
     deleteProject: (id) => ipcRenderer.invoke("zentask:deleteProject", id),
   },
   quickAccess: {

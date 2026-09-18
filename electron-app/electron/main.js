@@ -16,6 +16,13 @@ const platform = createPlatformAdapter();
 
 app.setName("DM");
 app.commandLine.appendSwitch("enable-transparent-visuals");
+if (process.env.DM_E2E_ROOT) {
+  // UI tests are isolated from the user's vault and settings.
+  app.setPath("appData", path.join(process.env.DM_E2E_ROOT, "app-data"));
+  app.setPath("userData", path.join(process.env.DM_E2E_ROOT, "user-data"));
+  app.setPath("documents", path.join(process.env.DM_E2E_ROOT, "documents"));
+  app.commandLine.appendSwitch("remote-debugging-port", process.env.DM_E2E_PORT || "9333");
+}
 
 // 更名后沿用旧版「雾笺」的用户数据，避免笔记与待办丢失
 (() => {
@@ -141,7 +148,7 @@ function notifyWorkspaceChanged(change = {}) {
 }
 
 function rendererUrl(hash = "") {
-  if (isDev) return `http://127.0.0.1:5173/${hash}`;
+  if (isDev) return `http://127.0.0.1:${process.env.DM_E2E_SERVER_PORT || "5173"}/${hash}`;
   return `${require("node:url").pathToFileURL(path.join(__dirname, "../index.html")).href}${hash}`;
 }
 
@@ -448,6 +455,7 @@ app.whenReady().then(() => {
   ipcMain.handle("ai:cancel", (_event, requestId) => aiService.cancel(requestId));
   ipcMain.handle("zentask:load", () => zenTaskStore.load());
   ipcMain.handle("zentask:addTask", (_event, input) => zenTaskStore.addTask(input));
+  ipcMain.handle("zentask:addTasksBatch", (_event, inputs) => zenTaskStore.addTasksBatch(inputs));
   ipcMain.handle("zentask:updateTask", (_event, id, input) =>
     zenTaskStore.updateTask(id, input),
   );
@@ -458,6 +466,9 @@ app.whenReady().then(() => {
   );
   ipcMain.handle("zentask:updateProject", (_event, id, input) =>
     zenTaskStore.updateProject(id, input),
+  );
+  ipcMain.handle("zentask:deleteMilestone", (_event, projectId, milestoneId, reassignTo) =>
+    zenTaskStore.deleteMilestone(projectId, milestoneId, reassignTo),
   );
   ipcMain.handle("zentask:deleteProject", (_event, id) =>
     zenTaskStore.deleteProject(id),

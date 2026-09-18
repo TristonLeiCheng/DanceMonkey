@@ -53,6 +53,7 @@
 .pm-task-toolbar .module-segments { flex: none; }
 .pm-task-list { display: flex; flex-direction: column; gap: 8px; }
 .pm-task { border: 1px solid var(--ws-line); border-radius: 8px; padding: 12px; background: var(--ws-bg); min-width: 0; }
+.pm-task-focused { border-color: var(--ws-accent); box-shadow: 0 0 0 1px var(--ws-accent); }
 .pm-task-top { display: flex; align-items: baseline; gap: 8px; }
 .pm-task-title, .pm-task-top strong { text-align: left; color: var(--ws-text); font-size: 13px; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }
 .pm-task-title:hover { color: var(--ws-accent); }
@@ -88,6 +89,43 @@
 .pm-picker-row input { width: 15px; height: 15px; flex: none; accent-color: var(--ws-accent); }
 .pm-note-picker .module-modal-actions { align-items: center; }
 .pm-note-picker [data-pm-selected] { margin-right: auto; }
+.pm-milestone-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.pm-milestone { border: 1px solid var(--ws-line); border-radius: 8px; padding: 14px; background: var(--ws-bg); min-width: 0; }
+.pm-milestone-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; }
+.pm-milestone-head strong { overflow-wrap: anywhere; }
+.pm-milestone-head span, .pm-milestone small { color: var(--ws-muted); white-space: nowrap; font-size: 10px; }
+.pm-milestone .project-progress { margin: 12px 0; background: var(--ws-line); }
+.pm-milestone p { color: var(--ws-muted); font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pm-milestone .module-row-actions { flex-wrap: wrap; margin-top: 12px; }
+.pm-milestone .pm-button { padding: 5px 7px; font-size: 10px; }
+.pm-updates .pm-update { border-top: 1px solid var(--ws-line); padding: 14px 0; }
+.pm-update > div { display: flex; gap: 12px; align-items: center; font-size: 12px; }
+.pm-update > div span { color: var(--ws-accent); }
+.pm-update p { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.pm-update small { display: block; color: var(--ws-muted); margin-top: 5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pm-dialog label { display: flex; flex-direction: column; gap: 7px; margin: 12px 0; }
+.pm-dialog input, .pm-dialog textarea, .pm-dialog select { width: 100%; }
+.pm-source-excerpt { display: block; margin-top: 8px; color: var(--ws-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ws-note-task-dialog { max-width: 640px; }
+.ws-note-task-dialog > label { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.ws-note-task-dialog select { width: 100%; }
+.ws-note-task-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--ws-line); border-radius: 8px; margin: 12px 0; }
+.module-modal .ws-note-task-row { display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--ws-line); }
+.ws-note-task-row:last-child { border-bottom: 0; }
+.ws-note-task-row input[type="checkbox"] { flex: none; width: 16px; height: 16px; accent-color: var(--ws-accent); }
+.ws-note-task-title { flex: 1; min-width: 0; }
+.ws-note-task-error[hidden] { display: none; }
+.ws-note-task-row:has(.ws-duplicate-hint) { background: color-mix(in srgb, #d99b35 10%, transparent); flex-wrap: wrap; }
+.ws-duplicate-hint { width: 100%; padding-left: 26px; color: #a66a10; font-size: 10px; }
+.pm-attention .pm-panel-heading { align-items: baseline; }
+.pm-attention .pm-panel-heading small { color: var(--ws-muted); }
+.pm-attention-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.pm-attention-list button { text-align: left; border: 1px solid var(--ws-line); border-radius: 8px; padding: 10px; background: var(--ws-bg); color: inherit; cursor: pointer; }
+.pm-attention-list button:hover { border-color: var(--ws-accent); }
+.pm-attention-list strong, .pm-attention-list span { display: block; }
+.pm-attention-list span { margin-top: 5px; color: var(--ws-muted); font-size: 10px; }
+.pm-confirm { flex-direction: row !important; align-items: center; }
+.pm-confirm input { width: auto; }
 @media (max-width: 1100px) {
   .pm-detail-grid { grid-template-columns: minmax(0, 1fr); }
   .pm-context .pm-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }

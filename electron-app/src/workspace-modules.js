@@ -58,7 +58,7 @@
       api, esc, attr, rerender,
       getState: () => ({ tasks, projects }),
       onResult: refreshZen,
-      openNote: helpers.openNote,
+      openNote: async (path) => { await helpers.openNote(path); modal = null; },
       editProject: (project) => {
         modal = { type: "project", id: field(project, "Id"), item: project || {} };
         error = "";
@@ -678,6 +678,7 @@
           <label>标题<input name="title" required value="${attr(field(item, "Title"))}" /></label>
           <div class="form-columns">
             <label>项目<select name="projectId"><option value="">未分配</option>${projects.filter((p) => !window.DMZenModel.archived(p) || field(p, "Id") === projectId).map((p) => option(field(p, "Id"), projectId, field(p, "Name") + (window.DMZenModel.archived(p) ? "（已归档）" : ""))).join("")}</select></label>
+            <label>里程碑<select name="milestoneId"><option value="">未分配阶段</option>${window.DMZenModel.list(projects.find((p) => field(p, "Id") === projectId), "Milestones").map((stage) => option(field(stage, "Id"), field(item, "MilestoneId"), field(stage, "Name"))).join("")}</select></label>
             <label>优先级<select name="priority">${[["Urgent & Important", "紧急且重要"], ["Not Urgent & Important", "重要不紧急"], ["Urgent & Not Important", "紧急不重要"], ["Medium", "普通"], ["Low", "低"]].map(([p, label]) => option(p, currentPriority, label)).join("")}</select></label>
             <label>责任角色<select name="raci">${["Responsible", "Accountable", "Consulted", "Informed"].map((p) => option(p, field(item, "RaciRole", "Responsible"))).join("")}</select></label>
             <label>能量<select name="energy">${["Low", "Medium", "High"].map((p) => option(p, field(item, "EnergyLevel", "Medium"))).join("")}</select></label>
@@ -686,6 +687,7 @@
           </div>
           <label>标签<input name="tags" value="${attr(field(item, "Tags"))}" /></label>
           <label>备注<textarea name="notes" rows="4">${esc(field(item, "Notes"))}</textarea></label>
+          ${field(item, "SourceNotePath") ? `<div class="pm-source-line">来源笔记：<button type="button" data-module-action="pm-open-note" data-id="${attr(field(item, "SourceNotePath"))}">${esc(field(item, "SourceNotePath"))}</button>${field(item, "SourceExcerpt") ? `<small>${esc(field(item, "SourceExcerpt"))}</small>` : ""}</div>` : ""}
           ${error ? `<div class="module-error">${esc(error)}</div>` : ""}
           <div class="module-modal-actions"><button type="button" data-module-action="close-modal">取消</button><button class="module-primary" type="button" data-module-action="save-modal">保存</button></div>
         </form></div>`;
@@ -698,7 +700,8 @@
           <div class="form-columns">
             <label>负责人<input name="owner" value="${attr(field(item, "Owner"))}" /></label>
             <label>优先级<select name="priority">${[["Low", "低"], ["Medium", "中"], ["High", "高"], ["Critical", "紧急"]].map(([p, label]) => option(p, field(item, "Priority", "Medium"), label)).join("")}</select></label>
-            <label>状态<select name="status">${[["On Track", "正常"], ["At Risk", "有风险"], ["Blocked", "受阻"], ["Completed", "已完成"]].map(([p, label]) => option(p, field(item, "Status", "On Track"), label)).join("")}</select></label>
+            <label>生命周期<select name="lifecycleStatus">${[["Planned", "计划中"], ["In Progress", "进行中"], ["Paused", "已暂停"], ["Completed", "已完成"]].map(([p, label]) => option(p, modal.id ? window.DMZenModel.lifecycle(item) : "Planned", label)).join("")}</select></label>
+            <label>健康度<select name="status">${[["On Track", "正常"], ["At Risk", "有风险"], ["Blocked", "受阻"]].map(([p, label]) => option(p, window.DMZenModel.health(item), label)).join("")}</select></label>
             <label>分类<input name="category" value="${attr(field(item, "Category"))}" placeholder="例如：产品研发" /></label>
             <label>截止日期<input name="dueDate" type="date" value="${attr(dateValue(field(item, "DueDate")))}" /></label>
           </div>
@@ -1409,6 +1412,12 @@
 
     function bindSearch(scope) {
       projectManager.bind(scope);
+      const taskProject = scope.querySelector('form[data-form="task"] select[name="projectId"]');
+      if (taskProject) taskProject.onchange = () => {
+        const select = scope.querySelector('form[data-form="task"] select[name="milestoneId"]');
+        const chosen = projects.find((p) => field(p, "Id") === taskProject.value);
+        select.innerHTML = `<option value="">未分配阶段</option>${window.DMZenModel.list(chosen, "Milestones").map((stage) => option(field(stage, "Id"), "", field(stage, "Name"))).join("")}`;
+      };
       const search = scope.querySelector(".module-search:not([data-pm-search])");
       if (search) {
         search.oninput = () => {
@@ -1484,7 +1493,7 @@
       rerender();
     }
 
-    return { loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages };
+    return { loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id) };
   }
 
   window.DMWorkspaceModules = { create };

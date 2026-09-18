@@ -204,22 +204,43 @@ function buildUpdaterScript() {
     [int]$CurrentPid
 )
 $ErrorActionPreference = 'Stop'
+$logPath = Join-Path $PSScriptRoot 'apply-update.log'
+function Write-UpdateLog([string]$message) {
+    Add-Content -LiteralPath $logPath -Value ("$(Get-Date -Format o) $message") -Encoding UTF8
+}
 function Normalize-Dir([string]$p) {
     if ([string]::IsNullOrWhiteSpace($p)) { return '' }
     return [System.IO.Path]::GetFullPath($p).TrimEnd('\\','/')
 }
 try {
-    if ($CurrentPid -gt 0) {
-        Wait-Process -Id $CurrentPid -ErrorAction SilentlyContinue
-    }
     $install = Normalize-Dir $InstallDir
+    $entry = Join-Path $install $ExeName
+    $deadline = (Get-Date).AddSeconds(120)
+    Write-UpdateLog "Waiting for application to exit before updating $entry"
+    while ($true) {
+        $mainRunning = $CurrentPid -gt 0 -and $null -ne (Get-Process -Id $CurrentPid -ErrorAction SilentlyContinue)
+        # Electron uses the same executable for renderer/GPU child processes.
+        # Waiting only for the main PID leaves the executable locked on Windows.
+        $exeProcesses = @(Get-CimInstance Win32_Process -Filter "Name = '$($ExeName.Replace("'", "''"))'" |
+            Where-Object {
+                $_.ExecutablePath -and [string]::Equals(
+                    (Normalize-Dir $_.ExecutablePath), (Normalize-Dir $entry),
+                    [StringComparison]::OrdinalIgnoreCase)
+            })
+        if (-not $mainRunning -and $exeProcesses.Count -eq 0) { break }
+        if ((Get-Date) -ge $deadline) {
+            throw "The application is still running ($($exeProcesses.Count) processes). Close all DanceMonkey windows and try again."
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    Start-Sleep -Milliseconds 750
     New-Item -ItemType Directory -Force -Path $install | Out-Null
-    # Invoke directly so PowerShell preserves paths containing spaces as single arguments.
-    & robocopy.exe $SourceDir $install /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP
+    Write-UpdateLog "Copying files from $SourceDir to $install"
+    & robocopy.exe $SourceDir $install /E /R:10 /W:2 /NFL /NDL /NJH /NJS /NP ('/LOG+:' + $logPath)
     if ($LASTEXITCODE -gt 7) {
         throw "robocopy failed with exit code $LASTEXITCODE."
     }
-    $entry = Join-Path $install $ExeName
+    Write-UpdateLog "Copy finished with robocopy exit code $LASTEXITCODE"
     if ($UpdateStartup -eq '1') {
         $runKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
         if (Get-ItemProperty -Path $runKey -Name 'DanceMonkey' -ErrorAction SilentlyContinue) {
@@ -232,6 +253,7 @@ try {
     }
     if ($ExeName -like '*.exe') {
         if (-not (Test-Path $entry)) { throw "Updated executable not found: $entry" }
+        Write-UpdateLog "Restarting $entry"
         Start-Process -FilePath $entry -WorkingDirectory $install | Out-Null
     } elseif ($ExeName -like '*.bat' -or $ExeName -like '*.cmd') {
         if (-not (Test-Path $entry)) { throw "Updated launcher not found: $entry" }
@@ -260,8 +282,13 @@ try {
     }
 }
 catch {
-    Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show("升级失败：$($_.Exception.Message)", 'DM 更新') | Out-Null
+    $failure = $_.Exception.Message
+    try { Write-UpdateLog "FAILED: $failure" } catch {}
+    try {
+        Add-Type -AssemblyName PresentationFramework
+        [System.Windows.MessageBox]::Show("升级失败：$failure$([Environment]::NewLine)日志：$logPath", 'DM 更新') | Out-Null
+    } catch {}
+    exit 1
 }
 `;
 }
@@ -278,7 +305,7 @@ function parseRepository(repository) {
   return value.replace(/^\/+|\/+$/g, "");
 }
 
-function createAppUpdateService({ getInstallDirectory, getCurrentVersion, isStartupEnabled }) {
+function createAppUpdateService({ getInstallDirectory, getCurrentVersion, isStartupEnabled, spawnUpdater = spawn }) {
   function buildCheckResult(manifest) {
     const currentVersionText = String(getCurrentVersion() || "0.0.0");
     const latestVersionText = String(manifest.version || "").trim();
@@ -386,7 +413,8 @@ function createAppUpdateService({ getInstallDirectory, getCurrentVersion, isStar
     const payloadRoot = resolvePayloadRoot(extractRoot, manifest.entryExe);
     const exeName = detectEntryName(payloadRoot, manifest.entryExe);
     validateElectronPayload(payloadRoot, exeName);
-    fs.writeFileSync(scriptPath, buildUpdaterScript(), { encoding: "utf8" });
+    // Windows PowerShell 5.1 requires a BOM to reliably read non-ASCII scripts.
+    fs.writeFileSync(scriptPath, `\uFEFF${buildUpdaterScript()}`, { encoding: "utf8" });
 
     return {
       scriptPath,
@@ -417,13 +445,19 @@ function createAppUpdateService({ getInstallDirectory, getCurrentVersion, isStar
       "-CurrentPid",
       String(process.pid),
     ];
-    const child = spawn("powershell.exe", args, {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-      cwd: path.dirname(launchInfo.scriptPath),
+    return new Promise((resolve, reject) => {
+      const child = spawnUpdater("powershell.exe", args, {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        cwd: path.dirname(launchInfo.scriptPath),
+      });
+      child.once("error", reject);
+      child.once("spawn", () => {
+        child.unref();
+        resolve();
+      });
     });
-    child.unref();
   }
 
   async function checkAndPrepare(options = {}, onProgress) {
@@ -456,6 +490,7 @@ function createAppUpdateService({ getInstallDirectory, getCurrentVersion, isStar
 
 module.exports = {
   createAppUpdateService,
+  buildUpdaterScript,
   parseVersion,
   compareVersions,
   resolvePayloadRoot,

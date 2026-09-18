@@ -158,7 +158,7 @@ const manifest = {
   entryExe: "DanceMonkey.exe",
   sha256: hash,
   releaseNotes:
-    "DanceMonkey 3.0（Electron）：磨砂快捷轨、工作区、Zen Task、快速访问、文件夹同步、在线升级。旧版一键升级后将切换到新界面。",
+    "修复 Windows 在线更新：等待 Electron 主进程及子进程完全退出后再替换文件；更新失败时生成 apply-update.log；兼容 Windows PowerShell 5.1。",
 };
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
 

@@ -700,7 +700,7 @@ app.whenReady().then(() => {
       if (!launchInfo?.scriptPath || !launchInfo?.sourceDirectory || !launchInfo?.installDirectory) {
         throw new Error("升级信息不完整，请重新检查更新。");
       }
-      appUpdateService.launchUpdaterAndRestart({
+      await appUpdateService.launchUpdaterAndRestart({
         ...launchInfo,
         exeName: launchInfo.exeName || "DanceMonkey.exe",
         updateStartupEntry: Boolean(launchInfo.updateStartupEntry),

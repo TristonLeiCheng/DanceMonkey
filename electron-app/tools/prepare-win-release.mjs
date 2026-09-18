@@ -21,7 +21,8 @@ const manifest = {
   packageUrl: zipName,
   entryExe: "DanceMonkey.exe",
   sha256: hash.digest("hex").toUpperCase(),
-  releaseNotes: "全新 DM 粒子轨道图标；笔记文件夹展开状态会在重启后保留，展开按钮更清晰；更新器拒绝非 Electron 程序包。",
+  releaseNotes:
+    "修复 Windows 在线更新：等待 Electron 主进程及子进程完全退出后再替换文件；更新失败时生成 apply-update.log；兼容 Windows PowerShell 5.1。",
 };
 fs.writeFileSync(path.join(targetDir, "update-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 console.log(`Windows update package: ${target}`);

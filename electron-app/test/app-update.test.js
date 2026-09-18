@@ -3,7 +3,13 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { resolvePayloadRoot, validateElectronPayload } = require("../electron/app-update");
+const { EventEmitter } = require("node:events");
+const {
+  buildUpdaterScript,
+  createAppUpdateService,
+  resolvePayloadRoot,
+  validateElectronPayload,
+} = require("../electron/app-update");
 
 function temporaryTree() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "dm-update-test-"));
@@ -33,4 +39,47 @@ test("nested Forge zip resolves to the directory containing the requested execut
   fs.mkdirSync(payload);
   fs.writeFileSync(path.join(payload, "DanceMonkey.exe"), "MZ");
   assert.equal(resolvePayloadRoot(root, "DanceMonkey.exe"), payload);
+});
+
+test("updater waits for every process using the target executable and logs copy failures", () => {
+  const script = buildUpdaterScript();
+  assert.match(script, /Get-CimInstance Win32_Process/);
+  assert.match(script, /ExecutablePath/);
+  assert.match(script, /\$exeProcesses\.Count -eq 0/);
+  assert.match(script, /\/R:10 \/W:2/);
+  assert.match(script, /apply-update\.log/);
+  assert.match(script, /exit 1/);
+});
+
+test("updater launch reports spawn failures instead of closing the app", async () => {
+  const child = new EventEmitter();
+  child.unref = () => {};
+  const service = createAppUpdateService({
+    getInstallDirectory: () => "C:\\DanceMonkey",
+    getCurrentVersion: () => "3.3.0",
+    spawnUpdater: () => {
+      queueMicrotask(() => child.emit("error", new Error("powershell unavailable")));
+      return child;
+    },
+  });
+  await assert.rejects(
+    service.launchUpdaterAndRestart({ scriptPath: "C:\\Temp\\apply-update.ps1" }),
+    /powershell unavailable/,
+  );
+});
+
+test("updater launch waits until detached process has spawned", async () => {
+  const child = new EventEmitter();
+  let unrefCalled = false;
+  child.unref = () => { unrefCalled = true; };
+  const service = createAppUpdateService({
+    getInstallDirectory: () => "C:\\DanceMonkey",
+    getCurrentVersion: () => "3.3.0",
+    spawnUpdater: () => {
+      queueMicrotask(() => child.emit("spawn"));
+      return child;
+    },
+  });
+  await service.launchUpdaterAndRestart({ scriptPath: "C:\\Temp\\apply-update.ps1" });
+  assert.equal(unrefCalled, true);
 });

@@ -699,7 +699,7 @@
           <button class="rail-btn" data-act="quick-note">${icons.note}<span class="tooltip">快速便签</span></button>
           <button class="rail-btn" data-act="quick-todo">${icons.check}<span class="tooltip">快速任务</span></button>
           <button class="rail-home" data-act="open-workspace" data-section="notes" title="打开主界面">
-            <img class="rail-home-avatar" src="assets/logo.png" alt="DanceMonkey" width="32" height="32" draggable="false" />
+            <img class="rail-home-avatar" src="assets/logo.png" alt="DanceMonkey 粒子图标" width="32" height="32" draggable="false" />
             <span class="tooltip">打开主界面</span>
           </button>
           <button class="rail-btn" data-act="open-books">${icons.books}<span class="tooltip">笔记本</span></button>

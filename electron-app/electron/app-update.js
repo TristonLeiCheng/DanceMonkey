@@ -160,6 +160,18 @@ function detectEntryName(payloadRoot, preferred) {
   return preferredName;
 }
 
+function validateElectronPayload(payloadRoot, exeName) {
+  const entry = path.join(payloadRoot, exeName);
+  if (!/\.exe$/i.test(exeName) || !fs.existsSync(entry)) {
+    throw new Error("升级包不是可识别的 Windows DM 应用：缺少 .exe 入口。");
+  }
+  const asar = path.join(payloadRoot, "resources", "app.asar");
+  const unpackedMain = path.join(payloadRoot, "resources", "app", "electron", "main.js");
+  if (!fs.existsSync(asar) && !fs.existsSync(unpackedMain)) {
+    throw new Error("升级包不是 Electron 版 DM（缺少 resources/app.asar），已拒绝替换当前程序。");
+  }
+}
+
 function extractZip(packagePath, extractRoot) {
   fs.mkdirSync(extractRoot, { recursive: true });
   const { execFileSync } = require("node:child_process");
@@ -373,6 +385,7 @@ function createAppUpdateService({ getInstallDirectory, getCurrentVersion, isStar
     extractZip(packagePath, extractRoot);
     const payloadRoot = resolvePayloadRoot(extractRoot, manifest.entryExe);
     const exeName = detectEntryName(payloadRoot, manifest.entryExe);
+    validateElectronPayload(payloadRoot, exeName);
     fs.writeFileSync(scriptPath, buildUpdaterScript(), { encoding: "utf8" });
 
     return {
@@ -445,4 +458,6 @@ module.exports = {
   createAppUpdateService,
   parseVersion,
   compareVersions,
+  resolvePayloadRoot,
+  validateElectronPayload,
 };

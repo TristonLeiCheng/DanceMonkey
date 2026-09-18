@@ -349,12 +349,42 @@
   background: var(--ws-accent-bg);
 }
 
-.tree-expander {
-  width: 14px;
+.tree-expander,
+.tree-expander-placeholder {
+  width: 20px;
+  height: 22px;
   flex: none;
-  color: var(--ws-muted);
-  font-size: 9px;
-  text-align: center;
+}
+
+.tree-expander {
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--ws-muted) 38%, transparent);
+  border-radius: 4px;
+  color: var(--ws-text);
+  background: color-mix(in srgb, var(--ws-hover) 75%, transparent);
+  cursor: pointer;
+}
+
+.tree-expander span {
+  display: block;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 120ms ease;
+}
+
+.tree-expander.expanded span {
+  transform: rotate(90deg);
+}
+
+.tree-expander:hover,
+.tree-expander:focus-visible {
+  border-color: var(--ws-accent);
+  color: var(--ws-accent);
+  background: var(--ws-accent-bg);
+  outline: none;
 }
 
 .tree-icon {

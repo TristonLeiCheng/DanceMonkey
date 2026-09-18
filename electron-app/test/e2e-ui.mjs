@@ -107,6 +107,14 @@ try {
   await waitFor(() => evaluate(`window.lumen.getAppVersion().then(version => document.querySelector(".ws-brand")?.textContent.includes("v" + version))`), { process: electron });
   assert.equal(await evaluate(`localStorage.getItem("lumen-workspace-opacity") === null && document.querySelector(".ws-opacity")?.value === "82"`), true);
   assert.equal(await evaluate(`document.querySelectorAll(".ws-theme-select option").length >= 6`), true);
+  assert.equal(await evaluate(`(()=>{const button=document.querySelector('.tree-expander'); return button?.tagName === 'BUTTON' && button.getAttribute('aria-expanded') === 'true' && button.getAttribute('aria-label').includes('折叠文件夹')})()`), true);
+  await evaluate(`document.querySelector('.tree-expander').click()`);
+  assert.equal(await evaluate(`JSON.parse(localStorage.getItem("lumen-workspace-expanded-folders")).length === 0 && document.querySelector('.tree-expander').getAttribute('aria-expanded') === 'false'`), true);
+  await evaluate(`location.reload()`);
+  await waitFor(() => evaluate(`document.readyState === "complete" && document.querySelector('.tree-expander')?.getAttribute('aria-expanded') === 'false'`), { process: electron });
+  await evaluate(`(()=>{const button=document.querySelector('.tree-expander'); button.focus(); button.click()})()`);
+  assert.equal(await evaluate(`document.querySelector('.tree-expander').getAttribute('aria-expanded') === 'true' && JSON.parse(localStorage.getItem("lumen-workspace-expanded-folders")).length === 1`), true);
+  assert.equal(await evaluate(`Boolean(document.querySelector('.tree-name[data-action="tree-open"]'))`), true);
   await evaluate(`(()=>{ const select=document.querySelector(".ws-theme-select"); select.value="frost-green"; select.dispatchEvent(new Event("change",{bubbles:true})); const opacity=document.querySelector(".ws-opacity"); opacity.value="67"; opacity.dispatchEvent(new Event("input",{bubbles:true})); opacity.dispatchEvent(new Event("change",{bubbles:true})); })()`);
   assert.equal(await evaluate(`localStorage.getItem("lumen-workspace-theme") === "frost-green" && localStorage.getItem("lumen-workspace-opacity") === "67"`), true);
   await evaluate(`document.querySelector('[data-action="maximize"]').click()`);

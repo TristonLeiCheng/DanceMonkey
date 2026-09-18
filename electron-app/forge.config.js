@@ -4,6 +4,9 @@ const packagerConfig = {
   asar: true,
   executableName: "DanceMonkey",
   appBundleId: "com.dancemonkey.desktop",
+  // Packager resolves the matching .ico/.icns for the target platform,
+  // including when building the Windows package on macOS.
+  icon: path.join(__dirname, "assets", "logo"),
   // Local builds use an ad-hoc signature so Electron's nested Helper bundles are valid.
   // Release builds use an installed Developer ID identity and optional notarization.
   ...(process.platform === "darwin"
@@ -29,10 +32,6 @@ const packagerConfig = {
       }
     : {}),
 };
-
-if (process.platform === "win32") {
-  packagerConfig.icon = path.join(__dirname, "assets", "logo.ico");
-}
 
 module.exports = {
   packagerConfig,

@@ -36,7 +36,9 @@
   let selectedPath = "";
   let content = "";
   let savedContent = "";
+  const EXPANDED_FOLDERS_KEY = "lumen-workspace-expanded-folders";
   let expanded = new Set();
+  let expandedRestored = false;
   let viewMode = localStorage.getItem("lumen-workspace-view") || "split";
   let effect = localStorage.getItem("lumen-workspace-effect") || "glass";
   let theme = localStorage.getItem("lumen-workspace-theme") || "dark";
@@ -454,6 +456,37 @@
     return selected?.type === "folder" ? selected.path : parentPath(activePath);
   }
 
+  function persistExpanded() {
+    localStorage.setItem(EXPANDED_FOLDERS_KEY, JSON.stringify([...expanded].sort()));
+  }
+
+  function restoreExpanded() {
+    expanded = window.DMTreeState.restore(tree, localStorage.getItem(EXPANDED_FOLDERS_KEY));
+    expandedRestored = true;
+    persistExpanded();
+  }
+
+  function reconcileExpanded() {
+    if (!expandedRestored) return restoreExpanded();
+    expanded = window.DMTreeState.restore(tree, [...expanded]);
+    persistExpanded();
+  }
+
+  function toggleFolder(path) {
+    if (expanded.has(path)) expanded.delete(path);
+    else expanded.add(path);
+    persistExpanded();
+  }
+
+  function expandAncestors(path) {
+    let parent = parentPath(path);
+    while (parent) {
+      expanded.add(parent);
+      parent = parentPath(parent);
+    }
+    persistExpanded();
+  }
+
   function renderMarkdown(value) {
     if (!window.marked || !window.DOMPurify) return `<pre>${esc(value)}</pre>`;
     return window.DOMPurify.sanitize(
@@ -472,7 +505,9 @@
             : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M6 3.5h8l4 4v13H6Z" stroke="currentColor" stroke-width="1.4"/><path d="M14 3.5v4h4" stroke="currentColor" stroke-width="1.4"/></svg>';
         const row = `<div class="tree-row ${node.path === selectedPath || node.path === activePath ? "active" : ""}"
           data-type="${node.type}" data-path="${attr(node.path)}" style="padding-left:${5 + depth * 14}px">
-          <span class="tree-expander">${node.type === "folder" ? (open ? "▾" : "›") : ""}</span>
+          ${node.type === "folder"
+            ? `<button class="tree-expander ${open ? "expanded" : "collapsed"}" data-action="tree-toggle" aria-label="${open ? "折叠" : "展开"}文件夹 ${attr(node.name)}" aria-expanded="${open}" title="${open ? "折叠文件夹" : "展开文件夹"}"><span aria-hidden="true">›</span></button>`
+            : '<span class="tree-expander-placeholder" aria-hidden="true"></span>'}
           <span class="tree-icon">${icon}</span>
           <button class="tree-name" data-action="tree-open" title="${attr(node.path)}">${esc(node.name)}</button>
           <span class="tree-actions">
@@ -723,19 +758,16 @@
         renderShell();
       }
 
-      if (["tree-open", "rename", "delete"].includes(action)) {
+      if (["tree-open", "tree-toggle", "rename", "delete"].includes(action)) {
         const row = control.closest(".tree-row");
         const path = row.dataset.path;
         const type = row.dataset.type;
         selectedPath = path;
-        if (action === "tree-open") {
-          if (type === "folder") {
-            if (expanded.has(path)) expanded.delete(path);
-            else expanded.add(path);
-            renderShell();
-          } else {
-            await openFile(path);
-          }
+        if (action === "tree-toggle" || (action === "tree-open" && type === "folder")) {
+          toggleFolder(path);
+          renderShell();
+        } else if (action === "tree-open") {
+          await openFile(path);
         }
         if (action === "rename") openDialog("rename", path, type);
         if (action === "delete") openDialog("delete", path, type);
@@ -849,6 +881,7 @@
     const result = await api.workspace.list();
     tree = result.tree;
     vaultRoot = result.root;
+    reconcileExpanded();
     if (preferredPath) selectedPath = preferredPath;
     renderShell();
   }
@@ -932,18 +965,22 @@
 
     if (current.kind === "file" && value) {
       nextPath = await api.workspace.createFile(selectedFolder(), value);
-      expanded.add(parentPath(nextPath));
+      expandAncestors(nextPath);
       await refreshTree(nextPath);
       await openFile(nextPath);
     }
     if (current.kind === "folder" && value) {
       nextPath = await api.workspace.createFolder(selectedFolder(), value);
       expanded.add(nextPath);
-      expanded.add(parentPath(nextPath));
+      expandAncestors(nextPath);
       await refreshTree(nextPath);
     }
     if (current.kind === "rename" && value) {
       nextPath = await api.workspace.rename(current.target, value);
+      if (current.targetType === "folder") {
+        expanded = window.DMTreeState.remap(expanded, current.target, nextPath);
+        persistExpanded();
+      }
       if (activePath === current.target) activePath = nextPath;
       if (activePath?.startsWith(`${current.target}/`)) {
         activePath = `${nextPath}${activePath.slice(current.target.length)}`;
@@ -1038,6 +1075,10 @@
   // 快速便签中新建、编辑或改名后，完整笔记即时同步对应文件
   api.onWorkspaceChanged?.((change = {}) => {
     void (async () => {
+      for (const item of change.renames || []) {
+        expanded = window.DMTreeState.remap(expanded, item.from, item.to);
+      }
+      if (change.renames?.length) persistExpanded();
       const rename = change.renames?.find((item) => item.from === activePath);
       if (rename) {
         activePath = rename.to;
@@ -1077,8 +1118,7 @@
         await openFile(path);
         const result = await api.workspace.list();
         tree = result.tree;
-        let parent = parentPath(path);
-        while (parent) { expanded.add(parent); parent = parentPath(parent); }
+        expandAncestors(path);
         await setSection("notes");
       },
     });
@@ -1086,7 +1126,7 @@
     const result = await api.workspace.list();
     tree = result.tree;
     vaultRoot = result.root;
-    flatten(tree, "folder").forEach((folder) => expanded.add(folder.path));
+    restoreExpanded();
     const first = flatten(tree, "file")[0];
     if (first) {
       activePath = first.path;

@@ -21,7 +21,7 @@ const manifest = {
   packageUrl: zipName,
   entryExe: "DanceMonkey.exe",
   sha256: hash.digest("hex").toUpperCase(),
-  releaseNotes: "项目管理升级：里程碑、项目健康度与进展记录、笔记任务批量导入、风险提醒与安全删除。",
+  releaseNotes: "标题栏显示版本号；最大化窗口无留白；主题下拉选择增加淡黄、淡绿磨砂等主题与背景不透明度调整；修复更新路径含空格时的复制失败。",
 };
 fs.writeFileSync(path.join(targetDir, "update-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 console.log(`Windows update package: ${target}`);

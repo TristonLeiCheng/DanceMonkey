@@ -9,7 +9,9 @@
   padding: 8px;
   color: var(--ws-text);
   background: transparent;
-  --ws-bg: rgba(16, 17, 20, 0.82);
+  --ws-opacity: 0.82;
+  --ws-surface: 16 17 20;
+  --ws-bg: rgb(var(--ws-surface) / var(--ws-opacity));
   --ws-side: rgba(11, 12, 15, 0.42);
   --ws-panel: rgba(255, 255, 255, 0.025);
   --ws-hover: rgba(255, 255, 255, 0.065);
@@ -23,7 +25,8 @@
 }
 
 .workspace-root.light {
-  --ws-bg: rgba(246, 245, 242, 0.86);
+  --ws-surface: 246 245 242;
+  --ws-bg: rgb(var(--ws-surface) / var(--ws-opacity));
   --ws-side: rgba(235, 232, 226, 0.58);
   --ws-panel: rgba(30, 24, 18, 0.025);
   --ws-hover: rgba(30, 24, 18, 0.065);
@@ -33,6 +36,54 @@
   --ws-accent: #806239;
   --ws-accent-bg: rgba(128, 98, 57, 0.13);
   --ws-danger: #b2554e;
+}
+
+.workspace-root.theme-frost-yellow {
+  --ws-surface: 255 248 207;
+  --ws-side: rgba(232, 213, 132, 0.34);
+  --ws-panel: rgba(112, 88, 25, 0.035);
+  --ws-hover: rgba(112, 88, 25, 0.09);
+  --ws-line: rgba(99, 76, 18, 0.14);
+  --ws-text: rgba(48, 40, 17, 0.92);
+  --ws-muted: rgba(48, 40, 17, 0.56);
+  --ws-accent: #8a681c;
+  --ws-accent-bg: rgba(138, 104, 28, 0.15);
+}
+
+.workspace-root.theme-frost-green {
+  --ws-surface: 224 246 224;
+  --ws-side: rgba(157, 205, 165, 0.3);
+  --ws-panel: rgba(29, 91, 48, 0.035);
+  --ws-hover: rgba(29, 91, 48, 0.09);
+  --ws-line: rgba(30, 91, 48, 0.14);
+  --ws-text: rgba(23, 54, 31, 0.92);
+  --ws-muted: rgba(23, 54, 31, 0.56);
+  --ws-accent: #39794a;
+  --ws-accent-bg: rgba(57, 121, 74, 0.15);
+}
+
+.workspace-root.theme-slate {
+  --ws-surface: 30 42 54;
+  --ws-side: rgba(18, 31, 44, 0.52);
+  --ws-accent: #8fb8d8;
+  --ws-accent-bg: rgba(143, 184, 216, 0.16);
+}
+
+.workspace-root.theme-lavender {
+  --ws-surface: 241 235 248;
+  --ws-side: rgba(215, 198, 230, 0.42);
+  --ws-accent: #765590;
+  --ws-accent-bg: rgba(118, 85, 144, 0.14);
+}
+
+#root.workspace-root.maximized {
+  padding: 0;
+  background: rgb(var(--ws-surface) / var(--ws-opacity));
+}
+
+.workspace-root.maximized .workspace-frame {
+  border-width: 0;
+  border-radius: 0;
 }
 
 .workspace-frame {
@@ -52,17 +103,29 @@
   -webkit-backdrop-filter: blur(32px) saturate(155%);
 }
 
+.workspace-root.effect-solid {
+  --ws-surface: 21 22 26;
+}
+
+.workspace-root.effect-solid.light {
+  --ws-surface: 242 240 236;
+}
+
 .effect-solid .workspace-frame {
-  background: #15161a;
+  background: rgb(var(--ws-surface) / var(--ws-opacity));
   backdrop-filter: none;
 }
 
-.effect-solid.light .workspace-frame {
-  background: #f2f0ec;
+.workspace-root.effect-paper {
+  --ws-surface: 33 31 27;
+}
+
+.workspace-root.effect-paper.light {
+  --ws-surface: 238 233 223;
 }
 
 .effect-paper .workspace-frame {
-  background: #211f1b;
+  background: rgb(var(--ws-surface) / var(--ws-opacity));
   --ws-side: rgba(54, 48, 39, 0.42);
   --ws-panel: rgba(205, 183, 145, 0.035);
   --ws-hover: rgba(205, 183, 145, 0.08);
@@ -73,7 +136,7 @@
 }
 
 .effect-paper.light .workspace-frame {
-  background: #eee9df;
+  background: rgb(var(--ws-surface) / var(--ws-opacity));
   --ws-side: rgba(217, 207, 191, 0.54);
   --ws-panel: rgba(91, 70, 42, 0.025);
   --ws-hover: rgba(91, 70, 42, 0.07);
@@ -125,6 +188,56 @@
   gap: 2px;
   padding: 0 4px;
   -webkit-app-region: no-drag;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ws-theme-label,
+.ws-opacity-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ws-muted);
+  font-size: 10px;
+}
+
+.ws-theme-select {
+  width: 86px;
+  height: 25px;
+  padding: 0 5px;
+  border: 1px solid var(--ws-line);
+  border-radius: 4px;
+  outline: none;
+  color: var(--ws-text);
+  background: rgb(var(--ws-surface) / 0.94);
+  font: inherit;
+}
+
+.ws-theme-select:focus-visible,
+.ws-opacity:focus-visible {
+  outline: 2px solid var(--ws-accent);
+  outline-offset: 1px;
+}
+
+.ws-opacity {
+  width: 70px;
+  accent-color: var(--ws-accent);
+}
+
+.ws-opacity-label output {
+  width: 30px;
+  color: var(--ws-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .ws-window-actions {

@@ -94,6 +94,7 @@ try {
     return response.result?.result?.value;
   };
 
+  // The disposable Electron userData directory guarantees first-run (unset) preferences.
   await evaluate(`window.lumen.openWorkspace("notes")`);
   const workspace = await waitFor(async () => {
     const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
@@ -103,6 +104,21 @@ try {
   await connect(workspace.webSocketDebuggerUrl);
 
   await waitFor(() => evaluate(`location.hash.startsWith("#workspace") && document.readyState === "complete"`), { process: electron });
+  await waitFor(() => evaluate(`window.lumen.getAppVersion().then(version => document.querySelector(".ws-brand")?.textContent.includes("v" + version))`), { process: electron });
+  assert.equal(await evaluate(`localStorage.getItem("lumen-workspace-opacity") === null && document.querySelector(".ws-opacity")?.value === "82"`), true);
+  assert.equal(await evaluate(`document.querySelectorAll(".ws-theme-select option").length >= 6`), true);
+  await evaluate(`(()=>{ const select=document.querySelector(".ws-theme-select"); select.value="frost-green"; select.dispatchEvent(new Event("change",{bubbles:true})); const opacity=document.querySelector(".ws-opacity"); opacity.value="67"; opacity.dispatchEvent(new Event("input",{bubbles:true})); opacity.dispatchEvent(new Event("change",{bubbles:true})); })()`);
+  assert.equal(await evaluate(`localStorage.getItem("lumen-workspace-theme") === "frost-green" && localStorage.getItem("lumen-workspace-opacity") === "67"`), true);
+  await evaluate(`document.querySelector('[data-action="maximize"]').click()`);
+  await waitFor(() => evaluate(`document.querySelector(".workspace-root").classList.contains("maximized")`), { process: electron });
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector(".workspace-root")).padding === "0px"`), true);
+  for (const effect of ["solid", "paper"]) {
+    await evaluate(`document.querySelector('[data-action="effect"][data-value="${effect}"]').click()`);
+    const surfaceColors = await evaluate(`(()=>({root:getComputedStyle(document.querySelector(".workspace-root")).backgroundColor,frame:getComputedStyle(document.querySelector(".workspace-frame")).backgroundColor}))()`);
+    assert.equal(surfaceColors.root, surfaceColors.frame, `${effect} maximized surfaces differ: ${JSON.stringify(surfaceColors)}`);
+  }
+  await evaluate(`document.querySelector('[data-action="maximize"]').click()`);
+  await waitFor(() => evaluate(`!document.querySelector(".workspace-root").classList.contains("maximized")`), { process: electron });
   if (!await evaluate(`Boolean(document.querySelector(".ws-editor"))`)) await evaluate(`window.lumen.workspace.createFile("", "e2e.md").then(() => location.reload())`);
   await waitFor(() => evaluate(`Boolean(document.querySelector(".ws-editor"))`), { process: electron });
   await evaluate(`(async()=>{ await window.lumen.zenTask.addProject({name:"UI 发布",status:"Blocked",lifecycleStatus:"In Progress",milestones:[{id:"ui-stage",name:"UI 验收",dueDate:"2020-01-01"}]}); const editor=document.querySelector(".ws-editor"); editor.value="- [ ] 完成 UI 验收\\n- [ ] 返回来源笔记"; editor.dispatchEvent(new Event("input",{bubbles:true})); editor.setSelectionRange(0,editor.value.length); document.querySelector('[data-action="note-to-tasks"]').click(); })()`);

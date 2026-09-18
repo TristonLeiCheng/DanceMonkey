@@ -202,9 +202,10 @@ try {
     }
     $install = Normalize-Dir $InstallDir
     New-Item -ItemType Directory -Force -Path $install | Out-Null
-    $copy = Start-Process -FilePath 'robocopy.exe' -ArgumentList @($SourceDir, $install, '/E', '/R:2', '/W:1', '/NFL', '/NDL', '/NJH', '/NJS', '/NP') -Wait -PassThru -NoNewWindow
-    if ($copy.ExitCode -gt 7) {
-        throw "robocopy failed with exit code $($copy.ExitCode)."
+    # Invoke directly so PowerShell preserves paths containing spaces as single arguments.
+    & robocopy.exe $SourceDir $install /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP
+    if ($LASTEXITCODE -gt 7) {
+        throw "robocopy failed with exit code $LASTEXITCODE."
     }
     $entry = Join-Path $install $ExeName
     if ($UpdateStartup -eq '1') {

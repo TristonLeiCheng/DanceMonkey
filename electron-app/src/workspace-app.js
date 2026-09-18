@@ -13,6 +13,15 @@
     ["sync", "文件同步"],
     ["settings", "设置"],
   ];
+  const THEMES = [
+    ["dark", "深色"],
+    ["light", "浅色"],
+    ["frost-yellow", "淡黄磨砂"],
+    ["frost-green", "淡绿磨砂"],
+    ["slate", "雾蓝"],
+    ["lavender", "淡紫"],
+  ];
+  const LIGHT_THEMES = new Set(["light", "frost-yellow", "frost-green", "lavender"]);
 
   function sectionFromHash() {
     const part = location.hash.replace(/^#workspace\/?/, "").split("/")[0];
@@ -31,7 +40,14 @@
   let viewMode = localStorage.getItem("lumen-workspace-view") || "split";
   let effect = localStorage.getItem("lumen-workspace-effect") || "glass";
   let theme = localStorage.getItem("lumen-workspace-theme") || "dark";
+  if (!THEMES.some(([value]) => value === theme)) theme = "dark";
+  const storedBackgroundOpacity = localStorage.getItem("lumen-workspace-opacity");
+  let backgroundOpacity = storedBackgroundOpacity === null ? 82 : Number(storedBackgroundOpacity);
+  if (!Number.isFinite(backgroundOpacity)) backgroundOpacity = 82;
+  backgroundOpacity = Math.max(35, Math.min(100, Math.round(backgroundOpacity)));
   let editorWidth = Number(localStorage.getItem("lumen-workspace-editor-width")) || 50;
+  let appVersion = "";
+  let maximized = false;
   let saveTimer = null;
   let dialog = null;
   let paletteOpen = false;
@@ -395,9 +411,12 @@
           return { profiles, profile };
         },
       },
+      getAppVersion: async () => "",
       window: {
         minimize: async () => undefined,
-        toggleMaximize: async () => undefined,
+        isMaximized: async () => false,
+        toggleMaximize: async () => false,
+        onMaximized: () => () => {},
         close: async () => {
           location.hash = "";
           location.reload();
@@ -469,8 +488,10 @@
   }
 
   function renderShell() {
-    root.className = `workspace-root effect-${effect} ${theme}`;
+    const lightTheme = LIGHT_THEMES.has(theme) ? "light" : "";
+    root.className = `workspace-root effect-${effect} theme-${theme} ${lightTheme} ${maximized ? "maximized" : ""}`;
     root.style.setProperty("--editor-width", `${editorWidth}%`);
+    root.style.setProperty("--ws-opacity", String(backgroundOpacity / 100));
     const isNotes = section === "notes";
     const title =
       section === "ai"
@@ -488,13 +509,14 @@
                 : activePath || vaultRoot || "本地知识库";
     root.innerHTML = `<main class="workspace-frame">
       <header class="ws-titlebar">
-        <div class="ws-brand">DM <span>DanceMonkey</span></div>
+        <div class="ws-brand">DM <span>DanceMonkey${appVersion ? ` v${esc(appVersion)}` : ""}</span></div>
         <div class="ws-current-path">${esc(title)}</div>
         <div class="ws-title-actions">
           <button class="ws-effect ${effect === "glass" ? "active" : ""}" data-action="effect" data-value="glass">玻璃</button>
           <button class="ws-effect ${effect === "solid" ? "active" : ""}" data-action="effect" data-value="solid">纯色</button>
           <button class="ws-effect ${effect === "paper" ? "active" : ""}" data-action="effect" data-value="paper">纸张</button>
-          <button class="ws-btn" data-action="theme">${theme === "dark" ? "浅色" : "深色"}</button>
+          <label class="ws-theme-label"><span class="visually-hidden">工作区主题</span><select class="ws-theme-select" aria-label="工作区主题">${THEMES.map(([value, label]) => `<option value="${value}" ${theme === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+          <label class="ws-opacity-label" title="调整工作区背景不透明度"><span>透明度</span><input class="ws-opacity" type="range" min="35" max="100" step="1" value="${backgroundOpacity}" aria-label="工作区背景不透明度" aria-valuetext="${backgroundOpacity}%"><output>${backgroundOpacity}%</output></label>
         </div>
         <div class="ws-window-actions">
           <button class="ws-window-btn" data-action="minimize" title="最小化">−</button>
@@ -688,11 +710,6 @@
         void setSection(control.dataset.value);
         return;
       }
-      if (action === "theme") {
-        theme = theme === "dark" ? "light" : "dark";
-        localStorage.setItem("lumen-workspace-theme", theme);
-        renderShell();
-      }
       if (action === "minimize") void api.window.minimize();
       if (action === "maximize") void api.window.toggleMaximize();
       if (action === "close-window") void api.window.close();
@@ -724,6 +741,32 @@
         if (action === "delete") openDialog("delete", path, type);
       }
     };
+
+    const themeSelect = root.querySelector(".ws-theme-select");
+    if (themeSelect) {
+      themeSelect.onchange = () => {
+        theme = themeSelect.value;
+        if (theme === "frost-yellow" || theme === "frost-green") {
+          effect = "glass";
+          localStorage.setItem("lumen-workspace-effect", effect);
+        }
+        localStorage.setItem("lumen-workspace-theme", theme);
+        renderShell();
+      };
+    }
+
+    const opacityInput = root.querySelector(".ws-opacity");
+    if (opacityInput) {
+      opacityInput.oninput = () => {
+        backgroundOpacity = Number(opacityInput.value);
+        root.style.setProperty("--ws-opacity", String(backgroundOpacity / 100));
+        opacityInput.setAttribute("aria-valuetext", `${backgroundOpacity}%`);
+        opacityInput.parentElement.querySelector("output").textContent = `${backgroundOpacity}%`;
+      };
+      opacityInput.onchange = () => {
+        localStorage.setItem("lumen-workspace-opacity", String(backgroundOpacity));
+      };
+    }
 
     const editor = root.querySelector(".ws-editor");
     if (editor) {
@@ -1016,6 +1059,16 @@
   });
 
   (async () => {
+    const [runtimeVersion, initialMaximized] = await Promise.all([
+      api.getAppVersion?.().catch(() => "") || "",
+      api.window.isMaximized?.().catch(() => false) || false,
+    ]);
+    appVersion = String(runtimeVersion || "");
+    maximized = Boolean(initialMaximized);
+    api.window.onMaximized?.((next) => {
+      maximized = Boolean(next);
+      root.classList.toggle("maximized", maximized);
+    });
     modulesInstance = window.DMWorkspaceModules?.create(api, {
       esc,
       attr,

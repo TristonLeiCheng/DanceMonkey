@@ -217,6 +217,13 @@ function openWorkspace(section = "notes") {
     workspaceWindow.show();
     workspaceWindow.focus();
   });
+  const sendMaximizedState = () => {
+    if (workspaceWindow && !workspaceWindow.isDestroyed()) {
+      workspaceWindow.webContents.send("window:maximized", workspaceWindow.isMaximized());
+    }
+  };
+  workspaceWindow.on("maximize", sendMaximizedState);
+  workspaceWindow.on("unmaximize", sendMaximizedState);
   workspaceWindow.on("closed", () => {
     workspaceWindow = null;
   });
@@ -584,6 +591,9 @@ app.whenReady().then(() => {
   ipcMain.handle("window:minimize", (event) =>
     BrowserWindow.fromWebContents(event.sender)?.minimize(),
   );
+  ipcMain.handle("window:isMaximized", (event) =>
+    Boolean(BrowserWindow.fromWebContents(event.sender)?.isMaximized()),
+  );
   ipcMain.handle("window:toggleMaximize", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return false;
@@ -595,6 +605,7 @@ app.whenReady().then(() => {
     BrowserWindow.fromWebContents(event.sender)?.close(),
   );
   ipcMain.handle("app:quit", () => app.quit());
+  ipcMain.handle("app:version", () => app.getVersion());
   ipcMain.handle("screenshot:quick", () => screenshotController.captureQuick());
   ipcMain.handle("screenshot:region", () => screenshotController.beginRegionCapture());
   ipcMain.on("region:submit", (_event, payload) => {

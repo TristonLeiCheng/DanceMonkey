@@ -97,10 +97,17 @@ contextBridge.exposeInMainWorld("lumen", {
     },
   },
   quitApp: () => ipcRenderer.invoke("app:quit"),
+  getAppVersion: () => ipcRenderer.invoke("app:version"),
   window: {
     minimize: () => ipcRenderer.invoke("window:minimize"),
+    isMaximized: () => ipcRenderer.invoke("window:isMaximized"),
     toggleMaximize: () => ipcRenderer.invoke("window:toggleMaximize"),
     close: () => ipcRenderer.invoke("window:close"),
+    onMaximized: (cb) => {
+      const listener = (_event, maximized) => cb(maximized);
+      ipcRenderer.on("window:maximized", listener);
+      return () => ipcRenderer.removeListener("window:maximized", listener);
+    },
   },
   onState: (cb) => {
     const listener = (_e, next) => cb(next);

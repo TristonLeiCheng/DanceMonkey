@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("lumen", {
+  platform: process.platform,
   // 软件渲染下 backdrop-filter 几乎无效，界面需要退回不依赖模糊的实心样式
   softwareRender: process.argv.includes("--lumen-software-render"),
   getState: () => ipcRenderer.invoke("store:get"),

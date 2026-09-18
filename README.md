@@ -1,5 +1,7 @@
 # DanceMonkey
 
+> 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。下文记录的是已归档的 WPF/.NET 1.x 版本；源码位于 `archive/legacy-dotnet/`。
+
 ---
 
 ## Overview

@@ -3,16 +3,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createAiService } = require("./ai");
 const { createAppSettings, toAccelerator } = require("./app-settings");
-const { createAppUpdateService } = require("./app-update");
 const { createFolderSyncService, defaultProfile } = require("./folder-sync");
 const { createFolderSyncScheduler, normalizeProfiles } = require("./folder-sync-scheduler");
 const { createLegacyConfig } = require("./legacy-config");
-const { createProxyEnforcement } = require("./proxy-enforcement");
+const { createPlatformAdapter } = require("./platform");
 const { createQuickAccessService } = require("./quick-access");
 const { createScreenshotController } = require("./screenshot-controller");
 const { createStore } = require("./store");
 const { createWorkspace } = require("./workspace");
 const { createZenTaskStore } = require("./zentask");
+const platform = createPlatformAdapter();
 
 app.setName("DM");
 app.commandLine.appendSwitch("enable-transparent-visuals");
@@ -142,7 +142,7 @@ function notifyWorkspaceChanged(change = {}) {
 
 function rendererUrl(hash = "") {
   if (isDev) return `http://127.0.0.1:5173/${hash}`;
-  return `file://${path.join(__dirname, "../index.html")}${hash}`;
+  return `${require("node:url").pathToFileURL(path.join(__dirname, "../index.html")).href}${hash}`;
 }
 
 function workspaceHash(section = "notes") {
@@ -262,12 +262,12 @@ app.whenReady().then(() => {
     applyShell,
     isDev,
   });
-  proxyEnforcement = createProxyEnforcement();
+  proxyEnforcement = platform.createProxyEnforcement();
   appSettings = createAppSettings(legacyConfig, {
     proxyEnforcement,
     onHotkeysChanged: () => registerAllHotkeys(),
   });
-  appUpdateService = createAppUpdateService({
+  appUpdateService = platform.createAppUpdateService({
     getInstallDirectory: () =>
       app.isPackaged ? path.dirname(process.execPath) : path.resolve(app.getAppPath()),
     getCurrentVersion: () => {
@@ -383,6 +383,7 @@ app.whenReady().then(() => {
           to: note.filePath,
         }))
         .filter((change) => change.from && change.from !== change.to);
+      for (const change of renames) zenTaskStore.relocateNotes(change.from, change.to);
       notifyWorkspaceChanged({ renames });
     }
     const next = store.set(normalized);
@@ -418,6 +419,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("workspace:rename", (_e, relativePath, name) => {
     const result = workspaceStore.rename(relativePath, name);
+    zenTaskStore.relocateNotes(relativePath, result);
     refreshQuickNotes();
     return result;
   });

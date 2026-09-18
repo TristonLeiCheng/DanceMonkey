@@ -6,12 +6,19 @@
   "description": "DM (DanceMonkey) 桌面磨砂玻璃笔记与待办",
   "main": "electron/main.js",
   "scripts": {
+    "test": "node --test test/*.test.js",
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "desktop": "node desktop.mjs",
-    "publish:win": "node tools/publish-electron-release.mjs"
+    "publish:win": "node tools/publish-electron-release.mjs",
+    "package:win": "electron-forge make --platform=win32 --arch=x64",
+    "package:mac": "node tools/package-mac.mjs",
+    "package:mac:arm64": "node tools/package-mac.mjs arm64",
+    "package:mac:x64": "node tools/package-mac.mjs x64"
   },
   "devDependencies": {
+    "@electron-forge/cli": "^7.10.2",
+    "@electron-forge/maker-zip": "^7.10.2",
     "electron": "^44.4.1"
   },
   "dependencies": {

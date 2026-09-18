@@ -14,7 +14,7 @@
     if (impact >= 4 && urgency >= 4) return ["Urgent & Important", "Q1 紧急重要", "q1"];
     if (impact >= 4) return ["Not Urgent & Important", "Q2 重要不紧急", "q2"];
     if (urgency >= 4) return ["Urgent & Not Important", "Q3 紧急不重要", "q3"];
-    return ["Medium", "Q4 常规", "q4"];
+    return [impact <= 2 && urgency <= 2 ? "Low" : "Medium", "Q4 常规", "q4"];
   }
 
   function create(api, helpers) {
@@ -35,6 +35,7 @@
     let linkFilter = "all";
     let linkSort = "pinned";
     let modal = null;
+    let modalSaving = false;
     let error = "";
     let aiSettings = null;
     let aiMessages = [];
@@ -53,6 +54,20 @@
     let updateStatus = "";
     let updateBusy = false;
     let unsubscribeUpdateProgress = null;
+    const projectManager = window.DMProjectManager.create({
+      api, esc, attr, rerender,
+      getState: () => ({ tasks, projects }),
+      onResult: refreshZen,
+      openNote: helpers.openNote,
+      editProject: (project) => {
+        modal = { type: "project", id: field(project, "Id"), item: project || {} };
+        error = "";
+      },
+      editTask: (task, projectId) => {
+        modal = { type: "task", id: field(task, "Id"), item: task || { ProjectId: projectId } };
+        error = "";
+      },
+    });
 
     const AI_PROMPTS = [
       ["总结要点", "请用条目总结下面内容的核心结论与待办：\n\n"],
@@ -85,6 +100,7 @@
       const state = await api.zenTask.load();
       tasks = state.tasks || [];
       projects = state.projects || [];
+      await projectManager.refreshFiles();
     }
 
     async function loadLinks() {
@@ -175,10 +191,6 @@
       if (status) status.textContent = aiBusy ? "正在生成…" : `${aiMessages.length} 条消息`;
     }
 
-    function projectName(id) {
-      return field(projects.find((item) => field(item, "Id") === id), "Name", "未分配");
-    }
-
     function isDone(task) {
       return ["Completed", "Done"].includes(field(task, "WorkflowStatus"));
     }
@@ -262,40 +274,6 @@
           </div>
         </div>
         <div class="task-list">${rows || '<div class="module-empty">当前筛选下没有任务</div>'}</div>
-      </section>`;
-    }
-
-    function renderProjects() {
-      const cards = projects
-        .map((project) => {
-          const id = field(project, "Id");
-          const associated = tasks.filter((task) => field(task, "ProjectId") === id);
-          const calculated = associated.length
-            ? Math.round((associated.filter(isDone).length / associated.length) * 100)
-            : Number(field(project, "Progress", 0));
-          return `<article class="project-card">
-            <div class="project-card-head">
-              <span class="project-icon">◎</span>
-              <span class="priority ${String(field(project, "Priority", "Medium")).toLowerCase()}">${esc(field(project, "Priority", "Medium"))}</span>
-            </div>
-            <h2>${esc(field(project, "Name", "未命名项目"))}</h2>
-            <p>${esc(field(project, "Description", "暂无项目说明"))}</p>
-            <div class="project-progress"><span style="width:${Math.max(0, Math.min(100, calculated))}%"></span></div>
-            <div class="project-footer"><span>${calculated}% · ${associated.length} 个任务</span><span>${esc(field(project, "Status", "On Track"))}</span></div>
-            <div class="module-row-actions visible">
-              <button data-module-action="project-tasks" data-id="${attr(id)}">查看任务</button>
-              <button data-module-action="edit-project" data-id="${attr(id)}">编辑</button>
-              <button class="danger" data-module-action="delete-project" data-id="${attr(id)}">删除</button>
-            </div>
-          </article>`;
-        })
-        .join("");
-      return `<section class="module-page">
-        <div class="module-heading">
-          <div><h1>项目管理</h1><p>连接项目目标与 Zen Task 执行进度</p></div>
-          <button class="module-primary" data-module-action="add-project">＋ 新建项目</button>
-        </div>
-        <div class="projects-grid">${cards || '<div class="module-empty">还没有项目</div>'}</div>
       </section>`;
     }
 
@@ -430,13 +408,13 @@
             </div>
             <label>主文件夹（本地）
               <div class="sync-path-row">
-                <input name="masterPath" value="${attr(draft.masterPath)}" placeholder="C:\\Users\\...\\Documents" />
+                <input name="masterPath" value="${attr(draft.masterPath)}" placeholder="${api.platform === "darwin" ? "/Users/…/Documents" : "C:\\Users\\...\\Documents"}" />
                 <button type="button" data-module-action="sync-browse-master">浏览</button>
               </div>
             </label>
             <label>从文件夹（共享盘/局域网）
               <div class="sync-path-row">
-                <input name="slavePath" value="${attr(draft.slavePath)}" placeholder="\\\\server\\share 或映射盘" />
+                <input name="slavePath" value="${attr(draft.slavePath)}" placeholder="${api.platform === "darwin" ? "/Volumes/共享盘" : "\\\\server\\share 或映射盘"}" />
                 <button type="button" data-module-action="sync-browse-slave">浏览</button>
               </div>
             </label>
@@ -562,12 +540,13 @@
 
     function renderAppSettings() {
       const s = appSettings || {};
+      const isMac = api.platform === "darwin";
       const mode = s.proxyForceMode === "pac" ? "pac" : "manual";
       return `<section class="module-page ws-settings-page">
         <div class="module-heading">
           <div>
             <h1>软件设置</h1>
-            <p>全局快捷键、强制代理与在线升级，写入旧版共用的 config.json</p>
+            <p>${isMac ? "全局快捷键与应用配置" : "全局快捷键、强制代理与在线升级，写入旧版共用的 config.json"}</p>
           </div>
           <div class="ws-ai-heading-actions">
             <button type="button" data-module-action="settings-reload">重新加载</button>
@@ -586,7 +565,7 @@
             </div>
           </section>
 
-          <section class="ws-settings-card">
+          <section class="ws-settings-card" style="${isMac ? "display:none" : ""}">
             <h2>强制代理</h2>
             <p class="ws-settings-desc">定时回写 Windows 系统代理，用于对抗组策略覆盖。AI 请求会跟随系统代理/PAC。</p>
             <label class="ws-settings-check">
@@ -633,7 +612,8 @@
 
           <section class="ws-settings-card">
             <h2>关于与更新</h2>
-            <p class="ws-settings-desc">当前版本 v${esc(updateInfo.currentVersion || s._currentVersion || "1.0.0")}。优先使用升级清单 URL；留空则检查 GitHub Releases。</p>
+            <p class="ws-settings-desc">当前版本 v${esc(updateInfo.currentVersion || s._currentVersion || "1.0.0")}。${isMac ? "请从发布页下载新版 DMG 更新。" : "优先使用升级清单 URL；留空则检查 GitHub Releases。"}</p>
+            <div style="${isMac ? "display:none" : ""}">
             <label>升级清单 URL（可选）
               <input name="updateManifestUrl" value="${attr(s.updateManifestUrl || "")}" placeholder="https://example.com/update-manifest.json 或本地/UNC 路径" />
             </label>
@@ -647,6 +627,7 @@
             </div>
             <div class="ws-settings-actions">
               <button class="module-primary" type="button" data-module-action="settings-check-update" ${updateBusy ? "disabled" : ""}>${updateBusy ? "检查中…" : "检查并更新"}</button>
+            </div>
             </div>
             ${updateStatus ? `<p class="ws-settings-update-status">${esc(updateStatus)}</p>` : ""}
             ${updateInfo.installDirectory ? `<p class="ws-settings-desc">安装目录：${esc(updateInfo.installDirectory)}</p>` : ""}
@@ -662,7 +643,11 @@
     }
 
     function renderModal() {
-      if (!modal) return "";
+      if (!modal) return projectManager.renderModal();
+      const draftItem = { ...(modal.item || {}) };
+      for (const [key, val] of Object.entries(modal.draft || {})) {
+        draftItem[({ raci: "RaciRole", energy: "EnergyLevel" })[key] || key[0].toUpperCase() + key.slice(1)] = val;
+      }
       if (modal.type === "ai-settings") {
         const settings = aiSettings || {};
         const profiles = (settings.modelProfiles || [])
@@ -675,7 +660,7 @@
           <label>模型<input name="model" list="ws-ai-models" value="${attr(settings.model || "")}" /></label>
           <datalist id="ws-ai-models">${profiles}</datalist>
           <label>系统提示词<textarea name="globalChatSystemPrompt" rows="5" placeholder="留空使用默认提示词">${esc(settings.globalChatSystemPrompt || "")}</textarea></label>
-          <p class="ws-ai-settings-hint">与旧版共用 %AppData%\\DanceMonkey\\config.json；请求自动走系统代理。</p>
+          <p class="ws-ai-settings-hint">${api.platform === "darwin" ? "配置保存在 Application Support/DanceMonkey/config.json；请求跟随系统代理。" : "与旧版共用 %AppData%\\DanceMonkey\\config.json；请求自动走系统代理。"}</p>
           ${error ? `<div class="module-error">${esc(error)}</div>` : ""}
           <div class="module-modal-actions">
             <button type="button" data-module-action="close-modal">取消</button>
@@ -685,18 +670,18 @@
         </form></div>`;
       }
       if (modal.type === "task") {
-        const item = modal.item || {};
+        const item = draftItem;
         const projectId = field(item, "ProjectId");
-        const [currentPriority] = priority(item);
+        const currentPriority = modal.draft?.priority || priority(item)[0];
         return `<div class="module-modal-backdrop"><form class="module-modal" data-form="task" onsubmit="return false;">
           <h2>${modal.id ? "编辑任务" : "新建任务"}</h2>
           <label>标题<input name="title" required value="${attr(field(item, "Title"))}" /></label>
           <div class="form-columns">
-            <label>项目<select name="projectId"><option value="">未分配</option>${projects.map((p) => option(field(p, "Id"), projectId, field(p, "Name"))).join("")}</select></label>
-            <label>优先级<select name="priority">${["Urgent & Important", "Not Urgent & Important", "Urgent & Not Important", "Medium", "Low"].map((p) => option(p, currentPriority)).join("")}</select></label>
+            <label>项目<select name="projectId"><option value="">未分配</option>${projects.filter((p) => !window.DMZenModel.archived(p) || field(p, "Id") === projectId).map((p) => option(field(p, "Id"), projectId, field(p, "Name") + (window.DMZenModel.archived(p) ? "（已归档）" : ""))).join("")}</select></label>
+            <label>优先级<select name="priority">${[["Urgent & Important", "紧急且重要"], ["Not Urgent & Important", "重要不紧急"], ["Urgent & Not Important", "紧急不重要"], ["Medium", "普通"], ["Low", "低"]].map(([p, label]) => option(p, currentPriority, label)).join("")}</select></label>
             <label>责任角色<select name="raci">${["Responsible", "Accountable", "Consulted", "Informed"].map((p) => option(p, field(item, "RaciRole", "Responsible"))).join("")}</select></label>
             <label>能量<select name="energy">${["Low", "Medium", "High"].map((p) => option(p, field(item, "EnergyLevel", "Medium"))).join("")}</select></label>
-            <label>状态<select name="workflowStatus">${["Todo", "In Progress", "Blocked", "Completed"].map((p) => option(p, field(item, "WorkflowStatus", "Todo"))).join("")}</select></label>
+            <label>状态<select name="workflowStatus">${[["Todo", "待办"], ["In Progress", "进行中"], ["Blocked", "受阻"], ["Completed", "完成"]].map(([p, label]) => option(p, isDone(item) ? "Completed" : field(item, "WorkflowStatus", "Todo"), label)).join("")}</select></label>
             <label>截止日期<input name="dueDate" type="date" value="${attr(dateValue(field(item, "DueDate")))}" /></label>
           </div>
           <label>标签<input name="tags" value="${attr(field(item, "Tags"))}" /></label>
@@ -706,17 +691,22 @@
         </form></div>`;
       }
       if (modal.type === "project") {
-        const item = modal.item || {};
+        const item = draftItem;
         return `<div class="module-modal-backdrop"><form class="module-modal" data-form="project" onsubmit="return false;">
           <h2>${modal.id ? "编辑项目" : "新建项目"}</h2>
           <label>项目名称<input name="name" required value="${attr(field(item, "Name"))}" /></label>
           <div class="form-columns">
             <label>负责人<input name="owner" value="${attr(field(item, "Owner"))}" /></label>
-            <label>优先级<select name="priority">${["Low", "Medium", "High", "Critical"].map((p) => option(p, field(item, "Priority", "Medium"))).join("")}</select></label>
-            <label>状态<select name="status">${["On Track", "At Risk", "Blocked", "Completed"].map((p) => option(p, field(item, "Status", "On Track"))).join("")}</select></label>
-            <label>分类<input name="category" value="${attr(field(item, "Category", "New Initiatives"))}" /></label>
+            <label>优先级<select name="priority">${[["Low", "低"], ["Medium", "中"], ["High", "高"], ["Critical", "紧急"]].map(([p, label]) => option(p, field(item, "Priority", "Medium"), label)).join("")}</select></label>
+            <label>状态<select name="status">${[["On Track", "正常"], ["At Risk", "有风险"], ["Blocked", "受阻"], ["Completed", "已完成"]].map(([p, label]) => option(p, field(item, "Status", "On Track"), label)).join("")}</select></label>
+            <label>分类<input name="category" value="${attr(field(item, "Category"))}" placeholder="例如：产品研发" /></label>
+            <label>截止日期<input name="dueDate" type="date" value="${attr(dateValue(field(item, "DueDate")))}" /></label>
           </div>
-          <label>说明<textarea name="description" rows="4">${esc(field(item, "Description"))}</textarea></label>
+          <label>背景说明<textarea name="description" rows="2">${esc(field(item, "Description"))}</textarea></label>
+          <label>项目目标<textarea name="goal" rows="2" placeholder="这个项目要解决什么问题？">${esc(field(item, "Goal"))}</textarea></label>
+          <label>完成标准<textarea name="acceptanceCriteria" rows="2" placeholder="交付什么成果，才算完成？">${esc(field(item, "AcceptanceCriteria"))}</textarea></label>
+          <label>下一步行动<input name="nextAction" value="${attr(field(item, "NextAction"))}" placeholder="一件可以立即推进的事" /></label>
+          <label>阻塞与风险<textarea name="blockers" rows="2">${esc(field(item, "Blockers"))}</textarea></label>
           ${error ? `<div class="module-error">${esc(error)}</div>` : ""}
           <div class="module-modal-actions"><button type="button" data-module-action="close-modal">取消</button><button class="module-primary" type="button" data-module-action="save-modal">保存</button></div>
         </form></div>`;
@@ -740,7 +730,7 @@
       if (section === "ai") return renderAi();
       if (section === "settings") return renderAppSettings();
       if (section === "tasks") return renderTasks();
-      if (section === "projects") return renderProjects();
+      if (section === "projects") return projectManager.render();
       if (section === "sync") return renderFolderSync();
       return renderQuickAccess();
     }
@@ -757,12 +747,13 @@
       const form = document.querySelector('form[data-form="app-settings"]');
       if (!form) return { ...(appSettings || {}) };
       const values = Object.fromEntries(new FormData(form).entries());
+      const isMac = api.platform === "darwin";
       return {
         ...(appSettings || {}),
         globalChatHotkey: values.globalChatHotkey,
         quickScreenshotHotkey: values.quickScreenshotHotkey,
         regionScreenshotHotkey: values.regionScreenshotHotkey,
-        proxyForceEnabled: Boolean(form.querySelector('[name="proxyForceEnabled"]')?.checked),
+        proxyForceEnabled: isMac ? false : Boolean(form.querySelector('[name="proxyForceEnabled"]')?.checked),
         proxyForceMode: values.proxyForceMode === "pac" ? "pac" : "manual",
         proxyPacUrl: values.proxyPacUrl || "",
         proxyServer: values.proxyServer || "",
@@ -799,6 +790,7 @@
     }
 
     async function handleAction(action, id, setSection) {
+      if (await projectManager.handleAction(action, id)) return true;
       if (action === "settings-reload") {
         settingsError = "";
         settingsMessage = "";
@@ -1037,9 +1029,8 @@
         return true;
       }
       if (action === "project-tasks") {
-        query = projectName(id);
-        taskFilter = "all";
-        setSection("tasks");
+        await projectManager.open(id);
+        await setSection("projects");
         return true;
       }
       if (action === "add-link") {
@@ -1246,10 +1237,15 @@
     }
 
     async function saveModal() {
+      if (modalSaving) return;
       const form = document.querySelector("form.module-modal");
       if (!form || !modal) return;
       if (typeof form.reportValidity === "function" && !form.reportValidity()) return;
       const values = Object.fromEntries(new FormData(form));
+      modal.draft = values;
+      modalSaving = true;
+      const saveButton = form.querySelector('[data-module-action="save-modal"]');
+      if (saveButton) saveButton.disabled = true;
       try {
         if (form.dataset.form === "ai-settings") {
           if (!api.ai?.saveSettings) throw new Error("当前环境不支持保存 AI 设置");
@@ -1285,6 +1281,8 @@
       } catch (cause) {
         error = cause?.message || "保存失败";
         rerender();
+      } finally {
+        modalSaving = false;
       }
     }
 
@@ -1388,6 +1386,7 @@
     }
 
     function closeModal() {
+      if (!modal && projectManager.closeModal()) return true;
       if (!modal) return false;
       modal = null;
       error = "";
@@ -1409,7 +1408,8 @@
     }
 
     function bindSearch(scope) {
-      const search = scope.querySelector(".module-search");
+      projectManager.bind(scope);
+      const search = scope.querySelector(".module-search:not([data-pm-search])");
       if (search) {
         search.oninput = () => {
           query = search.value;

@@ -142,6 +142,7 @@
     }
 
     return {
+      platform: navigator.platform.toLowerCase().includes("mac") ? "darwin" : "win32",
       getState: async () => state,
       setState: async (partial) => {
         state = { ...state, ...partial };
@@ -201,79 +202,7 @@
         save: async (payload) => ({ success: true, settings: payload }),
         applyProxy: async () => ({ success: false, error: "浏览器预览无法写入系统代理" }),
       },
-      zenTask: {
-        load: async () => loadZen(),
-        addTask: async (input) => {
-          const next = loadZen();
-          next.tasks.unshift({
-            Id: `t${Date.now().toString(36)}`,
-            ProjectId: input.projectId || "",
-            Project: next.projects.find((p) => p.Id === input.projectId)?.Name || "Unassigned",
-            Title: input.title,
-            Impact: 3,
-            Urgency: 3,
-            RaciRole: input.raci || "Responsible",
-            EnergyLevel: input.energy || "Medium",
-            WorkflowStatus: input.workflowStatus || "Todo",
-            DueDate: input.dueDate || null,
-            Notes: input.notes || "",
-            Tags: input.tags || "",
-          });
-          return saveZen(next);
-        },
-        updateTask: async (id, input) => {
-          const next = loadZen();
-          const task = next.tasks.find((item) => item.Id === id);
-          Object.assign(task, {
-            Title: input.title,
-            ProjectId: input.projectId || "",
-            Project: next.projects.find((p) => p.Id === input.projectId)?.Name || "Unassigned",
-            RaciRole: input.raci,
-            EnergyLevel: input.energy,
-            WorkflowStatus: input.workflowStatus,
-            DueDate: input.dueDate || null,
-            Notes: input.notes || "",
-            Tags: input.tags || "",
-          });
-          return saveZen(next);
-        },
-        toggleTask: async (id) => {
-          const next = loadZen();
-          const task = next.tasks.find((item) => item.Id === id);
-          task.WorkflowStatus = ["Completed", "Done"].includes(task.WorkflowStatus) ? "Todo" : "Completed";
-          return saveZen(next);
-        },
-        deleteTask: async (id) => {
-          const next = loadZen();
-          next.tasks = next.tasks.filter((item) => item.Id !== id);
-          return saveZen(next);
-        },
-        addProject: async (input) => {
-          const next = loadZen();
-          next.projects.unshift({
-            Id: `p${Date.now().toString(36)}`,
-            Name: input.name,
-            Owner: input.owner || "",
-            Progress: 0,
-            Priority: input.priority || "Medium",
-            Status: input.status || "On Track",
-            Category: input.category || "New Initiatives",
-            Description: input.description || "",
-          });
-          return saveZen(next);
-        },
-        updateProject: async (id, input) => {
-          const next = loadZen();
-          const project = next.projects.find((item) => item.Id === id);
-          Object.assign(project, input, { Name: input.name });
-          return saveZen(next);
-        },
-        deleteProject: async (id) => {
-          const next = loadZen();
-          next.projects = next.projects.filter((item) => item.Id !== id);
-          return saveZen(next);
-        },
-      },
+      zenTask: window.DMZenModel.previewApi(loadZen, saveZen),
       quickAccess: {
         list: async () => loadLinks(),
         add: async (input) => {
@@ -709,7 +638,7 @@
           <label>模型<input class="ai-setting-model" list="ai-models" value="${escapeAttr(settings.model || "")}" /></label>
           <datalist id="ai-models">${profiles}</datalist>
           <label>系统提示词<textarea class="ai-setting-prompt" rows="5" placeholder="留空使用默认提示词">${escapeHtml(settings.globalChatSystemPrompt || "")}</textarea></label>
-          <p>设置与旧版共用 <code>%AppData%\\DanceMonkey\\config.json</code>。</p>
+          <p>${api.platform === "darwin" ? "设置保存在 macOS 的 Application Support/DanceMonkey/config.json。" : "设置与旧版共用 %AppData%\\DanceMonkey\\config.json。"}</p>
         </div>
         <div class="ai-settings-actions">
           <button class="ghost visible" data-act="test-ai">测试连接</button>

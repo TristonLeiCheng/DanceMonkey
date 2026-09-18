@@ -1,5 +1,6 @@
 const path = require("node:path");
 const { BrowserWindow, clipboard, screen } = require("electron");
+const { pathToFileURL } = require("node:url");
 const {
   captureDisplayImage,
   cropImage,
@@ -30,7 +31,7 @@ function createScreenshotController({
 
   function uiUrl(fileName) {
     const filePath = path.join(__dirname, "ui", fileName);
-    return `file://${filePath.replaceAll("\\", "/")}`;
+    return pathToFileURL(filePath).href;
   }
 
   function localUiPrefs() {

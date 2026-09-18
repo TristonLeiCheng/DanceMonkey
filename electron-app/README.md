@@ -1,6 +1,6 @@
 # DM (DanceMonkey)
 
-Windows 桌面常驻的磨砂玻璃笔记与待办应用。
+Windows / macOS 桌面常驻的磨砂玻璃笔记与待办应用。
 
 ## 预览
 
@@ -27,7 +27,7 @@ npm run dev
 - 可调整宽度的文件树，以及可拖动的编辑/预览分栏
 - 玻璃、纯色、纸张三种界面效果及深浅主题
 - **Zen Task**：读写旧版 `Journal/task-module.json`，支持优先级、RACI、能量、截止日期
-- **项目管理**：读写 `Journal/zentask-projects.json`，进度由关联任务推算
+- **项目管理**：项目详情、目标与完成标准、下一步行动、截止日期、任务列表/四列看板、归档恢复和 Markdown 笔记关联
 - **快速访问**：系统路径探测 + 旧版 `config.json` 的 `quickLinks`
 
 桌面知识库与旧版 DanceMonkey 共用 `%AppData%\DanceMonkey\config.json` 中的
@@ -43,6 +43,31 @@ npm run dev
 浏览器预览只展示界面，实际问答与真实 NoteVault 需使用桌面模式。
 
 ## 桌面模式
+
+在 macOS 上，从终端运行：
+
+```bash
+cd electron-app
+npm install
+npm run desktop
+```
+
+打包当前 Mac 架构的 `.app`、`.dmg` 和 `.zip`：
+
+```bash
+npm run package:mac
+```
+
+也可以分别运行 `npm run package:mac:arm64` 或 `npm run package:mac:x64`。
+产物位于 `out/`。本地开发包使用临时签名，可在本机测试；对外分发时需配置 Apple Developer ID
+签名和公证，然后以 `DM_MAC_SIGN=1` 启用打包配置中的签名流程。
+macOS 的屏幕截图需要在系统设置中授权「屏幕与系统音频录制」。当前 macOS 版本的
+AI 请求会跟随系统代理，但不写入系统代理；应用内更新暂不可用，请下载安装新版 DMG。
+
+Windows 可用 `npm run package:win` 生成 Forge ZIP。`npm run publish:win` 仍保留旧版
+`v1.3.x` 升级器所需的 `win-x64` ZIP 与升级清单，供迁移老用户使用。
+
+以下 Windows 启动器说明仍适用于 Windows：
 
 双击项目根目录的 `启动DM.bat`（内部调用 `start-dm.ps1`）。缺少依赖时会自动执行 `npm install`。
 
@@ -77,3 +102,21 @@ $env:LUMEN_SOFTWARE_RENDER="1"; npm run desktop
 - `Ctrl+P`：在完整页面快速查找文件
 
 完整工作区导航：`#workspace`（笔记）、`#workspace/tasks`、`#workspace/projects`、`#workspace/links`。
+
+## 项目工作台
+
+在「项目」中新建项目，点击项目名称进入详情。项目内添加的任务自动归属当前项目；
+列表和看板使用同一份任务数据，可直接用任务上的状态菜单切换待办、进行中、受阻、完成。
+任务完成率按关联任务数量计算，项目状态独立维护；没有任务时完成率为 0%。
+
+项目详情支持目标、完成标准、下一步行动、阻塞与风险，以及负责人和截止日期。
+通过「关联笔记」选择知识库中的 Markdown 文件，点击即可进入原笔记编辑器。
+应用内重命名笔记或文件夹会同步关联路径；外部移动或删除的文件会提示重新关联。
+解除关联不会删除原文件。
+
+归档项目会从活跃项目列表移出，保留任务与笔记关联；在「已归档」中可恢复。
+旧版 JSON 继续兼容，编辑保留未提交的字段。只有项目名称且无 ID 的旧任务，
+仅在名称唯一时解析归属；同名歧义任务需手动指定项目。
+
+数据与界面回归检查：`npm test`。浏览器预览和桌面版共用任务/项目字段更新逻辑，
+浏览器示例保存在浏览器本地，不会写入真实知识库。

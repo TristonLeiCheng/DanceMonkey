@@ -1,5 +1,8 @@
 /* 完整 Markdown 工作区 */
 
+/* The shared #root rule must not override the workspace's own theme text color. */
+#root.workspace-root { color: var(--ws-text); }
+
 .workspace-root {
   width: 100%;
   height: 100%;

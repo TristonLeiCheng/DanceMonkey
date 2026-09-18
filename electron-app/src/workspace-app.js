@@ -198,6 +198,7 @@
     }
 
     return {
+      platform: navigator.platform.toLowerCase().includes("mac") ? "darwin" : "win32",
       getState: async () => ({ aiMessages: browserAiMessages }),
       setState: async (partial) => {
         if (Array.isArray(partial?.aiMessages)) {
@@ -283,6 +284,9 @@
             }
           });
           save();
+          const zen = loadZen();
+          zen.projects = window.DMZenModel.renameNoteLinks(zen.projects, oldPath, newPath);
+          saveZen(zen);
           return newPath;
         },
         remove: async (path) => {
@@ -291,79 +295,7 @@
           return true;
         },
       },
-      zenTask: {
-        load: async () => loadZen(),
-        addTask: async (input) => {
-          const state = loadZen();
-          state.tasks.unshift({
-            Id: `t${Date.now().toString(36)}`,
-            ProjectId: input.projectId || "",
-            Project: state.projects.find((p) => p.Id === input.projectId)?.Name || "Unassigned",
-            Title: input.title,
-            Impact: 3,
-            Urgency: 3,
-            RaciRole: input.raci || "Responsible",
-            EnergyLevel: input.energy || "Medium",
-            WorkflowStatus: input.workflowStatus || "Todo",
-            DueDate: input.dueDate || null,
-            Notes: input.notes || "",
-            Tags: input.tags || "",
-          });
-          return saveZen(state);
-        },
-        updateTask: async (id, input) => {
-          const state = loadZen();
-          const task = state.tasks.find((item) => item.Id === id);
-          Object.assign(task, {
-            Title: input.title,
-            ProjectId: input.projectId || "",
-            Project: state.projects.find((p) => p.Id === input.projectId)?.Name || "Unassigned",
-            RaciRole: input.raci,
-            EnergyLevel: input.energy,
-            WorkflowStatus: input.workflowStatus,
-            DueDate: input.dueDate || null,
-            Notes: input.notes || "",
-            Tags: input.tags || "",
-          });
-          return saveZen(state);
-        },
-        toggleTask: async (id) => {
-          const state = loadZen();
-          const task = state.tasks.find((item) => item.Id === id);
-          task.WorkflowStatus = task.WorkflowStatus === "Completed" ? "Todo" : "Completed";
-          return saveZen(state);
-        },
-        deleteTask: async (id) => {
-          const state = loadZen();
-          state.tasks = state.tasks.filter((item) => item.Id !== id);
-          return saveZen(state);
-        },
-        addProject: async (input) => {
-          const state = loadZen();
-          state.projects.unshift({
-            Id: `p${Date.now().toString(36)}`,
-            Name: input.name,
-            Owner: input.owner || "",
-            Progress: 0,
-            Priority: input.priority || "Medium",
-            Status: input.status || "On Track",
-            Category: input.category || "New Initiatives",
-            Description: input.description || "",
-          });
-          return saveZen(state);
-        },
-        updateProject: async (id, input) => {
-          const state = loadZen();
-          const project = state.projects.find((item) => item.Id === id);
-          Object.assign(project, input, { Name: input.name });
-          return saveZen(state);
-        },
-        deleteProject: async (id) => {
-          const state = loadZen();
-          state.projects = state.projects.filter((item) => item.Id !== id);
-          return saveZen(state);
-        },
-      },
+      zenTask: window.DMZenModel.previewApi(loadZen, saveZen),
       quickAccess: {
         list: async () => loadLinks(),
         add: async (input) => {
@@ -814,9 +746,10 @@
 
   async function openFile(path) {
     await saveActive();
+    const nextContent = await api.workspace.read(path);
     activePath = path;
     selectedPath = path;
-    content = await api.workspace.read(path);
+    content = nextContent;
     savedContent = content;
     renderShell();
   }
@@ -1021,6 +954,14 @@
       esc,
       attr,
       rerender: () => renderShell(),
+      openNote: async (path) => {
+        await openFile(path);
+        const result = await api.workspace.list();
+        tree = result.tree;
+        let parent = parentPath(path);
+        while (parent) { expanded.add(parent); parent = parentPath(parent); }
+        await setSection("notes");
+      },
     });
     modulesReady = Boolean(modulesInstance);
     const result = await api.workspace.list();

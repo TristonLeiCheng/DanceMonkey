@@ -1,6 +1,27 @@
 # DanceMonkey
 
-> 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。下文记录的是已归档的 WPF/.NET 1.x 版本；源码位于 `archive/legacy-dotnet/`。
+> 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。
+
+## 最新版本 · v3.4.0
+
+[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.4.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.4.0.md)
+
+- **GitHub 笔记同步**：网页设备码授权、私有仓库选择、手动预览与确认同步；不需要另外安装 Git。
+- **多设备笔记库**：同步 Markdown 和常用图片；支持双向修改/删除、冲突副本、本地备份及失败恢复。
+- **本地优先**：离线继续编辑，API Key、软件设置和任务/项目 JSON 不上传。
+- **桌面工作区**：Markdown 笔记、项目与任务管理、AI 对话、截图及文件夹同步。
+
+提供 Windows x64 ZIP、macOS Apple Silicon / Intel 的 DMG 和 ZIP。macOS 产物采用 ad-hoc 签名，未经过 Apple Developer ID 公证；Windows ZIP 未做代码签名。下载时请核对 Release 中的 SHA-256。
+
+### 开发运行
+
+```bash
+cd electron-app
+npm install
+npm run desktop
+```
+
+**以下内容为已归档的 WPF/.NET 1.x 历史说明，不代表当前版本功能；源码位于 `archive/legacy-dotnet/`。**
 
 ---
 

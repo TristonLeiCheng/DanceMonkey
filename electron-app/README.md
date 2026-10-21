@@ -64,8 +64,8 @@ npm run package:mac
 macOS 的屏幕截图需要在系统设置中授权「屏幕与系统音频录制」。当前 macOS 版本的
 AI 请求会跟随系统代理，但不写入系统代理；应用内更新暂不可用，请下载安装新版 DMG。
 
-Windows 可用 `npm run package:win` 生成 Forge ZIP。`npm run publish:win` 仍保留旧版
-`v1.3.x` 升级器所需的 `win-x64` ZIP 与升级清单，供迁移老用户使用。
+Windows 可用 `npm run package:win` 生成 Forge ZIP。`npm run publish:win` 依次执行 Forge 打包和
+升级包准备，包含全部生产依赖，并生成兼容旧版升级器的 `win-x64` ZIP 与升级清单；此命令不上传 GitHub。
 在 macOS 交叉打包 Windows ZIP 后运行 `npm run prepare:win-release`，可在
 `out/make/release/` 生成兼容 GitHub Latest 更新和旧版清单更新的 `win-x64` ZIP 与 `update-manifest.json`。
 
@@ -91,6 +91,61 @@ npm run desktop
 ```powershell
 $env:LUMEN_SOFTWARE_RENDER="1"; npm run desktop
 ```
+
+## GitHub 笔记手动同步
+
+桌面版「设置 → GitHub 笔记同步」可以将当前本地笔记库与一个 **私有 GitHub 仓库**绑定。
+离线继续本地编辑；只有点击「预览差异」并确认同步后，才会提交和推送。无需另外安装 Git，
+运行时使用 `isomorphic-git`。浏览器预览不能连接账号或同步真实文件。
+
+### 点击完成连接与建库
+
+1. 点击 **连接 GitHub · 网页授权**，在浏览器登录 GitHub。点击 **复制验证码**，在授权页粘贴；完成后应用自动更新连接状态。
+   如果浏览器未打开，可点击 **打开授权网页**。
+2. 点击 **创建笔记库 · 打开 GitHub**，网页填写仓库名称（例如 `my-notes`），选择 **Private**，由用户确认创建。
+   已有仓库可直接选择 **选择已有笔记库**。
+3. 点击 **授权笔记库 · 打开网页**，安装或调整 GitHub App 的仓库访问权限；选择 **Only select repositories**，仅授权笔记仓库。
+4. 回到应用点击 **已完成，刷新列表**，从下拉列表选择笔记库，再点 **确认选择并进入同步**。
+   列表只显示当前 App 已授权且用户有写权限的私有仓库，自动使用默认分支，无需输入 owner、仓库地址或分支。
+5. 绑定只保存关联；先预览上传、下载、删除和冲突，再确认手动同步。另一台电脑登录后选择相同仓库即可。
+
+应用只打开固定的 GitHub 官方页面，不会代替用户提交建库表单，也不申请额外 Administration 权限。
+网页创建与仓库安装授权是独立步骤；返回应用需刷新列表，不会把“已打开网页”当成“已创建成功”。
+
+### 开发者一次性配置
+
+正式发行时，开发者注册 GitHub App，启用 **Device Flow**，Repository permissions 设置为
+**Contents: Read and write**（Metadata 必需只读）；不需要 Webhook、客户端密钥或私钥。
+将公开 `clientId` 和 `appSlug` 预置到 `electron/github-app.json`，也可在开发启动时使用
+`DM_GITHUB_CLIENT_ID` / `DM_GITHUB_APP_SLUG` 环境变量。预置后普通用户无需配置 App。
+
+v3.4.0 已预置 `dmdesktop` 的公开 App 标识，用户无需填写 Client ID。GitHub App 的可安装范围由拥有者在 GitHub 管理：
+面向其他用户发布时，应确认 App 允许其他账号安装。高级设置可填写自有 App 标识或手动指定仓库与分支；这些标识不是访问令牌。
+
+首版绑定当前笔记目录，不提供 API 自动创建仓库、更换已绑定仓库/分支、切换本地笔记库或自动同步。新设备默认使用
+文档目录的 `NoteVault`；目录内已有内容会参与预览，不会被当作可丢弃缓存。
+
+### 范围、安全与冲突
+
+- 同步 `.md`、`.png`、`.jpg`、`.jpeg`、`.gif`、`.webp`；每个文件最多 10 MiB，最多 5000 个文件 / 200 MiB。
+  不上传任务/项目 JSON、应用设置、API Key 或隐藏目录；遇到符号链接、大小写歧义或不兼容路径会停止同步。
+- Git 元数据、同步基准、备份及冲突材料存放在 Electron `userData/github-notes`，不放入笔记库。
+  GitHub token/refresh token 由系统安全存储加密后单独保存；安全存储不可用时拒绝登录，不明文降级。
+- 同步会短暂暂停笔记编辑，完成后刷新完整编辑器和快捷便签，避免旧缓存覆盖下载内容。
+- 双方修改同一文件、删除与修改相遇时停止同步，不强制推送、不按修改时间决定覆盖。
+  打开同步备份目录查看 `conflicts/<编号>/local`、`remote` 及删除说明。先将想保留的本地内容另存为新文件，
+  再将冲突路径内容调整为远端版本（远端删除时删除该路径），重新预览即可继续；首版不做文本自动合并。
+- 每次实际同步会在 `backups` 下保留同步范围内的本地快照；未完成操作保留恢复记录，下次预览重新协调。
+  备份不会自动清理，长期使用需自行检查磁盘空间。
+- 不直接同步整个应用数据目录，不与现有「文件夹同步」并发执行；请勿同时用其他程序修改笔记库。
+- 私有仓库不是端到端加密；删除文件不会清除 Git 历史。截图可能包含隐私，上传前检查预览。
+- 断开连接只删除本机授权凭据，不删除本地笔记或 GitHub 仓库。需要撤销远端授权时，在 GitHub
+  Settings → Applications 中撤销 App 授权/安装。
+
+开发验证：`npm test` 使用临时笔记库、模拟授权和隔离 Git 仓库，不上传真实笔记。
+Git 传输集成测试需要开发机安装 `git`（应用运行及打包后的用户端不需要系统 Git）；`npm run test:e2e`
+会启动隔离用户目录的 Electron，验证设置与编辑器保存/恢复，不访问真实 GitHub。
+真实 GitHub App 授权、企业代理和两台真实设备的互通仍需使用专用测试仓库验收。
 
 ## 快捷键
 

@@ -22,7 +22,7 @@ const manifest = {
   entryExe: "DanceMonkey.exe",
   sha256: hash.digest("hex").toUpperCase(),
   releaseNotes:
-    "修复 Windows 在线更新：等待 Electron 主进程及子进程完全退出后再替换文件；更新失败时生成 apply-update.log；兼容 Windows PowerShell 5.1。",
+    "新增 GitHub 私有笔记库手动同步：网页授权、仓库选择、差异预览、冲突副本与失败恢复；改进设置引导和笔记保存保护。支持 Windows 与 macOS，无需安装 Git。仅在用户确认后上传笔记。",
 };
 fs.writeFileSync(path.join(targetDir, "update-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 console.log(`Windows update package: ${target}`);

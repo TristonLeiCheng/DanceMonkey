@@ -51,6 +51,8 @@
   let appVersion = "";
   let maximized = false;
   let saveTimer = null;
+  let saveInFlight = Promise.resolve();
+  let syncPaused = false;
   let dialog = null;
   let paletteOpen = false;
   let paletteQuery = "";
@@ -652,10 +654,9 @@
   }
 
   async function setSection(next) {
-    if (activePath && content !== savedContent) {
-      await api.workspace.write(activePath, content);
-      savedContent = content;
-    }
+    if (syncPaused) return;
+    await saveActive();
+    if (next !== "settings") modulesInstance?.pauseGitHub?.();
     section = next;
     const hash = next === "notes" ? "#workspace" : `#workspace/${next}`;
     if (location.hash !== hash) history.replaceState(null, "", hash);
@@ -808,7 +809,12 @@
         root.querySelector(".ws-count").textContent = `${content.length} 字符`;
         root.querySelector(".ws-save-state").textContent = "保存中…";
         clearTimeout(saveTimer);
-        saveTimer = setTimeout(saveActive, 650);
+        saveTimer = setTimeout(() => {
+          void saveActive().catch((error) => {
+            const status = root.querySelector(".ws-save-state");
+            if (status) status.textContent = error?.message || "保存失败，请重试";
+          });
+        }, 650);
       };
       editor.onkeydown = (event) => {
         if (event.key === "Tab") {
@@ -896,14 +902,54 @@
     renderShell();
   }
 
-  async function saveActive() {
+  function saveActive() {
     clearTimeout(saveTimer);
-    if (!activePath || content === savedContent) return;
-    await api.workspace.write(activePath, content);
-    savedContent = content;
-    const status = root.querySelector(".ws-save-state");
-    if (status) status.textContent = "已保存";
+    const request = saveInFlight.catch(() => {}).then(async () => {
+      if (!activePath || content === savedContent) return;
+      const target = activePath;
+      const snapshot = content;
+      await api.workspace.write(target, snapshot);
+      if (activePath === target) savedContent = snapshot;
+      const status = root.querySelector(".ws-save-state");
+      if (status) status.textContent = content === savedContent ? "已保存" : "保存中…";
+    });
+    saveInFlight = request;
+    return request;
   }
+
+  async function reloadSyncedNotes() {
+    const result = await api.workspace.list();
+    tree = result.tree;
+    vaultRoot = result.root;
+    reconcileExpanded();
+    if (activePath && content === savedContent) {
+      if (flatten(tree, "file").some((file) => file.path === activePath)) {
+        content = await api.workspace.read(activePath);
+        savedContent = content;
+      } else {
+        activePath = null;
+        selectedPath = "";
+        content = "";
+        savedContent = "";
+      }
+    }
+    renderShell();
+  }
+
+  api.githubSync?.onEditor(async ({ phase }) => {
+    if (phase === "prepare") {
+      syncPaused = true;
+      root.inert = true;
+      await saveActive();
+    } else {
+      try {
+        await reloadSyncedNotes();
+      } finally {
+        syncPaused = false;
+        root.inert = false;
+      }
+    }
+  });
 
   function openDialog(kind, target = "", targetType = "") {
     dialog = { kind, target, targetType };
@@ -1050,6 +1096,7 @@
   }
 
   window.addEventListener("keydown", async (event) => {
+    if (syncPaused) { event.preventDefault(); return; }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
       await saveActive();
@@ -1074,6 +1121,7 @@
 
   // 快速便签中新建、编辑或改名后，完整笔记即时同步对应文件
   api.onWorkspaceChanged?.((change = {}) => {
+    if (syncPaused) return;
     void (async () => {
       for (const item of change.renames || []) {
         expanded = window.DMTreeState.remap(expanded, item.from, item.to);

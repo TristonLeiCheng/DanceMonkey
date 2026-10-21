@@ -273,6 +273,9 @@
     const RAIL_ENTER_GRACE_MS = 550;
 
     let skipRender = false;
+    let syncPaused = false;
+    let pendingNoteSave = Promise.resolve();
+    let noteSaveError = null;
     let zenTasks = [];
     let zenProjects = [];
     let quickLinks = [];
@@ -349,7 +352,24 @@
     }
 
     api.onState((next) => {
-      if (adopt(next) && !skipRender) render();
+      if (adopt(next) && !skipRender && !syncPaused) render();
+    });
+    api.githubSync?.onEditor(async ({ phase }) => {
+      if (phase === "prepare") {
+        syncPaused = true;
+        root.inert = true;
+        await pendingNoteSave;
+        if (noteSaveError) throw noteSaveError;
+      } else {
+        try {
+          if (!noteSaveError) adopt(await api.getState());
+          skipRender = false;
+          render();
+        } finally {
+          syncPaused = false;
+          root.inert = false;
+        }
+      }
     });
     api.onShellMode((next) => {
       mode = next;
@@ -443,6 +463,7 @@
     }
 
     window.addEventListener("keydown", (e) => {
+      if (syncPaused) { e.preventDefault(); return; }
       if (e.key === "Escape") {
         if (sheet) {
           sheet = null;
@@ -999,15 +1020,22 @@
       if (title && body) {
         // 编辑时本地更新并跳过重渲染，避免打断输入焦点
         const update = () => {
+          if (syncPaused) return;
           const id = title.dataset.id;
           const notes = state.notes.map((n) =>
             n.id === id ? { ...n, title: title.value, body: body.value, updatedAt: Date.now() } : n,
           );
           state = { ...state, notes, activeNoteId: id };
           skipRender = true;
-          void api.setState({ notes, activeNoteId: id }).then((next) => {
+          pendingNoteSave = api.setState({ notes, activeNoteId: id }).then((next) => {
             adopt(next);
+            noteSaveError = null;
             skipRender = false;
+          });
+          void pendingNoteSave.catch((error) => {
+            noteSaveError = error;
+            skipRender = false;
+            zenError = error?.message || "便签保存失败，请重试";
           });
         };
         title.oninput = update;

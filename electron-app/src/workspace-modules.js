@@ -54,6 +54,9 @@
     let updateStatus = "";
     let updateBusy = false;
     let unsubscribeUpdateProgress = null;
+    const githubUI = window.DMGitHubSyncUI?.create(api, {
+      esc, attr, beforeRender: () => { appSettings = readSettingsForm(); },
+    });
     const projectManager = window.DMProjectManager.create({
       api, esc, attr, rerender,
       getState: () => ({ tasks, projects }),
@@ -131,6 +134,7 @@
     }
 
     async function loadAppSettings() {
+      await githubUI?.load();
       if (api.settings?.get) {
         appSettings = await api.settings.get();
       }
@@ -610,6 +614,7 @@
             </div>
           </section>
 
+          ${githubUI?.render() || ""}
           <section class="ws-settings-card">
             <h2>关于与更新</h2>
             <p class="ws-settings-desc">当前版本 v${esc(updateInfo.currentVersion || s._currentVersion || "1.0.0")}。${isMac ? "请从发布页下载新版 DMG 更新。" : "优先使用升级清单 URL；留空则检查 GitHub Releases。"}</p>
@@ -730,6 +735,7 @@
     }
 
     function render(section) {
+      if (section !== "settings") githubUI?.pause();
       if (section === "ai") return renderAi();
       if (section === "settings") return renderAppSettings();
       if (section === "tasks") return renderTasks();
@@ -793,6 +799,7 @@
     }
 
     async function handleAction(action, id, setSection) {
+      if (await githubUI?.handleAction(action)) return true;
       if (await projectManager.handleAction(action, id)) return true;
       if (action === "settings-reload") {
         settingsError = "";
@@ -1493,7 +1500,7 @@
       rerender();
     }
 
-    return { loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id) };
+    return { pauseGitHub: () => githubUI?.pause(), loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id) };
   }
 
   window.DMWorkspaceModules = { create };

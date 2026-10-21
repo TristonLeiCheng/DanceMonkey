@@ -1,4 +1,6 @@
-const { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, shell } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, safeStorage, screen, shell } = require("electron");
+const { registerGitHubSync } = require("./github-ipc");
+const { fetchWithSystemProxy } = require("./system-proxy");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createAiService } = require("./ai");
@@ -85,6 +87,7 @@ let screenshotController;
 let appSettings;
 let proxyEnforcement;
 let legacyConfig;
+let githubNotes;
 let overlay = null;
 let workspaceWindow = null;
 let mode = "collapsed";
@@ -186,6 +189,7 @@ function applyShell(next) {
 }
 
 function openWorkspace(section = "notes") {
+  if (githubNotes?.busy && (!workspaceWindow || workspaceWindow.isDestroyed())) return;
   const hash = workspaceHash(section);
   if (workspaceWindow && !workspaceWindow.isDestroyed()) {
     workspaceWindow.webContents.send("workspace:section", section || "notes");
@@ -211,6 +215,7 @@ function openWorkspace(section = "notes") {
       additionalArguments: softwareRender ? ["--lumen-software-render"] : [],
     },
   });
+  workspaceWindow.on("close", (event) => { if (githubNotes?.busy) event.preventDefault(); });
   workspaceWindow.setMenuBarVisibility(false);
   void workspaceWindow.loadURL(rendererUrl(hash));
   workspaceWindow.once("ready-to-show", () => {
@@ -235,6 +240,13 @@ app.whenReady().then(() => {
   workspaceStore = createWorkspace(legacyConfig.notesRoot(app.getPath("documents")));
   aiService = createAiService(legacyConfig);
   zenTaskStore = createZenTaskStore(workspaceStore.root);
+  githubNotes = registerGitHubSync({
+    app, ipcMain, safeStorage, shell, clipboard, dialog, BrowserWindow, fetch: fetchWithSystemProxy,
+    root: workspaceStore.root,
+    getWindows: () => [overlay, workspaceWindow],
+    isFolderSyncBusy: () => syncAbortControllers.size > 0 || Boolean(screenshotController?.writing),
+    refreshNotes: () => refreshQuickNotes(),
+  });
   quickAccessService = createQuickAccessService(legacyConfig, shell, {
     desktop: app.getPath("desktop"),
     documents: app.getPath("documents"),
@@ -245,6 +257,7 @@ app.whenReady().then(() => {
     getProfiles: listSyncProfiles,
     saveProfiles: saveSyncProfiles,
     runProfile: async (profile) => {
+      if (githubNotes.busy) throw new Error("GitHub 笔记同步期间暂停文件夹同步。");
       const controller = new AbortController();
       syncAbortControllers.set(profile.id, controller);
       try {
@@ -267,7 +280,10 @@ app.whenReady().then(() => {
   });
   folderSyncScheduler.start();
   screenshotController = createScreenshotController({
-    getNotesRoot: () => legacyConfig.notesRoot(app.getPath("documents")),
+    getNotesRoot: () => {
+      githubNotes.assertWritable();
+      return workspaceStore.root;
+    },
     aiService,
     store,
     getOverlay: () => overlay,
@@ -378,7 +394,8 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("store:get", () => refreshQuickNotes({ broadcast: false }));
-  ipcMain.handle("store:set", (event, partial) => {
+  ipcMain.handle("store:set", (event, partial, generation) => {
+    if (Array.isArray(partial?.notes)) githubNotes.assertWritable(generation);
     const normalized = { ...partial };
     if (Array.isArray(partial.notes)) {
       const previousById = new Map(
@@ -416,28 +433,33 @@ app.whenReady().then(() => {
     tree: workspaceStore.list(),
   }));
   ipcMain.handle("workspace:read", (_e, relativePath) => workspaceStore.read(relativePath));
-  ipcMain.handle("workspace:write", (_e, relativePath, content) => {
+  ipcMain.handle("workspace:write", (_e, relativePath, content, generation) => {
+    githubNotes.assertWritable(generation);
     const result = workspaceStore.write(relativePath, content);
     refreshQuickNotes();
     return result;
   });
-  ipcMain.handle("workspace:createFile", (_e, parent, name) => {
+  ipcMain.handle("workspace:createFile", (_e, parent, name, generation) => {
+    githubNotes.assertWritable(generation);
     const result = workspaceStore.createFile(parent, name);
     refreshQuickNotes();
     return result;
   });
-  ipcMain.handle("workspace:createFolder", (_e, parent, name) => {
+  ipcMain.handle("workspace:createFolder", (_e, parent, name, generation) => {
+    githubNotes.assertWritable(generation);
     const result = workspaceStore.createFolder(parent, name);
     refreshQuickNotes();
     return result;
   });
-  ipcMain.handle("workspace:rename", (_e, relativePath, name) => {
+  ipcMain.handle("workspace:rename", (_e, relativePath, name, generation) => {
+    githubNotes.assertWritable(generation);
     const result = workspaceStore.rename(relativePath, name);
     zenTaskStore.relocateNotes(relativePath, result);
     refreshQuickNotes();
     return result;
   });
-  ipcMain.handle("workspace:remove", (_e, relativePath) => {
+  ipcMain.handle("workspace:remove", (_e, relativePath, generation) => {
+    githubNotes.assertWritable(generation);
     const result = workspaceStore.remove(relativePath);
     refreshQuickNotes();
     return result;
@@ -510,6 +532,7 @@ app.whenReady().then(() => {
     return folderSyncService.preview(profile);
   });
   ipcMain.handle("folderSync:run", async (event, id) => {
+    if (githubNotes.busy) throw new Error("GitHub 笔记同步期间暂停文件夹同步。");
     const profile = findSyncProfile(id);
     if (syncAbortControllers.has(id)) throw new Error("该任务正在同步中");
     const controller = new AbortController();
@@ -761,7 +784,8 @@ app.whenReady().then(() => {
   registerAllHotkeys();
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (githubNotes?.busy) { event.preventDefault(); return; }
   folderSyncScheduler?.stop();
   void proxyEnforcement?.stop?.();
 });

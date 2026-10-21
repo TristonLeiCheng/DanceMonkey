@@ -110,8 +110,8 @@ try {
   assert.equal(await evaluate(`(()=>{const button=document.querySelector('.tree-expander'); return button?.tagName === 'BUTTON' && button.getAttribute('aria-expanded') === 'true' && button.getAttribute('aria-label').includes('折叠文件夹')})()`), true);
   await evaluate(`document.querySelector('.tree-expander').click()`);
   assert.equal(await evaluate(`JSON.parse(localStorage.getItem("lumen-workspace-expanded-folders")).length === 0 && document.querySelector('.tree-expander').getAttribute('aria-expanded') === 'false'`), true);
-  await evaluate(`location.reload()`);
-  await waitFor(() => evaluate(`document.readyState === "complete" && document.querySelector('.tree-expander')?.getAttribute('aria-expanded') === 'false'`), { process: electron });
+  await evaluate(`window.__e2eBeforeReload = true; location.reload()`);
+  await waitFor(() => evaluate(`!window.__e2eBeforeReload && document.readyState === "complete" && document.querySelector('.tree-expander')?.getAttribute('aria-expanded') === 'false'`), { process: electron });
   await evaluate(`(()=>{const button=document.querySelector('.tree-expander'); button.focus(); button.click()})()`);
   assert.equal(await evaluate(`document.querySelector('.tree-expander').getAttribute('aria-expanded') === 'true' && JSON.parse(localStorage.getItem("lumen-workspace-expanded-folders")).length === 1`), true);
   assert.equal(await evaluate(`Boolean(document.querySelector('.tree-name[data-action="tree-open"]'))`), true);
@@ -144,7 +144,41 @@ try {
   await waitFor(() => evaluate(`document.body.textContent.includes("完成 UI 验收")`), { process: electron });
   await evaluate(`document.querySelector('[data-module-action="pm-open-task-source"]').click()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector(".ws-editor"))`), { process: electron });
-  console.log(`UI E2E passed on isolated ports ${serverPort}/${debugPort}: note preview → atomic batch → milestone → attention → source return`);
+  // Exercise the real IPC editor handshake without GitHub credentials or any network sync.
+  const githubState = await evaluate(`window.lumen.githubSync.status()`);
+  assert.equal(githubState.success, true);
+  assert.equal(githubState.auth.connected, false);
+  assert.equal(githubState.root.startsWith(fs.realpathSync(root)), true);
+  const syncWithoutBinding = await evaluate(`(async()=>{ const editor=document.querySelector('.ws-editor'); editor.value='GitHub flush test'; editor.dispatchEvent(new Event('input',{bubbles:true})); return window.lumen.githubSync.preview(); })()`);
+  assert.equal(syncWithoutBinding.success, false);
+  assert.match(syncWithoutBinding.error, /绑定/);
+  assert.equal(await evaluate(`document.getElementById('root').inert`), false);
+  assert.equal(await evaluate(`document.querySelector('.ws-editor').value`), "GitHub flush test");
+  assert.equal(await evaluate(`document.querySelector('.ws-save-state').textContent`), "已保存");
+  await evaluate(`document.querySelector('[data-action="section"][data-value="settings"]').click()`);
+  await waitFor(() => evaluate(`document.body.textContent.includes('GitHub 笔记同步')`), { process: electron });
+  assert.equal(await evaluate(`document.body.textContent.includes('Client ID')`), true);
+  assert.equal(await evaluate(`document.querySelector('[data-github-advanced]').open`), false);
+  assert.equal(await evaluate(`document.querySelectorAll('.github-step').length`), 3);
+  assert.equal(await evaluate(`document.querySelector('[data-module-action="github-create"]').disabled`), true);
+  if (process.env.DM_E2E_SCREENSHOT) {
+    await evaluate(`document.querySelector('.ws-github-sync')?.scrollIntoView({block:'start'})`);
+    const capture = await send("Page.captureScreenshot", { format: "png" });
+    fs.writeFileSync(process.env.DM_E2E_SCREENSHOT, Buffer.from(capture.result.data, "base64"));
+  }
+  // Release builds have real public App identifiers. Never start live authorization in E2E.
+  assert.equal(await evaluate(`typeof window.lumen.githubSync.startAuth`), "function");
+  await evaluate(`document.querySelector('[data-github-advanced]').open = true`);
+  await evaluate(`(()=>{ const client=document.querySelector('[data-github-field="clientId"]'); client.value='bad'; document.querySelector('[data-module-action="github-configure"]').click(); })()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-github-sync .module-error')?.textContent.includes('Client ID')`), { process: electron });
+  await evaluate(`(()=>{ document.querySelector('[data-github-field="clientId"]').value='Iv1.e2e-fake-client'; document.querySelector('[data-github-field="appSlug"]').value='e2e-notes-app'; document.querySelector('[data-module-action="github-configure"]').click(); })()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-github-sync .ws-settings-ok')?.textContent.includes('已保存')`), { process: electron });
+  const configured = await evaluate(`window.lumen.githubSync.status()`);
+  assert.equal(configured.auth.clientId, "Iv1.e2e-fake-client");
+  assert.equal(configured.auth.connected, false);
+  assert.equal(await evaluate(`document.querySelector('[data-module-action="github-connect"]').disabled`), false);
+  assert.equal(await evaluate(`document.querySelector('[data-module-action="github-preview"]').disabled`), true);
+  console.log(`UI E2E passed on isolated ports ${serverPort}/${debugPort}: notes/projects, GitHub settings and editor flush/resume (no remote access)`);
 } finally {
   try { socket?.close(); } catch {}
   for (const record of children.reverse()) await stop(record);

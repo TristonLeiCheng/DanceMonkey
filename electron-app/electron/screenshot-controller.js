@@ -28,6 +28,14 @@ function createScreenshotController({
   let currentImagePath = "";
   let pendingRegion = null;
   let lastCaptureMode = "quick";
+  let pendingWrites = 0;
+
+  async function saveCapturedImage(image, prefix) {
+    const root = getNotesRoot();
+    pendingWrites += 1;
+    try { return await savePngAndClipboardFast(image, root, prefix); }
+    finally { pendingWrites -= 1; }
+  }
 
   function uiUrl(fileName) {
     const filePath = path.join(__dirname, "ui", fileName);
@@ -208,7 +216,7 @@ function createScreenshotController({
     try {
       await delay(40);
       const { image } = await captureDisplayImage();
-      const filePath = await savePngAndClipboardFast(image, getNotesRoot(), "DM");
+      const filePath = await saveCapturedImage(image, "DM");
       restoreWindows(hidden);
       openChoiceWindow(filePath, "quick");
       return { success: true, path: filePath };
@@ -291,7 +299,7 @@ function createScreenshotController({
 
     try {
       const cropped = cropImage(context.image, rect, context.scale);
-      const filePath = await savePngAndClipboardFast(cropped, getNotesRoot(), "DM_region");
+      const filePath = await saveCapturedImage(cropped, "DM_region");
       if (action === "ai") openResultWindow(filePath, { autoAnalyze: true });
       else if (action === "edit") openEditorWindow(filePath);
       else openChoiceWindow(filePath, "region");
@@ -418,6 +426,7 @@ function createScreenshotController({
   }
 
   return {
+    get writing() { return pendingWrites > 0; },
     captureQuick,
     beginRegionCapture,
     finishRegionCapture,

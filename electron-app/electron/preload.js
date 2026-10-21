@@ -1,21 +1,31 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+let notesGeneration = 0;
+const notesReady = ipcRenderer.invoke("githubSync:generation").then((value) => { notesGeneration = value; });
+const noteWrites = new Set();
+function writeNotes(channel, ...args) {
+  const request = notesReady.then(() => ipcRenderer.invoke(channel, ...args, notesGeneration));
+  noteWrites.add(request);
+  request.then(() => noteWrites.delete(request), () => noteWrites.delete(request));
+  return request;
+}
+
 contextBridge.exposeInMainWorld("lumen", {
   platform: process.platform,
   // 软件渲染下 backdrop-filter 几乎无效，界面需要退回不依赖模糊的实心样式
   softwareRender: process.argv.includes("--lumen-software-render"),
   getState: () => ipcRenderer.invoke("store:get"),
-  setState: (partial) => ipcRenderer.invoke("store:set", partial),
+  setState: (partial) => writeNotes("store:set", partial),
   setShell: (mode) => ipcRenderer.invoke("shell:set", mode),
   openWorkspace: (section) => ipcRenderer.invoke("workspace:open", section),
   workspace: {
     list: () => ipcRenderer.invoke("workspace:list"),
     read: (path) => ipcRenderer.invoke("workspace:read", path),
-    write: (path, content) => ipcRenderer.invoke("workspace:write", path, content),
-    createFile: (parent, name) => ipcRenderer.invoke("workspace:createFile", parent, name),
-    createFolder: (parent, name) => ipcRenderer.invoke("workspace:createFolder", parent, name),
-    rename: (path, name) => ipcRenderer.invoke("workspace:rename", path, name),
-    remove: (path) => ipcRenderer.invoke("workspace:remove", path),
+    write: (path, content) => writeNotes("workspace:write", path, content),
+    createFile: (parent, name) => writeNotes("workspace:createFile", parent, name),
+    createFolder: (parent, name) => writeNotes("workspace:createFolder", parent, name),
+    rename: (path, name) => writeNotes("workspace:rename", path, name),
+    remove: (path) => writeNotes("workspace:remove", path),
   },
   ai: {
     getSettings: () => ipcRenderer.invoke("ai:settings:get"),
@@ -41,6 +51,37 @@ contextBridge.exposeInMainWorld("lumen", {
     get: () => ipcRenderer.invoke("settings:get"),
     save: (payload) => ipcRenderer.invoke("settings:save", payload),
     applyProxy: () => ipcRenderer.invoke("settings:apply-proxy"),
+  },
+  githubSync: {
+    status: () => ipcRenderer.invoke("githubSync:status"),
+    configureAuth: (input) => ipcRenderer.invoke("githubSync:configureAuth", input),
+    startAuth: () => ipcRenderer.invoke("githubSync:startAuth"),
+    pollAuth: () => ipcRenderer.invoke("githubSync:pollAuth"),
+    cancelAuth: () => ipcRenderer.invoke("githubSync:cancelAuth"),
+    openInstallation: () => ipcRenderer.invoke("githubSync:openInstallation"),
+    openVerification: () => ipcRenderer.invoke("githubSync:openVerification"),
+    copyCode: () => ipcRenderer.invoke("githubSync:copyCode"),
+    openCreateRepository: () => ipcRenderer.invoke("githubSync:openCreateRepository"),
+    repositories: () => ipcRenderer.invoke("githubSync:repositories"),
+    disconnect: () => ipcRenderer.invoke("githubSync:disconnect"),
+    bind: (input) => ipcRenderer.invoke("githubSync:bind", input),
+    preview: () => ipcRenderer.invoke("githubSync:preview"),
+    sync: (input) => ipcRenderer.invoke("githubSync:sync", input),
+    openBackup: () => ipcRenderer.invoke("githubSync:openBackup"),
+    onEditor: (cb) => {
+      const listener = async (_event, payload) => {
+        try {
+          if (payload.phase === "resume") notesGeneration = payload.generation;
+          await cb(payload);
+          await Promise.all([...noteWrites]);
+          ipcRenderer.send("githubSync:editor-ready", { id: payload.id });
+        } catch {
+          ipcRenderer.send("githubSync:editor-ready", { id: payload.id, error: true });
+        }
+      };
+      ipcRenderer.on("githubSync:editor", listener);
+      return () => ipcRenderer.removeListener("githubSync:editor", listener);
+    },
   },
   appUpdate: {
     info: () => ipcRenderer.invoke("appUpdate:info"),

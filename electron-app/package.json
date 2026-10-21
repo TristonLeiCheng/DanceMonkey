@@ -1,7 +1,7 @@
 {
   "name": "dance-monkey",
   "productName": "DanceMonkey",
-  "version": "3.3.1",
+  "version": "3.4.0",
   "private": true,
   "description": "DM (DanceMonkey) 桌面磨砂玻璃笔记与待办",
   "main": "electron/main.js",
@@ -11,7 +11,7 @@
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "desktop": "node desktop.mjs",
-    "publish:win": "node tools/publish-electron-release.mjs",
+    "publish:win": "npm run package:win && npm run prepare:win-release",
     "package:win": "electron-forge make --platform=win32 --arch=x64",
     "prepare:win-release": "node tools/prepare-win-release.mjs",
     "package:mac": "node tools/package-mac.mjs",
@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "dompurify": "^3.4.15",
+    "isomorphic-git": "^1.44.3",
     "marked": "^18.0.13",
     "undici": "^7.29.1"
   }

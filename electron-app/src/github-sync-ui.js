@@ -1,0 +1,225 @@
+(() => {
+  function create(api, { esc, attr, beforeRender }) {
+    let state = { auth: {}, sync: {}, root: "" };
+    let draft = {};
+    let repositories = [];
+    let repositoriesLoaded = false;
+    let selectedRepo = "";
+    let preview = null;
+    let device = null;
+    let busy = false;
+    let message = "";
+    let error = "";
+    let timer = null;
+    let active = false;
+    let epoch = 0;
+    let advancedOpen = false;
+    let setupRequired = false;
+    let awaitingRepository = false;
+
+    function capture() {
+      const card = document.querySelector(".ws-github-sync");
+      if (!card) return;
+      for (const input of card.querySelectorAll("[data-github-field]")) draft[input.dataset.githubField] = input.value;
+      const selection = card.querySelector("[data-github-repository]");
+      if (selection) selectedRepo = selection.value;
+      const advanced = card.querySelector("[data-github-advanced]");
+      if (advanced) advancedOpen = advanced.open;
+    }
+    function update() {
+      const card = document.querySelector(".ws-github-sync");
+      if (!card) return;
+      card.outerHTML = render();
+      const dialog = document.querySelector(".github-setup-dialog");
+      if (dialog && !dialog.open) {
+        dialog.showModal();
+        dialog.addEventListener("cancel", () => { setupRequired = false; });
+      }
+    }
+    async function load() {
+      if (!api.githubSync) return;
+      const result = await api.githubSync.status();
+      if (!result.success) { error = result.error || "读取同步设置失败"; return; }
+      if (state.auth?.login !== result.auth?.login || state.auth?.clientId !== result.auth?.clientId) {
+        repositories = []; repositoriesLoaded = false; selectedRepo = "";
+      }
+      state = result;
+      const binding = state.sync.binding || {};
+      draft = { clientId: state.auth.clientId || "", appSlug: state.auth.appSlug || "",
+        owner: binding.owner || "", repo: binding.repo || "", branch: binding.branch || "", ...draft };
+    }
+    async function loadRepositories() {
+      if (!api.githubSync.repositories || !state.auth.connected) return;
+      const result = await api.githubSync.repositories();
+      if (!result.success) throw new Error(result.error || "加载笔记库失败");
+      repositories = result.repositories || [];
+      repositoriesLoaded = true;
+      if (!repositories.some((repo) => repo.fullName === selectedRepo)) {
+        selectedRepo = repositories.length === 1 ? repositories[0].fullName : "";
+      }
+    }
+    function pause() {
+      active = false;
+      clearTimeout(timer);
+      timer = null;
+      epoch += 1;
+      if (device) {
+        device = null;
+        void api.githubSync?.cancelAuth().catch(() => {});
+      }
+    }
+    function schedule() {
+      clearTimeout(timer);
+      if (!active || !device) return;
+      const currentEpoch = epoch;
+      timer = setTimeout(async () => {
+        if (!active || !device || currentEpoch !== epoch) return;
+        capture();
+        if (Date.now() >= device.expiresAt) { device = null; error = "验证码已过期，请重新连接。"; update(); return; }
+        try {
+          const result = await api.githubSync.pollAuth();
+          if (currentEpoch !== epoch || !active) return;
+          if (!result.success) throw new Error(result.error || "授权失败");
+          if (result.status === "authorized" || (result.connected && !result.pending)) {
+            device = null;
+            await load();
+            message = "连接成功！下一步创建笔记库，或选择已有笔记库。";
+            try { await loadRepositories(); } catch (cause) { error = cause.message; }
+          } else if (["expired", "denied", "cancelled", "error", "idle"].includes(result.status)) {
+            device = null;
+            error = "授权已取消、过期或被拒绝，请重新连接。";
+          } else if (device) device.interval = Math.max(5, Number(result.interval) || device.interval);
+        } catch (cause) { error = cause.message || "授权状态检查失败"; }
+        update();
+        schedule();
+      }, Math.max(5, Number(device.interval) || 5) * 1000);
+    }
+    function renderList(title, rows) {
+      return rows?.length ? `<details open><summary>${esc(title)} · ${rows.length}</summary><ul>${rows.map((row) => `<li>${esc(typeof row === "string" ? row : `${row.path}（${row.side === "local" ? "本地删除" : "远端删除"}）`)}</li>`).join("")}</ul></details>` : "";
+    }
+    function render() {
+      active = true;
+      if (!api.githubSync) return '<section class="ws-settings-card ws-github-sync"><h2>GitHub 笔记同步</h2><p class="ws-settings-desc">请使用 Electron 桌面版连接 GitHub；浏览器预览不读写真实笔记。</p></section>';
+      const auth = state.auth || {}, sync = state.sync || {};
+      const appConfigured = Boolean(auth.clientId && auth.appSlug);
+      const disabled = busy ? "disabled" : "";
+      const field = (key, label, placeholder = "") => `<label>${esc(label)}<input data-github-field="${key}" value="${attr(draft[key] || "")}" placeholder="${attr(placeholder)}" ${disabled} autocomplete="off" /></label>`;
+      return `<section class="ws-settings-card ws-github-sync" aria-busy="${busy}">
+        <h2>GitHub 笔记同步 <small>本地编辑 · 多设备共享</small></h2>
+        <p class="ws-settings-desc">连接账号，选择一个私有笔记库。离线照常编辑，只有确认手动同步后才上传。</p>
+        ${setupRequired ? `<dialog class="github-setup-dialog" aria-labelledby="github-setup-title"><h3 id="github-setup-title">尚未配置 GitHub 授权应用</h3><p>当前版本缺少 GitHub App 的 Client ID 或 App slug，因此还不能打开有效的授权页面。</p><p>需要开发者先在 GitHub 注册一次 App，启用 Device Flow 和 Contents 读写权限，再填写公开标识。配置后，普通用户只需点击网页授权。</p><p>这里不需要 GitHub 密码、Token 或 Client Secret。</p><div class="ws-settings-actions"><button type="button" data-module-action="github-setup-close">稍后配置</button><button class="module-primary" type="button" data-module-action="github-setup-configure">查看配置项</button></div></dialog>` : ""}
+        <div class="github-steps">
+          <section class="github-step ${auth.connected ? "is-complete" : ""}">
+            <h3><span class="github-step-number">1</span> 连接 GitHub ${auth.connected ? '<small>已完成</small>' : ""}</h3>
+            ${auth.connected ? `<p>已连接 <strong>${esc(auth.login || "GitHub 账号")}</strong></p><button type="button" data-module-action="github-disconnect" ${disabled}>断开连接</button>` : `
+              <p class="ws-settings-desc">在浏览器完成 GitHub 授权，不需要在 DM 中输入密码或访问令牌。</p>
+              <button class="module-primary" type="button" data-module-action="github-connect" ${busy || device ? "disabled" : ""}>${appConfigured ? "连接 GitHub · 网页授权" : "连接 GitHub · 需先配置"}</button>
+              ${!appConfigured ? '<p class="ws-settings-desc">此开发版尚未配置发行方 GitHub App，开发者需在下方高级设置中完成一次配置。</p>' : ""}`}
+            ${device ? `<div class="github-device"><span>在 GitHub 授权页粘贴验证码</span><strong>${esc(device.userCode)}</strong><div class="ws-settings-actions"><button type="button" data-module-action="github-copy-code" ${disabled}>复制验证码</button><button type="button" data-module-action="github-open-verification" ${disabled}>打开授权网页</button><button type="button" data-module-action="github-cancel">取消</button></div><p>完成授权后这里会自动更新。请勿向他人提供验证码。</p></div>` : ""}
+          </section>
+          <section class="github-step ${sync.binding ? "is-complete" : ""}">
+            <h3><span class="github-step-number">2</span> 创建或选择笔记库 ${sync.binding ? '<small>已完成</small>' : ""}</h3>
+            ${sync.binding ? `<p class="github-path"><strong>${esc(sync.binding.owner)}/${esc(sync.binding.repo)}</strong> · ${esc(sync.binding.branch)}</p><p class="ws-settings-desc">已绑定私有笔记库。另一台电脑连接 GitHub 后，选择相同仓库即可。</p>` : `
+              <div class="ws-settings-actions"><button class="module-primary" type="button" data-module-action="github-create" ${busy || !auth.connected ? "disabled" : ""}>创建笔记库 · 打开 GitHub</button><button type="button" data-module-action="github-repositories" ${busy || !auth.connected ? "disabled" : ""}>${repositoriesLoaded ? "刷新笔记库列表" : "选择已有笔记库"}</button></div>
+              <p class="ws-settings-desc">网页中填写仓库名称（如 my-notes），选择 <strong>Private</strong> 并确认创建。这里不会自动创建或上传文件。</p>
+              <div class="github-repo-setup ${awaitingRepository ? "is-active" : ""}"><p>创建完成后，授权 DM 访问该仓库，再回来刷新列表。</p><div class="ws-settings-actions"><button type="button" data-module-action="github-install" ${busy || !auth.connected || !auth.appSlug ? "disabled" : ""}>授权笔记库 · 打开网页</button><button type="button" data-module-action="github-repositories" ${busy || !auth.connected ? "disabled" : ""}>已完成，刷新列表</button></div><p class="ws-settings-desc">授权页选择 Only select repositories，仅选中笔记仓库。</p></div>
+              ${repositoriesLoaded ? repositories.length ? `<label>可用的私有笔记库<select data-github-repository ${disabled}><option value="">请选择笔记库</option>${repositories.map((repo) => `<option value="${attr(repo.fullName)}" ${selectedRepo === repo.fullName ? "selected" : ""}>${esc(repo.fullName)}</option>`).join("")}</select></label><button class="module-primary" type="button" data-module-action="github-use-repository" ${disabled}>确认选择并进入同步</button><p class="ws-settings-desc">选择列表中的仓库还未完成绑定。请点击上方「确认选择并进入同步」，之后第 3 步才可预览。此操作不会上传或下载笔记。</p>` : '<p class="ws-settings-desc">暂未找到已授权且有写权限的私有仓库。请先创建、授权，再刷新；不会列出公开或只读仓库。</p>' : ""}`}
+          </section>
+          <section class="github-step" data-github-sync-step>
+            <h3><span class="github-step-number">3</span> 手动同步笔记</h3>
+            <p class="ws-settings-desc" data-github-sync-hint>${!auth.connected ? "请先完成第 1 步：连接 GitHub。" : !sync.binding ? "尚未绑定笔记库：请回到第 2 步，点击「确认选择并进入同步」。" : !preview ? "笔记库已绑定。先点击「预览同步差异」，查看变更后才可确认同步。" : preview.conflicts?.length ? "存在冲突，请先处理冲突，再重新预览。" : "预览已就绪，可以确认手动同步。"}</p>
+            <p class="ws-settings-desc">本地笔记库：<span class="github-path">${esc(state.root || "读取中…")}</span></p>
+            <div class="ws-settings-actions"><button type="button" data-module-action="github-preview" ${busy || !auth.connected || !sync.binding ? "disabled" : ""}>预览同步差异</button><button class="module-primary" type="button" data-module-action="github-sync" ${busy || !auth.connected || !preview || preview.conflicts?.length ? "disabled" : ""}>确认并手动同步</button><button type="button" data-module-action="github-backup" ${disabled}>备份 / 冲突目录</button></div>
+            <p class="ws-settings-desc">最近成功同步：${esc(sync.lastSync ? new Date(sync.lastSync).toLocaleString() : "尚无")}${sync.pending ? " · 检测到未完成同步，请重新预览以恢复" : ""}</p>
+            ${preview ? `<div class="github-preview">${!preview.uploads?.length && !preview.downloads?.length && !preview.deletions?.length && !preview.conflicts?.length ? "本地与远端内容一致。" : ""}${renderList("上传", preview.uploads)}${renderList("下载", preview.downloads)}${renderList("删除", preview.deletions)}${renderList("冲突 · 已停止同步", preview.conflicts)}${preview.conflicts?.length ? '<p>双方副本已保存到冲突目录。先另存需要保留的本地内容，再将冲突文件与远端版本协调一致，重新预览；不会自动覆盖。</p>' : ""}</div>` : ""}
+          </section>
+        </div>
+        ${busy ? '<p role="status">正在处理，请稍候…</p>' : ""}
+        ${error || sync.error ? `<div class="module-error" role="alert">${esc(error || sync.error)}</div>` : ""}
+        ${message ? `<p class="ws-settings-ok" role="status">${esc(message)}</p>` : ""}
+        <details data-github-advanced ${advancedOpen ? "open" : ""}><summary>高级设置 · 开发者配置与手动绑定</summary>
+          <p class="ws-settings-desc">正式发行版由开发者预置 GitHub App，普通用户无需填写。开发版需启用 Device Flow、Contents 读写权限；以下是公开标识，不是密码或 Client Secret。</p>
+          <div class="form-columns">${field("clientId", "Client ID", "Iv23…")}${field("appSlug", "App slug", "your-notes-app")}</div>
+          <button type="button" data-module-action="github-configure" ${disabled}>保存 App 配置</button>
+          <details><summary>手动指定仓库（可选）</summary><div class="form-columns">${field("owner", "仓库所有者", "owner")}${field("repo", "私有仓库名称", "notes")}${field("branch", "分支（留空使用默认分支）")}</div><button type="button" data-module-action="github-bind" ${busy || !auth.connected ? "disabled" : ""}>绑定当前笔记库</button></details>
+          <button type="button" data-module-action="github-refresh" ${disabled}>刷新连接状态</button>
+          <p class="ws-settings-desc">首版不支持更换已绑定仓库、分支或本地目录。</p>
+        </details>
+        <details><summary>同步范围与隐私说明</summary><p class="ws-settings-desc">同步 .md、.png、.jpg、.jpeg、.gif、.webp。每文件 ≤10 MiB，最多 5000 个文件 / 200 MiB。排除任务/项目 JSON、设置和隐藏目录；符号链接会阻止同步。</p><p class="ws-settings-desc">私有仓库不是端到端加密；删除的内容仍可能留在 Git 历史中。请检查截图隐私。断开连接不删除任何笔记。</p></details>
+      </section>`;
+    }
+    async function handleAction(action) {
+      if (!action.startsWith("github-")) return false;
+      if (!api.githubSync || (busy && action !== "github-cancel")) return true;
+      capture();
+      if (action === "github-setup-close" || action === "github-setup-configure") {
+        document.querySelector(".github-setup-dialog")?.close();
+        setupRequired = false;
+        if (action === "github-setup-configure") advancedOpen = true;
+        update();
+        if (action === "github-setup-configure") {
+          document.querySelector("[data-github-advanced]")?.scrollIntoView({ block: "center" });
+          document.querySelector('[data-github-field="clientId"]')?.focus();
+        }
+        return true;
+      }
+      beforeRender?.();
+      error = ""; message = ""; busy = true;
+      update();
+      try {
+        let result;
+        if (action === "github-configure") {
+          epoch += 1; clearTimeout(timer); device = null; preview = null;
+          result = await api.githubSync.configureAuth({ clientId: draft.clientId, appSlug: draft.appSlug });
+        }
+        if (action === "github-install") { result = await api.githubSync.openInstallation(); awaitingRepository = true; }
+        if (action === "github-create") { result = await api.githubSync.openCreateRepository(); awaitingRepository = true; }
+        if (action === "github-copy-code") result = await api.githubSync.copyCode();
+        if (action === "github-open-verification") result = await api.githubSync.openVerification();
+        if (action === "github-connect") {
+          if (!state.auth.clientId || !state.auth.appSlug) {
+            advancedOpen = true;
+            setupRequired = true;
+            throw new Error("此开发版尚未预置完整 GitHub App 配置，请先填写 Client ID 和 App slug。");
+          }
+          const attempt = ++epoch;
+          preview = null;
+          result = await api.githubSync.startAuth();
+          if (result.success && attempt === epoch && active) { device = result; schedule(); }
+          else if (result.success) { await api.githubSync.cancelAuth(); }
+        }
+        if (action === "github-cancel") { epoch += 1; clearTimeout(timer); device = null; result = await api.githubSync.cancelAuth(); }
+        if (action === "github-disconnect") { epoch += 1; clearTimeout(timer); device = null; preview = null; result = await api.githubSync.disconnect(); repositories = []; repositoriesLoaded = false; selectedRepo = ""; }
+        if (action === "github-bind") { preview = null; result = await api.githubSync.bind({ owner: draft.owner, repo: draft.repo, branch: draft.branch }); }
+        if (action === "github-repositories") { await load(); await loadRepositories(); result = { success: true }; }
+        if (action === "github-use-repository") {
+          const repo = repositories.find((item) => item.fullName === selectedRepo);
+          if (!repo) throw new Error("请先从列表选择一个私有笔记库。");
+          preview = null;
+          result = await api.githubSync.bind({ owner: repo.owner, repo: repo.repo });
+        }
+        if (action === "github-preview") { preview = null; result = await api.githubSync.preview(); if (result.success) preview = result; }
+        if (action === "github-sync") { result = await api.githubSync.sync({ previewId: preview?.id }); if (!result.cancelled) preview = null; }
+        if (action === "github-backup") result = await api.githubSync.openBackup();
+        if (action === "github-refresh") { await load(); result = { success: true }; }
+        if (!result?.success) throw new Error(result?.error || "操作失败");
+        await load();
+        if (action === "github-sync") message = result.cancelled ? "已取消，未执行同步。" : "手动同步完成。";
+        else if (["github-bind", "github-use-repository"].includes(action)) message = "笔记库已就绪。请先预览差异，确认后再同步。";
+        else if (action === "github-configure") message = "App 配置已保存，现在可以点击连接 GitHub。";
+        else if (action === "github-disconnect") message = "本机凭据已移除，笔记仍保留。";
+        else if (action === "github-create") message = "已打开 GitHub 创建页。选择 Private 并创建，然后点击「授权笔记库」。";
+        else if (action === "github-install") message = "已打开仓库授权页。完成后点击「已完成，刷新列表」。";
+        else if (action === "github-copy-code") message = "验证码已复制，请在 GitHub 授权页粘贴。";
+      } catch (cause) { error = cause.message || "GitHub 操作失败"; }
+      finally { busy = false; update(); }
+      if (!error && state.sync.binding && ["github-bind", "github-use-repository"].includes(action)) {
+        document.querySelector("[data-github-sync-step]")?.scrollIntoView({ block: "center" });
+        document.querySelector('[data-module-action="github-preview"]')?.focus();
+      }
+      return true;
+    }
+    return { load, render, handleAction, pause, capture };
+  }
+  window.DMGitHubSyncUI = { create };
+})();

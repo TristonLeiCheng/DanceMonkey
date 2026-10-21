@@ -6,12 +6,25 @@ const QUICK_NOTES_FOLDER = "Journal/Stickies";
 const QUICK_NOTE_MARKER = /^<!-- lumen-quick-note:([^\s>]+) -->\r?\n?/i;
 const QUICK_NOTE_MARKERS = /^(?:<!-- lumen-quick-note:[^\s>]+ -->\r?\n?)+/i;
 
+function writeAtomic(target, content) {
+  const temporary = path.join(path.dirname(target), `.dm-write-${crypto.randomUUID()}.tmp`);
+  try {
+    const mode = fs.existsSync(target) ? fs.statSync(target).mode & 0o777 : 0o600;
+    fs.writeFileSync(temporary, content, { encoding: "utf8", flag: "wx", mode });
+    fs.renameSync(temporary, target);
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
+}
+
 function createWorkspace(notesRootPath) {
-  const root = path.resolve(notesRootPath);
+  fs.mkdirSync(path.resolve(notesRootPath), { recursive: true });
+  const root = fs.realpathSync(path.resolve(notesRootPath));
   const quickNotesRoot = path.join(root, QUICK_NOTES_FOLDER);
 
   function ensureRoot() {
     fs.mkdirSync(root, { recursive: true });
+    resolveSafe(QUICK_NOTES_FOLDER);
     fs.mkdirSync(quickNotesRoot, { recursive: true });
   }
 
@@ -21,6 +34,18 @@ function createWorkspace(notesRootPath) {
     const rootResolved = path.resolve(root);
     if (resolved !== rootResolved && !resolved.startsWith(`${rootResolved}${path.sep}`)) {
       throw new Error("非法路径");
+    }
+    const segments = path.relative(root, resolved).split(path.sep).filter(Boolean);
+    let current = root;
+    if (fs.lstatSync(root).isSymbolicLink()) throw new Error("笔记库不能是符号链接");
+    for (const segment of segments) {
+      if (segment.toLowerCase() === ".git") throw new Error("不能访问 Git 内部文件");
+      current = path.join(current, segment);
+      try {
+        if (fs.lstatSync(current).isSymbolicLink()) throw new Error("不支持符号链接笔记路径");
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
     }
     return resolved;
   }
@@ -52,7 +77,8 @@ function createWorkspace(notesRootPath) {
   function readTree(directory = root) {
     const entries = fs.readdirSync(directory, { withFileTypes: true });
     return entries
-      .filter((entry) => entry.isDirectory() || entry.name.toLowerCase().endsWith(".md"))
+      .filter((entry) => entry.name.toLowerCase() !== ".git" && !entry.isSymbolicLink() &&
+        (entry.isDirectory() || (entry.isFile() && entry.name.toLowerCase().endsWith(".md"))))
       .sort((a, b) => {
         if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
         return a.name.localeCompare(b.name, "zh-CN", { numeric: true });
@@ -159,7 +185,7 @@ function createWorkspace(notesRootPath) {
           ? existingRaw
         : null;
       if (currentContent !== wantedContent) {
-        fs.writeFileSync(absolute, wantedContent, "utf8");
+        writeAtomic(absolute, wantedContent);
       }
       const stat = fs.statSync(absolute);
       synced.push({
@@ -196,19 +222,15 @@ function createWorkspace(notesRootPath) {
           ? readQuickNote(target)
           : { id: quickNoteId(target) };
         const raw = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
-        fs.writeFileSync(
-          target,
-          QUICK_NOTE_MARKER.test(raw) ? quickNoteRaw(existing.id, content) : String(content),
-          "utf8",
-        );
+        writeAtomic(target, QUICK_NOTE_MARKER.test(raw) ? quickNoteRaw(existing.id, content) : String(content));
       } else {
-        fs.writeFileSync(target, String(content), "utf8");
+        writeAtomic(target, String(content));
       }
       return { path: toRelative(target), updatedAt: fs.statSync(target).mtimeMs };
     },
     createFile(parentRelative, name) {
       const target = uniquePath(parentRelative, name, "file");
-      fs.writeFileSync(target, `# ${path.parse(target).name}\n\n`, "utf8");
+      writeAtomic(target, `# ${path.parse(target).name}\n\n`);
       return toRelative(target);
     },
     createFolder(parentRelative, name) {

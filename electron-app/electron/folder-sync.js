@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { createPkbPolicy } = require("./pkb-policy");
 
 const MODES = { masterToSlave: "masterToSlave", twoWay: "twoWay" };
 const POLICIES = {
@@ -191,6 +192,23 @@ function createFolderSyncService(appDataPath) {
       master.toLowerCase().startsWith(slavePrefix)
     ) {
       throw new Error("主文件夹和从文件夹不能互为父子目录，避免递归同步。");
+    }
+    // PKB sensitive-directory guard: fresh policy instance per validation so
+    // caches never outlive a single preview()/run() call and can't go stale
+    // if the manifest or protected directories change between syncs.
+    const pkbPolicy = createPkbPolicy();
+    pkbPolicy.assertLocalRootAllowed(master, { label: "主文件夹" });
+    pkbPolicy.assertLocalRootAllowed(slave, { label: "从文件夹" });
+    // A peer without its own manifest must not inject protected files into a PKB.
+    for (const [source, destination] of [[master, slave], [slave, master]]) {
+      for (const governor of pkbPolicy.locateGovernors(source)) {
+        const relative = path.relative(source, governor.pkbRoot);
+        if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+          if (pkbPolicy.assessProtectedOverlap(destination, path.join(destination, relative)).length) {
+            throw new Error("同步另一端含有 PKB 保护目录文件，已停止整次同步。请先检查独立加密存储和历史副本。");
+          }
+        }
+      }
     }
     return { master, slave };
   }

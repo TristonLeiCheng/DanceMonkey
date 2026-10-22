@@ -2,13 +2,16 @@
 
 > 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。
 
-## 最新版本 · v3.4.0
+## 最新版本 · v3.5.0
 
-[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.4.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.4.0.md)
+[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.5.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.5.0.md)
+
+- **人物分身**：导入文章、笔记、聊天记录和 Outlook 来信，生成人物卡，独立聊天、纠正和更新。
+- **人物档案**：记录出生年月、星座、简历和事件；支持手动填写 MBTI 或通过 12 道观察题记录倾向。
 
 - **GitHub 笔记同步**：网页设备码授权、私有仓库选择、手动预览与确认同步；不需要另外安装 Git。
-- **多设备笔记库**：同步 Markdown 和常用图片；支持双向修改/删除、冲突副本、本地备份及失败恢复。
-- **本地优先**：离线继续编辑，API Key、软件设置和任务/项目 JSON 不上传。
+- **多设备笔记库**：同步 Markdown、常用图片、任务和项目；支持双向修改/删除、整文件冲突保护、本地备份及失败恢复。
+- **本地优先**：离线继续编辑。JSON 仅同步 `Journal/task-module.json` 和 `Journal/zentask-projects.json`；其他 JSON、API Key 和软件设置不上传。
 - **桌面工作区**：Markdown 笔记、项目与任务管理、AI 对话、截图及文件夹同步。
 
 提供 Windows x64 ZIP、macOS Apple Silicon / Intel 的 DMG 和 ZIP。macOS 产物采用 ad-hoc 签名，未经过 Apple Developer ID 公证；Windows ZIP 未做代码签名。下载时请核对 Release 中的 SHA-256。

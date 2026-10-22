@@ -18,6 +18,17 @@ contextBridge.exposeInMainWorld("lumen", {
   setState: (partial) => writeNotes("store:set", partial),
   setShell: (mode) => ipcRenderer.invoke("shell:set", mode),
   openWorkspace: (section) => ipcRenderer.invoke("workspace:open", section),
+  vaults: {
+    list: () => ipcRenderer.invoke("vaults:list"),
+    open: () => ipcRenderer.invoke("vaults:open"),
+    select: (root) => ipcRenderer.invoke("vaults:select", root),
+  },
+  pkb: {
+    preview: (root) => ipcRenderer.invoke("pkb:preview", { root }),
+    initialize: (root) => ipcRenderer.invoke("pkb:initialize", { root }),
+    createNote: (input) => writeNotes("pkb:createNote", input),
+    search: (root, query) => ipcRenderer.invoke("pkb:search", { root, query }),
+  },
   workspace: {
     list: () => ipcRenderer.invoke("workspace:list"),
     read: (path) => ipcRenderer.invoke("workspace:read", path),
@@ -36,6 +47,48 @@ contextBridge.exposeInMainWorld("lumen", {
       const listener = (_event, payload) => cb(payload);
       ipcRenderer.on("ai:chunk", listener);
       return () => ipcRenderer.removeListener("ai:chunk", listener);
+    },
+  },
+  personas: {
+    list: () => ipcRenderer.invoke("personas:list"),
+    get: (id) => ipcRenderer.invoke("personas:get", id),
+    create: (input) => ipcRenderer.invoke("personas:create", input),
+    updateProfile: (input) => ipcRenderer.invoke("personas:updateProfile", input),
+    addSources: (input) => ipcRenderer.invoke("personas:addSources", input),
+    importFiles: (input) => ipcRenderer.invoke("personas:importFiles", input),
+    importNotes: (input) => ipcRenderer.invoke("personas:importNotes", input),
+    removeSource: (input) => ipcRenderer.invoke("personas:removeSource", input),
+    generate: (input) => ipcRenderer.invoke("personas:generate", input),
+    saveCard: (input) => ipcRenderer.invoke("personas:saveCard", input),
+    chat: (input) => ipcRenderer.invoke("personas:chat", input),
+    newConversation: (input) => ipcRenderer.invoke("personas:newConversation", input),
+    selectConversation: (input) => ipcRenderer.invoke("personas:selectConversation", input),
+    deleteConversation: (input) => ipcRenderer.invoke("personas:deleteConversation", input),
+    restoreCard: (input) => ipcRenderer.invoke("personas:restoreCard", input),
+    remove: (input) => ipcRenderer.invoke("personas:remove", input),
+    cancel: (requestId) => ipcRenderer.invoke("personas:cancel", requestId),
+    onChunk: (cb) => {
+      const listener = (_event, payload) => cb(payload);
+      ipcRenderer.on("personas:chunk", listener);
+      return () => ipcRenderer.removeListener("personas:chunk", listener);
+    },
+    onProgress: (cb) => {
+      const listener = (_event, payload) => cb(payload);
+      ipcRenderer.on("personas:progress", listener);
+      return () => ipcRenderer.removeListener("personas:progress", listener);
+    },
+  },
+  outlook: {
+    status: () => ipcRenderer.invoke("outlook:status"),
+    configure: (input) => ipcRenderer.invoke("outlook:configure", input),
+    connect: () => ipcRenderer.invoke("outlook:connect"),
+    disconnect: () => ipcRenderer.invoke("outlook:disconnect"),
+    importAndGenerate: (input) => ipcRenderer.invoke("outlook:importAndGenerate", input),
+    cancel: (requestId) => ipcRenderer.invoke("outlook:cancel", requestId),
+    onProgress: (cb) => {
+      const listener = (_event, payload) => cb(payload);
+      ipcRenderer.on("outlook:progress", listener);
+      return () => ipcRenderer.removeListener("outlook:progress", listener);
     },
   },
   screenshot: {
@@ -95,15 +148,15 @@ contextBridge.exposeInMainWorld("lumen", {
   },
   zenTask: {
     load: () => ipcRenderer.invoke("zentask:load"),
-    addTask: (input) => ipcRenderer.invoke("zentask:addTask", input),
-    addTasksBatch: (inputs) => ipcRenderer.invoke("zentask:addTasksBatch", inputs),
-    updateTask: (id, input) => ipcRenderer.invoke("zentask:updateTask", id, input),
-    toggleTask: (id) => ipcRenderer.invoke("zentask:toggleTask", id),
-    deleteTask: (id) => ipcRenderer.invoke("zentask:deleteTask", id),
-    addProject: (input) => ipcRenderer.invoke("zentask:addProject", input),
-    updateProject: (id, input) => ipcRenderer.invoke("zentask:updateProject", id, input),
-    deleteMilestone: (projectId, milestoneId, reassignTo) => ipcRenderer.invoke("zentask:deleteMilestone", projectId, milestoneId, reassignTo),
-    deleteProject: (id) => ipcRenderer.invoke("zentask:deleteProject", id),
+    addTask: (input) => writeNotes("zentask:addTask", input),
+    addTasksBatch: (inputs) => writeNotes("zentask:addTasksBatch", inputs),
+    updateTask: (id, input) => writeNotes("zentask:updateTask", id, input),
+    toggleTask: (id) => writeNotes("zentask:toggleTask", id),
+    deleteTask: (id) => writeNotes("zentask:deleteTask", id),
+    addProject: (input) => writeNotes("zentask:addProject", input),
+    updateProject: (id, input) => writeNotes("zentask:updateProject", id, input),
+    deleteMilestone: (projectId, milestoneId, reassignTo) => writeNotes("zentask:deleteMilestone", projectId, milestoneId, reassignTo),
+    deleteProject: (id) => writeNotes("zentask:deleteProject", id),
   },
   quickAccess: {
     list: () => ipcRenderer.invoke("quickAccess:list"),

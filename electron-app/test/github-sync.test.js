@@ -6,6 +6,11 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const git = require("isomorphic-git");
 const { createGitHubSync, planChanges, validatePaths } = require("../electron/github-sync");
+const { createZenTaskStore } = require("../electron/zentask");
+
+const TASK_FILE = "Journal/task-module.json";
+const PROJECT_FILE = "Journal/zentask-projects.json";
+const TASK_FILES = [TASK_FILE, PROJECT_FILE];
 
 function setup(t) {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "dm-git-sync-"));
@@ -79,6 +84,188 @@ test("two local clients upload, download, merge different files and propagate de
   const status = b.service.status();
   assert.ok(status.lastSync);
   assert.equal(JSON.stringify(status).includes("FAKE_TOKEN"), false);
+});
+
+test("tasks and projects sync both ways, including record and file deletion, without uploading other JSON", async (t) => {
+  const f = setup(t), a = f.client("a"), b = f.client("b");
+  const storeA = createZenTaskStore(a.root), storeB = createZenTaskStore(b.root);
+  const project = storeA.addProject({ name: "发布", linkedNotes: ["Notes/release.md"] }).projects[0];
+  const task = storeA.addTask({ title: "验收", projectId: project.Id, notes: "保留完整记录" }).tasks[0];
+  const excluded = ["config.json", "Journal/private.json", "Journal/task-module.json.bak",
+    "task-module.json", "Archive/Journal/task-module.json", "Journal/nested/zentask-projects.json", ".hidden/task-module.json"];
+  for (const file of excluded) a.put(file, JSON.stringify({ private: file }));
+  let preview = await a.service.preview();
+  assert.deepEqual(preview.uploads, TASK_FILES);
+  await a.service.sync({ previewId: preview.id });
+  assert.deepEqual(f.command(["--git-dir", f.remote, "ls-tree", "-r", "--name-only", "main"]).toString().trim().split("\n"), TASK_FILES);
+  preview = await b.service.preview();
+  assert.deepEqual(preview.downloads, TASK_FILES);
+  await b.service.sync({ previewId: preview.id });
+  for (const file of TASK_FILES) assert.equal(b.read(file), a.read(file));
+  for (const file of excluded) assert.equal(fs.existsSync(path.join(b.root, file)), false, file);
+  assert.equal(storeB.load().tasks[0].Id, task.Id);
+  assert.equal(storeB.load().tasks[0].ProjectId, project.Id);
+  assert.deepEqual(storeB.load().projects[0].LinkedNotes, ["Notes/release.md"]);
+
+  storeB.updateTask(task.Id, { workflowStatus: "Completed", notes: "另一台电脑完成" });
+  storeB.updateProject(project.Id, { goal: "已验收", lifecycleStatus: "In Progress" });
+  await f.run(b);
+  const downloaded = await f.run(a);
+  assert.equal(downloaded.downloaded, 2);
+  assert.equal(storeA.load().tasks[0].IsDone, true);
+  assert.equal(storeA.load().tasks[0].Notes, "另一台电脑完成");
+  assert.equal(storeA.load().projects[0].Goal, "已验收");
+  for (const file of TASK_FILES) assert.equal(a.read(file), b.read(file));
+
+  storeA.deleteTask(task.Id);
+  storeA.deleteProject(project.Id);
+  await f.run(a); await f.run(b);
+  assert.deepEqual(storeB.load().tasks, []);
+  assert.deepEqual(storeB.load().projects, []);
+  for (const file of TASK_FILES) {
+    assert.deepEqual(JSON.parse(b.read(file)).Items, []);
+    b.remove(file);
+  }
+  preview = await b.service.preview();
+  assert.deepEqual(preview.deletions, TASK_FILES.map((file) => ({ path: file, side: "remote" })));
+  await b.service.sync({ previewId: preview.id });
+  preview = await a.service.preview();
+  assert.deepEqual(preview.deletions, TASK_FILES.map((file) => ({ path: file, side: "local" })));
+  const deleted = await a.service.sync({ previewId: preview.id });
+  for (const file of TASK_FILES) {
+    assert.equal(fs.existsSync(path.join(a.root, file)), false);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(deleted.backupDirectory, "local", file), "utf8")).Items, []);
+  }
+  for (const file of excluded) assert.equal(JSON.parse(a.read(file)).private, file);
+});
+
+test("different task and project edits conflict as whole files and preserve both devices", async (t) => {
+  const f = setup(t), a = f.client("a"), b = f.client("b");
+  const storeA = createZenTaskStore(a.root), storeB = createZenTaskStore(b.root);
+  const project = storeA.addProject({ name: "共同项目" }).projects[0];
+  storeA.addTask({ title: "已有任务", projectId: project.Id });
+  await f.run(a); await f.run(b);
+  // Separate records and fields still conflict: the sync contract is file-level.
+  storeA.addTask({ title: "电脑 A 新增", projectId: project.Id });
+  storeB.addTask({ title: "电脑 B 新增", projectId: project.Id });
+  storeA.updateProject(project.Id, { goal: "电脑 A 的目标" });
+  storeB.updateProject(project.Id, { description: "电脑 B 的说明" });
+  await f.run(a);
+  const head = f.command(["--git-dir", f.remote, "rev-parse", "main"]).toString();
+  const local = Object.fromEntries(TASK_FILES.map((file) => [file, b.read(file)]));
+  const preview = await b.service.preview();
+  assert.deepEqual(preview.conflicts, TASK_FILES);
+  assert.deepEqual(preview.uploads, []);
+  assert.deepEqual(preview.downloads, []);
+  for (const file of TASK_FILES) {
+    assert.equal(fs.readFileSync(path.join(preview.conflictDirectory, "local", file), "utf8"), local[file]);
+    assert.equal(fs.readFileSync(path.join(preview.conflictDirectory, "remote", file), "utf8"), a.read(file));
+  }
+  await assert.rejects(b.service.sync({ previewId: preview.id }), /冲突/);
+  for (const file of TASK_FILES) assert.equal(b.read(file), local[file]);
+  assert.equal(f.command(["--git-dir", f.remote, "rev-parse", "main"]).toString(), head);
+});
+
+test("legacy note-only baselines treat task JSON as new files and never overwrite divergent local data", async (t) => {
+  const f = setup(t), a = f.client("a"); let b = f.client("b");
+  a.put("note.md", "existing baseline"); await f.run(a); await f.run(b);
+  const stateFile = path.join(f.folder, "b", "sync", "state.json");
+  const oldState = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+  assert.deepEqual(Object.keys(oldState.base), ["note.md"]);
+  for (const file of TASK_FILES) {
+    a.put(file, JSON.stringify({ SchemaVersion: 2, Items: [{ Id: "remote-record" }] }));
+    b.put(file, JSON.stringify({ SchemaVersion: 2, Items: [{ Id: "local-record" }] }));
+  }
+  await f.run(a);
+  b = f.client("b");
+  let preview = await b.service.preview();
+  assert.deepEqual(preview.conflicts, TASK_FILES);
+  await assert.rejects(b.service.sync({ previewId: preview.id }), /冲突/);
+  for (const file of TASK_FILES) assert.equal(JSON.parse(b.read(file)).Items[0].Id, "local-record");
+  assert.deepEqual(JSON.parse(fs.readFileSync(stateFile, "utf8")).base, oldState.base);
+
+  for (const file of TASK_FILES) b.put(file, a.read(file));
+  preview = await b.service.preview();
+  assert.deepEqual(preview.counts, { uploads: 0, downloads: 0, deletions: 0, conflicts: 0 });
+  await b.service.sync({ previewId: preview.id });
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(stateFile, "utf8")).base).sort(), [...TASK_FILES, "note.md"]);
+});
+
+test("legacy task arrays and lowercase project envelopes round-trip with all unknown fields intact", async (t) => {
+  const f = setup(t), a = f.client("a"), b = f.client("b");
+  const tasks = [{ title: "旧任务", Custom: { nested: [1, "保留", false] } }];
+  const projects = { schemaVersion: 1, items: [{ name: "旧项目", Custom: { archived: false } }], ExtraEnvelopeField: "keep" };
+  a.put(TASK_FILE, JSON.stringify(tasks, null, 2));
+  a.put(PROJECT_FILE, JSON.stringify(projects, null, 2));
+  await f.run(a); await f.run(b);
+  for (const file of TASK_FILES) assert.equal(b.read(file), a.read(file));
+  assert.deepEqual(JSON.parse(b.read(TASK_FILE)), tasks);
+  assert.deepEqual(JSON.parse(b.read(PROJECT_FILE)), projects);
+});
+
+test("invalid task or project JSON is rejected locally before any commit", async (t) => {
+  const f = setup(t), a = f.client("a");
+  const invalid = ["{broken", "null", "{}", '{"Items":{}}', '{"items":null}', '{"Items":[null]}', '{"items":[[]]}', '["not an object"]'];
+  for (const file of TASK_FILES) {
+    for (const content of invalid) {
+      a.put(file, content);
+      await assert.rejects(a.service.preview(), /JSON|任务|项目/, `${file}: ${content}`);
+      assert.equal(a.read(file), content);
+    }
+    a.remove(file);
+  }
+  assert.deepEqual(await git.listBranches({ fs, gitdir: f.remote }), []);
+});
+
+test("case aliases of task and project data are refused instead of ignored", async (t) => {
+  for (const file of ["journal/task-module.json", "Journal/Task-Module.json", "Journal/ZENTASK-PROJECTS.json"]) {
+    const f = setup(t), a = f.client("a");
+    const content = JSON.stringify({ Items: [{ Id: "keep" }] });
+    a.put(file, content);
+    await assert.rejects(a.service.preview(), /大小写|路径/);
+    assert.equal(a.read(file), content);
+    assert.deepEqual(await git.listBranches({ fs, gitdir: f.remote }), []);
+  }
+});
+
+test("merging a new task with a remote project deletion cannot create a dangling project link", async (t) => {
+  const f = setup(t), a = f.client("a"), b = f.client("b");
+  const storeA = createZenTaskStore(a.root), storeB = createZenTaskStore(b.root);
+  const project = storeA.addProject({ name: "并发编辑的项目" }).projects[0];
+  await f.run(a); await f.run(b);
+  const task = storeA.addTask({ title: "刚创建的任务", projectId: project.Id }).tasks[0];
+  storeB.deleteProject(project.Id);
+  await f.run(b);
+  const local = Object.fromEntries(TASK_FILES.map((file) => [file, a.read(file)]));
+  const head = f.command(["--git-dir", f.remote, "rev-parse", "main"]).toString();
+  await assert.rejects(a.service.preview(), /关联|项目|引用/);
+  for (const file of TASK_FILES) assert.equal(a.read(file), local[file]);
+  assert.equal(storeA.load().tasks[0].Id, task.Id);
+  assert.equal(storeA.load().projects[0].Id, project.Id);
+  assert.equal(f.command(["--git-dir", f.remote, "rev-parse", "main"]).toString(), head);
+});
+
+test("invalid remote task or project JSON stops preview without changing local records", async (t) => {
+  const f = setup(t), a = f.client("a");
+  const valid = JSON.stringify({ SchemaVersion: 2, Items: [{ Id: "local", Custom: "keep" }] });
+  for (const file of TASK_FILES) a.put(file, valid);
+  await f.run(a);
+  for (const [file, invalid] of [[TASK_FILE, "{broken"], [PROJECT_FILE, '{"Items":[null]}']]) {
+    const rows = [];
+    for (const candidate of TASK_FILES) {
+      const oid = await git.writeBlob({ fs, gitdir: f.remote, blob: Buffer.from(candidate === file ? invalid : valid) });
+      rows.push({ path: path.posix.basename(candidate), type: "blob", mode: "100644", oid });
+    }
+    const journal = await git.writeTree({ fs, gitdir: f.remote, tree: rows });
+    const tree = await git.writeTree({ fs, gitdir: f.remote, tree: [{ path: "Journal", type: "tree", mode: "040000", oid: journal }] });
+    const parent = await git.resolveRef({ fs, gitdir: f.remote, ref: "refs/heads/main" });
+    const author = { name: "Test", email: "test@example.invalid", timestamp: 2, timezoneOffset: 0 };
+    const commit = await git.writeCommit({ fs, gitdir: f.remote, commit: { tree, parent: [parent], author, committer: author, message: "invalid task data\n" } });
+    await git.writeRef({ fs, gitdir: f.remote, ref: "refs/heads/main", value: commit, force: true });
+    await assert.rejects(a.service.preview(), /JSON|任务|项目/, file);
+    for (const candidate of TASK_FILES) assert.equal(a.read(candidate), valid);
+    assert.equal(a.service.status().pending, false);
+  }
 });
 
 test("same-file conflicts export both copies and never overwrite or push", async (t) => {
@@ -159,22 +346,29 @@ test("push succeeded but external local edit prevents apply; recovery never over
   assert.equal(a.read("preserved.md"), "edited while pushing");
 });
 
-test("partial local apply failure resumes from its journal after restart", async (t) => {
+test("partial task/project apply failure preserves backups and resumes from its journal after restart", async (t) => {
   const f = setup(t); const a = f.client("a"); let b = f.client("b");
-  a.put("one.md", "base one"); a.put("two.md", "base two"); await f.run(a); await f.run(b);
-  a.put("one.md", "new one"); a.put("two.md", "new two"); await f.run(a);
+  const initial = JSON.stringify({ SchemaVersion: 2, Items: [{ Id: "base" }] });
+  const updated = JSON.stringify({ SchemaVersion: 2, Items: [{ Id: "new" }] });
+  for (const file of TASK_FILES) a.put(file, initial);
+  await f.run(a); await f.run(b);
+  for (const file of TASK_FILES) a.put(file, updated);
+  await f.run(a);
   const preview = await b.service.preview();
   const rename = fs.renameSync;
   fs.renameSync = (source, target) => {
-    if (target === path.join(fs.realpathSync(b.root), "two.md")) throw Object.assign(new Error("disk unavailable"), { code: "EACCES" });
+    if (target === path.join(fs.realpathSync(b.root), PROJECT_FILE)) throw Object.assign(new Error("disk unavailable"), { code: "EACCES" });
     return rename(source, target);
   };
   try { await assert.rejects(b.service.sync({ previewId: preview.id }), /本地写入未完成/); }
   finally { fs.renameSync = rename; }
-  assert.equal(b.read("one.md"), "new one"); assert.equal(b.read("two.md"), "base two");
+  assert.equal(b.read(TASK_FILE), updated); assert.equal(b.read(PROJECT_FILE), initial);
+  const pending = JSON.parse(fs.readFileSync(path.join(f.folder, "b", "sync", "pending.json"), "utf8"));
+  for (const file of TASK_FILES) assert.equal(fs.readFileSync(path.join(pending.backup, "local", file), "utf8"), initial);
   b = f.client("b"); const resumed = await b.service.preview();
-  assert.deepEqual(resumed.conflicts, []); assert.deepEqual(resumed.downloads, ["two.md"]);
-  await b.service.sync({ previewId: resumed.id }); assert.equal(b.read("two.md"), "new two");
+  assert.deepEqual(resumed.conflicts, []); assert.deepEqual(resumed.downloads, [PROJECT_FILE]);
+  await b.service.sync({ previewId: resumed.id });
+  for (const file of TASK_FILES) assert.equal(b.read(file), updated);
   assert.equal(b.service.status().pending, false);
 });
 

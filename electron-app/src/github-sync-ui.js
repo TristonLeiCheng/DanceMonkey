@@ -40,6 +40,14 @@
       if (!api.githubSync) return;
       const result = await api.githubSync.status();
       if (!result.success) { error = result.error || "读取同步设置失败"; return; }
+      if (state.root !== result.root) {
+        preview = null;
+        selectedRepo = "";
+        draft = {};
+        message = "";
+        error = "";
+        awaitingRepository = false;
+      }
       if (state.auth?.login !== result.auth?.login || state.auth?.clientId !== result.auth?.clientId) {
         repositories = []; repositoriesLoaded = false; selectedRepo = "";
       }
@@ -95,7 +103,12 @@
       }, Math.max(5, Number(device.interval) || 5) * 1000);
     }
     function renderList(title, rows) {
-      return rows?.length ? `<details open><summary>${esc(title)} · ${rows.length}</summary><ul>${rows.map((row) => `<li>${esc(typeof row === "string" ? row : `${row.path}（${row.side === "local" ? "本地删除" : "远端删除"}）`)}</li>`).join("")}</ul></details>` : "";
+      return rows?.length ? `<details open><summary>${esc(title)} · ${rows.length}</summary><ul>${rows.map((row) => {
+        const path = typeof row === "string" ? row : row.path;
+        const label = path === "Journal/task-module.json" ? "任务数据 · " : path === "Journal/zentask-projects.json" ? "项目数据 · " : "";
+        const deletion = typeof row === "string" ? "" : `（${row.side === "local" ? "本地删除" : "远端删除"}）`;
+        return `<li>${esc(`${label}${path}${deletion}`)}</li>`;
+      }).join("")}</ul></details>` : "";
     }
     function render() {
       active = true;
@@ -106,7 +119,7 @@
       const field = (key, label, placeholder = "") => `<label>${esc(label)}<input data-github-field="${key}" value="${attr(draft[key] || "")}" placeholder="${attr(placeholder)}" ${disabled} autocomplete="off" /></label>`;
       return `<section class="ws-settings-card ws-github-sync" aria-busy="${busy}">
         <h2>GitHub 笔记同步 <small>本地编辑 · 多设备共享</small></h2>
-        <p class="ws-settings-desc">连接账号，选择一个私有笔记库。离线照常编辑，只有确认手动同步后才上传。</p>
+        <p class="ws-settings-desc">连接账号，选择一个私有笔记库，同步笔记、任务和项目。离线照常编辑，只有确认手动同步后才上传。</p>
         ${setupRequired ? `<dialog class="github-setup-dialog" aria-labelledby="github-setup-title"><h3 id="github-setup-title">尚未配置 GitHub 授权应用</h3><p>当前版本缺少 GitHub App 的 Client ID 或 App slug，因此还不能打开有效的授权页面。</p><p>需要开发者先在 GitHub 注册一次 App，启用 Device Flow 和 Contents 读写权限，再填写公开标识。配置后，普通用户只需点击网页授权。</p><p>这里不需要 GitHub 密码、Token 或 Client Secret。</p><div class="ws-settings-actions"><button type="button" data-module-action="github-setup-close">稍后配置</button><button class="module-primary" type="button" data-module-action="github-setup-configure">查看配置项</button></div></dialog>` : ""}
         <div class="github-steps">
           <section class="github-step ${auth.connected ? "is-complete" : ""}">
@@ -126,7 +139,7 @@
               ${repositoriesLoaded ? repositories.length ? `<label>可用的私有笔记库<select data-github-repository ${disabled}><option value="">请选择笔记库</option>${repositories.map((repo) => `<option value="${attr(repo.fullName)}" ${selectedRepo === repo.fullName ? "selected" : ""}>${esc(repo.fullName)}</option>`).join("")}</select></label><button class="module-primary" type="button" data-module-action="github-use-repository" ${disabled}>确认选择并进入同步</button><p class="ws-settings-desc">选择列表中的仓库还未完成绑定。请点击上方「确认选择并进入同步」，之后第 3 步才可预览。此操作不会上传或下载笔记。</p>` : '<p class="ws-settings-desc">暂未找到已授权且有写权限的私有仓库。请先创建、授权，再刷新；不会列出公开或只读仓库。</p>' : ""}`}
           </section>
           <section class="github-step" data-github-sync-step>
-            <h3><span class="github-step-number">3</span> 手动同步笔记</h3>
+            <h3><span class="github-step-number">3</span> 手动同步笔记、任务与项目</h3>
             <p class="ws-settings-desc" data-github-sync-hint>${!auth.connected ? "请先完成第 1 步：连接 GitHub。" : !sync.binding ? "尚未绑定笔记库：请回到第 2 步，点击「确认选择并进入同步」。" : !preview ? "笔记库已绑定。先点击「预览同步差异」，查看变更后才可确认同步。" : preview.conflicts?.length ? "存在冲突，请先处理冲突，再重新预览。" : "预览已就绪，可以确认手动同步。"}</p>
             <p class="ws-settings-desc">本地笔记库：<span class="github-path">${esc(state.root || "读取中…")}</span></p>
             <div class="ws-settings-actions"><button type="button" data-module-action="github-preview" ${busy || !auth.connected || !sync.binding ? "disabled" : ""}>预览同步差异</button><button class="module-primary" type="button" data-module-action="github-sync" ${busy || !auth.connected || !preview || preview.conflicts?.length ? "disabled" : ""}>确认并手动同步</button><button type="button" data-module-action="github-backup" ${disabled}>备份 / 冲突目录</button></div>
@@ -143,9 +156,9 @@
           <button type="button" data-module-action="github-configure" ${disabled}>保存 App 配置</button>
           <details><summary>手动指定仓库（可选）</summary><div class="form-columns">${field("owner", "仓库所有者", "owner")}${field("repo", "私有仓库名称", "notes")}${field("branch", "分支（留空使用默认分支）")}</div><button type="button" data-module-action="github-bind" ${busy || !auth.connected ? "disabled" : ""}>绑定当前笔记库</button></details>
           <button type="button" data-module-action="github-refresh" ${disabled}>刷新连接状态</button>
-          <p class="ws-settings-desc">首版不支持更换已绑定仓库、分支或本地目录。</p>
+          <p class="ws-settings-desc">可在笔记页左侧切换本地笔记库；每个库单独绑定。不支持更换某个库已绑定的仓库或分支。</p>
         </details>
-        <details><summary>同步范围与隐私说明</summary><p class="ws-settings-desc">同步 .md、.png、.jpg、.jpeg、.gif、.webp。每文件 ≤10 MiB，最多 5000 个文件 / 200 MiB。排除任务/项目 JSON、设置和隐藏目录；符号链接会阻止同步。</p><p class="ws-settings-desc">私有仓库不是端到端加密；删除的内容仍可能留在 Git 历史中。请检查截图隐私。断开连接不删除任何笔记。</p></details>
+        <details><summary>同步范围与隐私说明</summary><p class="ws-settings-desc">同步 .md、.png、.jpg、.jpeg、.gif、.webp，以及任务数据 Journal/task-module.json 和项目数据 Journal/zentask-projects.json。每文件 ≤10 MiB，最多 5000 个文件 / 200 MiB。其他 JSON、应用设置、API Key 和隐藏目录不上传；符号链接会阻止同步。</p><p class="ws-settings-desc">任务和项目按整个数据文件判断冲突；两台设备同时修改同一数据文件时会停止同步、保留双方副本，不逐条自动合并。</p><p class="ws-settings-desc">私有仓库不是端到端加密；删除的内容仍可能留在 Git 历史中。请检查截图隐私。断开连接不删除任何笔记。</p></details>
       </section>`;
     }
     async function handleAction(action) {

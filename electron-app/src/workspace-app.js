@@ -6,6 +6,7 @@
   const api = window.lumen || createBrowserApi();
   const SECTIONS = [
     ["ai", "AI"],
+    ["personas", "人物分身"],
     ["notes", "笔记"],
     ["tasks", "Zen Task"],
     ["projects", "项目"],
@@ -25,7 +26,7 @@
 
   function sectionFromHash() {
     const part = location.hash.replace(/^#workspace\/?/, "").split("/")[0];
-    return ["ai", "notes", "tasks", "projects", "links", "sync", "settings"].includes(part)
+    return ["ai", "personas", "notes", "tasks", "projects", "links", "sync", "settings"].includes(part)
       ? part
       : "notes";
   }
@@ -36,7 +37,8 @@
   let selectedPath = "";
   let content = "";
   let savedContent = "";
-  const EXPANDED_FOLDERS_KEY = "lumen-workspace-expanded-folders";
+  let vaults = [];
+  let vaultSwitching = false;
   let expanded = new Set();
   let expandedRestored = false;
   let viewMode = localStorage.getItem("lumen-workspace-view") || "split";
@@ -53,6 +55,7 @@
   let saveTimer = null;
   let saveInFlight = Promise.resolve();
   let syncPaused = false;
+  let syncDraftBlocked = false;
   let dialog = null;
   let paletteOpen = false;
   let paletteQuery = "";
@@ -454,16 +457,17 @@
   }
 
   function selectedFolder() {
+    if (!selectedPath) return "";
     const selected = flatten(tree).find((node) => node.path === selectedPath);
-    return selected?.type === "folder" ? selected.path : parentPath(activePath);
+    return selected?.type === "folder" ? selected.path : parentPath(selectedPath);
   }
 
   function persistExpanded() {
-    localStorage.setItem(EXPANDED_FOLDERS_KEY, JSON.stringify([...expanded].sort()));
+    window.DMTreeState.saveForVault(localStorage, vaultRoot, expanded);
   }
 
   function restoreExpanded() {
-    expanded = window.DMTreeState.restore(tree, localStorage.getItem(EXPANDED_FOLDERS_KEY));
+    expanded = window.DMTreeState.restoreForVault(localStorage, vaultRoot, tree);
     expandedRestored = true;
     persistExpanded();
   }
@@ -490,31 +494,47 @@
   }
 
   function renderMarkdown(value) {
-    if (!window.marked || !window.DOMPurify) return `<pre>${esc(value)}</pre>`;
-    return window.DOMPurify.sanitize(
-      window.marked.parse(value, { gfm: true, breaks: false }),
+    const source = String(value || "");
+    const metadata = source.match(/^---\r?\n((?:[\s\S]*?))\r?\n---(?:\r?\n|$)/);
+    const frontmatter = metadata && /^\w[\w-]*:\s/m.test(metadata[1]) ? metadata : null;
+    const body = frontmatter ? source.slice(frontmatter[0].length) : source;
+    const header = frontmatter ? `<details class="ws-note-metadata"><summary>笔记元数据</summary><pre>${esc(frontmatter[1])}</pre></details>` : "";
+    if (!window.marked || !window.DOMPurify) return `${header}<pre>${esc(body)}</pre>`;
+    return header + window.DOMPurify.sanitize(
+      window.marked.parse(body, { gfm: true, breaks: false }),
       { USE_PROFILES: { html: true } },
     );
+  }
+
+  function treeIcon(name) {
+    const paths = {
+      chevron: '<path d="m9 5 7 7-7 7"/>',
+      folder: '<path d="M3 7V5a1 1 0 0 1 1-1h5l2 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z"/>',
+      file: '<path d="M14 3H5v18h14V8l-5-5Z"/><path d="M14 3v5h5M8 13h8M8 17h5"/>',
+      newFile: '<path d="M13 3H5v18h14V9M13 3v6h6M17 2v6M14 5h6"/>',
+      newFolder: '<path d="M21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5l2 3h3M19 4v6M16 7h6"/>',
+      refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/>',
+      edit: '<path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-4-4L5 15l-1 5Z"/>',
+      trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/>',
+      vault: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 13h8"/>',
+    };
+    return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.folder}</svg>`;
   }
 
   function renderTreeNodes(nodes, depth = 0) {
     return nodes
       .map((node) => {
         const open = expanded.has(node.path);
-        const icon =
-          node.type === "folder"
-            ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M3.5 6.5h6l1.5 2h9.5v9H3.5Z" stroke="currentColor" stroke-width="1.4"/></svg>'
-            : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M6 3.5h8l4 4v13H6Z" stroke="currentColor" stroke-width="1.4"/><path d="M14 3.5v4h4" stroke="currentColor" stroke-width="1.4"/></svg>';
-        const row = `<div class="tree-row ${node.path === selectedPath || node.path === activePath ? "active" : ""}"
-          data-type="${node.type}" data-path="${attr(node.path)}" style="padding-left:${5 + depth * 14}px">
+        const row = `<div class="tree-row ${node.path === selectedPath ? "active" : ""} ${node.path === activePath ? "current-note" : ""}"
+          data-type="${node.type}" data-path="${attr(node.path)}" style="padding-left:${5 + depth * 16}px">
           ${node.type === "folder"
-            ? `<button class="tree-expander ${open ? "expanded" : "collapsed"}" data-action="tree-toggle" aria-label="${open ? "折叠" : "展开"}文件夹 ${attr(node.name)}" aria-expanded="${open}" title="${open ? "折叠文件夹" : "展开文件夹"}"><span aria-hidden="true">›</span></button>`
+            ? `<button class="tree-expander ${open ? "expanded" : "collapsed"}" data-action="tree-toggle" aria-label="${open ? "折叠" : "展开"}文件夹 ${attr(node.name)}" aria-expanded="${open}" title="${open ? "折叠文件夹" : "展开文件夹"}">${treeIcon("chevron")}</button>`
             : '<span class="tree-expander-placeholder" aria-hidden="true"></span>'}
-          <span class="tree-icon">${icon}</span>
+          <span class="tree-icon">${treeIcon(node.type)}</span>
           <button class="tree-name" data-action="tree-open" title="${attr(node.path)}">${esc(node.name)}</button>
           <span class="tree-actions">
-            <button class="tree-action" data-action="rename" title="重命名">✎</button>
-            <button class="tree-action danger" data-action="delete" title="删除">×</button>
+            <button class="tree-action" data-action="rename" title="重命名" aria-label="重命名 ${attr(node.name)}">${treeIcon("edit")}</button>
+            <button class="tree-action danger" data-action="delete" title="删除" aria-label="删除 ${attr(node.name)}">${treeIcon("trash")}</button>
           </span>
         </div>`;
         const children =
@@ -533,6 +553,8 @@
     const title =
       section === "ai"
         ? "AI 问答"
+        : section === "personas"
+          ? "人物分身"
         : section === "tasks"
           ? "Zen Task"
           : section === "projects"
@@ -571,13 +593,36 @@
         ${
           isNotes
             ? `<aside class="ws-sidebar">
+          <div class="ws-vault-bar">
+            <span class="ws-vault-icon">${treeIcon("vault")}</span>
+            <label class="ws-vault-label"><span>笔记库</span>
+              <select class="ws-vault-select" aria-label="切换笔记库" title="${attr(vaultRoot)}" ${vaultSwitching || !api.vaults ? "disabled" : ""}>
+                ${(vaults.length ? vaults : [{ root: vaultRoot, name: vaultRoot.split(/[\\/]/).pop() || "本地笔记库" }]).map((vault) => `<option value="${attr(vault.root)}" title="${attr(vault.root)}" ${vault.root === vaultRoot ? "selected" : ""}>${esc(vault.name)}${vaults.filter((item) => item.name === vault.name).length > 1 ? ` — ${esc(vault.root)}` : ""}</option>`).join("")}
+                ${api.vaults ? '<option value="__open-vault__">打开其他笔记库…</option>' : ""}
+              </select>
+            </label>
+            <button class="ws-tool" data-action="open-vault" title="打开或新建笔记库" aria-label="打开或新建笔记库" ${vaultSwitching || !api.vaults ? "disabled" : ""}>${treeIcon("newFolder")}</button>
+          </div>
           <div class="ws-sidebar-head">
             <strong>文件</strong>
-            <button class="ws-tool" data-action="new-file" title="新建笔记">＋</button>
-            <button class="ws-tool" data-action="new-folder" title="新建文件夹">⌑</button>
-            <button class="ws-tool" data-action="refresh" title="刷新">↻</button>
+            <button class="ws-tool" data-action="new-file" title="在所选位置新建笔记" aria-label="新建笔记">${treeIcon("newFile")}</button>
+            <button class="ws-tool" data-action="new-folder" title="在所选位置新建文件夹" aria-label="新建文件夹">${treeIcon("newFolder")}</button>
+            <button class="ws-tool" data-action="refresh" title="刷新目录树" aria-label="刷新目录树">${treeIcon("refresh")}</button>
           </div>
-          <div class="ws-tree">${renderTreeNodes(tree)}</div>
+          ${api.pkb ? `<div class="ws-sidebar-head" aria-label="个人知识库工具">
+            <button class="ws-mode" data-action="pkb-setup" title="预览并建立标准目录，不移动旧笔记">PKB 设置</button>
+            <button class="ws-mode" data-action="pkb-note" title="从模板创建笔记、日记、会议或人物档案">模板</button>
+            <button class="ws-mode" data-action="pkb-search" title="搜索笔记正文">全文搜索</button>
+          </div>` : ""}
+          <div class="ws-tree" aria-label="笔记文件目录">
+            <div class="tree-root-row ${selectedPath === "" ? "active" : ""}">
+              <button class="tree-root-name" data-action="select-root" title="选择根目录，新内容将创建在这里">${treeIcon("vault")}<span>根目录</span></button>
+              <button class="tree-action" data-action="new-root-file" title="在根目录新建笔记" aria-label="在根目录新建笔记">${treeIcon("newFile")}</button>
+              <button class="tree-action" data-action="new-root-folder" title="在根目录新建文件夹" aria-label="在根目录新建文件夹">${treeIcon("newFolder")}</button>
+            </div>
+            ${renderTreeNodes(tree)}
+            ${tree.length ? "" : '<div class="ws-tree-empty">笔记库还是空的<br>点击上方图标新建笔记或文件夹</div>'}
+          </div>
           <div class="ws-vault-path" title="${attr(vaultRoot)}">${esc(vaultRoot)}</div>
         </aside>
         <div class="ws-resizer" role="separator" aria-label="调整文件树宽度" tabindex="0"></div>
@@ -586,7 +631,7 @@
             activePath
               ? `<div class="ws-docbar">
                   <div class="ws-doc-name">${esc(activePath.split("/").pop())}</div>
-                  <span class="ws-save-state">已保存</span>
+                  <span class="ws-save-state">${content === savedContent ? "已保存" : "待保存"}</span>
                   <button class="ws-mode" data-action="note-to-tasks" title="选中文字生成候选任务；未选中时读取整篇笔记">生成项目任务</button>
                   <div class="ws-mode-group">
                     <button class="ws-mode ${viewMode === "edit" ? "active" : ""}" data-action="view" data-value="edit">编辑</button>
@@ -616,6 +661,8 @@
             ? "Markdown"
             : section === "ai"
               ? "AI Chat"
+              : section === "personas"
+                ? "人物分身"
               : section === "tasks"
                 ? "Zen Task"
                 : section === "projects"
@@ -631,6 +678,8 @@
             ? `${content.length} 字符`
             : section === "ai"
               ? "与快捷面板共用对话与配置"
+              : section === "personas"
+                ? "人物资料与对话独立保存"
               : section === "sync"
                 ? "本地 / UNC 文件夹同步"
                 : section === "settings"
@@ -654,8 +703,9 @@
   }
 
   async function setSection(next) {
-    if (syncPaused) return;
+    if (syncPaused || vaultSwitching) return;
     await saveActive();
+    if (syncPaused || vaultSwitching) return;
     if (next !== "settings") modulesInstance?.pauseGitHub?.();
     section = next;
     const hash = next === "notes" ? "#workspace" : `#workspace/${next}`;
@@ -729,6 +779,7 @@
 
   function bindShell() {
     root.onclick = async (event) => {
+      if (syncPaused || vaultSwitching) return;
       if (modulesReady && section !== "notes") {
         const handled = await modulesInstance.handleClick(event, setSection);
         if (handled) return;
@@ -736,6 +787,15 @@
       const control = event.target.closest("[data-action]");
       if (!control) return;
       const action = control.dataset.action;
+      if (syncPaused || vaultSwitching) return;
+
+      if (action === "pkb-setup") { await openPkbSetup(); return; }
+      if (action === "pkb-note") { await openPkbNote(); return; }
+      if (action === "pkb-search") { openPkbSearch(); return; }
+      if (action === "open-vault") { await changeVault(); return; }
+      if (action === "select-root") { selectedPath = ""; renderShell(); return; }
+      if (action === "new-root-file") { openDialog("file", "", "", ""); return; }
+      if (action === "new-root-folder") { openDialog("folder", "", "", ""); return; }
 
       if (action === "effect") {
         effect = control.dataset.value;
@@ -774,6 +834,9 @@
         if (action === "delete") openDialog("delete", path, type);
       }
     };
+
+    const vaultSelect = root.querySelector(".ws-vault-select");
+    if (vaultSelect) vaultSelect.onchange = () => void changeVault(vaultSelect.value === "__open-vault__" ? undefined : vaultSelect.value);
 
     const themeSelect = root.querySelector(".ws-theme-select");
     if (themeSelect) {
@@ -883,18 +946,71 @@
     }
   }
 
-  async function refreshTree(preferredPath = null) {
-    const result = await api.workspace.list();
+  function applyTree(result) {
+    const changed = vaultRoot !== result.root;
+    if (changed) {
+      if (vaultRoot) persistExpanded();
+      activePath = null;
+      selectedPath = "";
+      content = "";
+      savedContent = "";
+      expandedRestored = false;
+      closeDialog();
+      closePalette();
+    }
     tree = result.tree;
     vaultRoot = result.root;
     reconcileExpanded();
-    if (preferredPath) selectedPath = preferredPath;
+    return changed;
+  }
+
+  async function loadVaults() {
+    if (api.vaults) {
+      const result = await api.vaults.list();
+      if (result.success === false) throw new Error(result.error || "无法加载笔记库");
+      vaults = result.vaults;
+    }
+  }
+
+  async function changeVault(target) {
+    if (!api.vaults || syncPaused || vaultSwitching || target === vaultRoot) return;
+    vaultSwitching = true;
+    root.inert = true;
+    try {
+      await saveActive();
+      persistExpanded();
+      const result = target ? await api.vaults.select(target) : await api.vaults.open();
+      if (result.success === false && !result.canceled) throw new Error(result.error || "切换笔记库失败");
+      await loadVaults();
+      await reloadSyncedNotes();
+    } catch (error) {
+      // A renderer reload can fail after the main process has committed the switch.
+      // Reconcile with the actual root instead of leaving an old document writable.
+      try { await reloadSyncedNotes(); } catch {}
+      alert(error?.message || "切换笔记库失败，请重试");
+    } finally {
+      vaultSwitching = false;
+      root.inert = syncPaused;
+      renderShell();
+    }
+  }
+
+  async function refreshTree(preferredPath = null) {
+    const origin = vaultRoot;
+    const result = await api.workspace.list();
+    if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
+    const changed = applyTree(result);
+    if (preferredPath && !changed) selectedPath = preferredPath;
     renderShell();
   }
 
   async function openFile(path) {
+    if (syncPaused || vaultSwitching) return;
+    const origin = vaultRoot;
     await saveActive();
+    if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
     const nextContent = await api.workspace.read(path);
+    if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
     activePath = path;
     selectedPath = path;
     content = nextContent;
@@ -918,10 +1034,13 @@
   }
 
   async function reloadSyncedNotes() {
-    const result = await api.workspace.list();
-    tree = result.tree;
-    vaultRoot = result.root;
-    reconcileExpanded();
+    const changed = applyTree(await api.workspace.list());
+    if (changed) {
+      await loadVaults();
+      if (modulesReady) await modulesInstance.reloadVault();
+    } else if (modulesReady) {
+      await modulesInstance.reloadSyncedTasks();
+    }
     if (activePath && content === savedContent) {
       if (flatten(tree, "file").some((file) => file.path === activePath)) {
         content = await api.workspace.read(activePath);
@@ -940,19 +1059,158 @@
     if (phase === "prepare") {
       syncPaused = true;
       root.inert = true;
+      syncDraftBlocked = false;
+      try {
+        if (root.querySelector(".ws-note-task-dialog [data-candidate]")) {
+          throw new Error("请先完成或关闭从笔记生成任务的窗口。");
+        }
+        if (modulesReady) modulesInstance.prepareSync();
+      } catch (error) {
+        syncDraftBlocked = true;
+        throw error;
+      }
+      closeDialog();
+      closePalette();
       await saveActive();
     } else {
       try {
+        // A rejected prepare never changes the vault. Keep its unsaved form DOM.
+        if (syncDraftBlocked) return;
         await reloadSyncedNotes();
+      } catch (error) {
+        // Never leave a saved document from an unknown root writable after a switch.
+        // A dirty draft means prepare failed, so the main process kept the old vault.
+        if (content === savedContent) {
+          activePath = null;
+          selectedPath = "";
+          content = "";
+          savedContent = "";
+          tree = [];
+          renderShell();
+        }
+        throw error;
       } finally {
+        syncDraftBlocked = false;
         syncPaused = false;
-        root.inert = false;
+        root.inert = vaultSwitching;
       }
     }
   });
 
-  function openDialog(kind, target = "", targetType = "") {
-    dialog = { kind, target, targetType };
+  async function openPkbSetup() {
+    if (!api.pkb || syncPaused || vaultSwitching) return;
+    closePalette();
+    const origin = vaultRoot;
+    try {
+      await saveActive();
+      const plan = await api.pkb.preview(origin);
+      if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
+      closeDialog();
+      dialog = { kind: "pkb" };
+      root.insertAdjacentHTML("beforeend", `<div class="ws-dialog-backdrop"><div class="ws-dialog ws-pkb-dialog" role="dialog" aria-modal="true" aria-label="PKB 设置">
+        <strong>${plan.status.initialized ? "PKB 已启用 · 补齐目录与模板" : "建立长期个人知识库"}</strong>
+        <p>只新增缺少的文件，不覆盖、不搬迁现有笔记。旧任务和项目 JSON 保留原位。</p>
+        <p>80_Vault 不是加密保险库。敏感原件请使用独立加密存储；保护目录有文件时会阻止整个同步。</p>
+        <p>${plan.directories.length} 个待建目录 · ${plan.files.length} 个待建文件</p>
+        <div class="ws-pkb-plan">${[...plan.warnings, ...plan.directories, ...plan.files].map((item) => `<div>${esc(item)}</div>`).join("")}</div>
+        <div class="ws-dialog-actions"><button class="ws-btn" data-pkb="cancel">取消</button><button class="ws-btn primary" data-pkb="initialize">确认并建立</button></div>
+      </div></div>`);
+      root.querySelector('[data-pkb="cancel"]').onclick = closeDialog;
+      root.querySelector('[data-pkb="initialize"]').onclick = async () => {
+        if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
+        closeDialog();
+        try {
+          const result = await api.pkb.initialize(origin);
+          if (result.canceled || syncPaused || vaultSwitching || origin !== vaultRoot) return;
+          await refreshTree();
+          expandAncestors("_System/index.md");
+          await openFile("_System/index.md");
+        } catch (error) { alert(error?.message || "PKB 初始化失败，原笔记未搬迁"); }
+      };
+    } catch (error) { alert(error?.message || "无法预览 PKB 初始化"); }
+  }
+
+  async function openPkbNote() {
+    if (!api.pkb || syncPaused || vaultSwitching) return;
+    closePalette();
+    const origin = vaultRoot;
+    try {
+      const plan = await api.pkb.preview(origin);
+      if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
+      if (!plan.status.initialized) { await openPkbSetup(); return; }
+      closeDialog();
+      dialog = { kind: "pkb-note" };
+      root.insertAdjacentHTML("beforeend", `<div class="ws-dialog-backdrop"><div class="ws-dialog" role="dialog" aria-modal="true" aria-label="模板笔记">
+        <strong>从模板创建</strong>
+        <label class="ws-create-location">类型<select class="ws-pkb-type"><option value="note">知识笔记</option><option value="daily">日记</option><option value="meeting">会议记录</option><option value="person">人物档案</option><option value="project">项目概览文档</option></select></label>
+        <input class="ws-dialog-input" aria-label="笔记标题" placeholder="输入标题" />
+        <p>包含稳定 ID、类型、日期和敏感等级。项目模板仅创建文档，不会新增任务模块中的项目。</p>
+        <div class="ws-dialog-actions"><button class="ws-btn" data-pkb="cancel">取消</button><button class="ws-btn primary" data-pkb="create">创建</button></div>
+      </div></div>`);
+      root.querySelector('[data-pkb="cancel"]').onclick = closeDialog;
+      root.querySelector('[data-pkb="create"]').onclick = async () => {
+        const title = root.querySelector(".ws-dialog-input")?.value.trim();
+        const type = root.querySelector(".ws-pkb-type")?.value;
+        if (!title || syncPaused || vaultSwitching || origin !== vaultRoot) return;
+        const button = root.querySelector('[data-pkb="create"]');
+        button.disabled = true;
+        try {
+          await saveActive();
+          if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
+          const result = await api.pkb.createNote({ root: origin, type, title });
+          if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
+          closeDialog();
+          expandAncestors(result.path);
+          await refreshTree(result.path);
+          await openFile(result.path);
+        } catch (error) { alert(error?.message || "模板笔记创建失败"); }
+        finally { button.disabled = false; }
+      };
+      root.querySelector(".ws-dialog-input").focus();
+    } catch (error) { alert(error?.message || "无法读取 PKB 配置"); }
+  }
+
+  function openPkbSearch() {
+    if (!api.pkb || syncPaused || vaultSwitching) return;
+    closeDialog();
+    closePalette();
+    paletteOpen = true;
+    const origin = vaultRoot;
+    root.insertAdjacentHTML("beforeend", `<div class="ws-palette-backdrop"><div class="ws-palette" role="dialog" aria-modal="true" aria-label="全文搜索">
+      <input class="ws-palette-input" aria-label="全文搜索关键词" placeholder="输入关键词，按 Enter 搜索正文" />
+      <div class="ws-palette-list"><div class="palette-item">本地全文搜索，不发送给 AI。最多显示 100 条；跳过保险库、隐藏目录和超大文件。</div></div>
+    </div></div>`);
+    const backdrop = root.querySelector(".ws-palette-backdrop");
+    const input = backdrop.querySelector(".ws-palette-input");
+    const list = backdrop.querySelector(".ws-palette-list");
+    let request = 0;
+    input.focus();
+    input.onkeydown = async (event) => {
+      if (event.key !== "Enter") return;
+      const query = input.value.trim();
+      const current = ++request;
+      if (!query) { list.textContent = "请输入关键词"; return; }
+      list.textContent = "正在搜索…";
+      try {
+        await saveActive();
+        if (syncPaused || vaultSwitching || origin !== vaultRoot || !backdrop.isConnected) return;
+        const results = await api.pkb.search(origin, query);
+        if (current !== request || !backdrop.isConnected || origin !== vaultRoot) return;
+        list.innerHTML = results.length ? results.map((item) => `<button class="palette-item" data-palette-path="${attr(item.path)}">${esc(item.title)}<small>${esc(item.path)}</small><small>${esc(item.snippet)}</small></button>`).join("") : '<div class="palette-item">未找到匹配内容</div>';
+      } catch (error) { if (backdrop.isConnected && current === request) list.textContent = error?.message || "搜索失败"; }
+    };
+    backdrop.onclick = async (event) => {
+      if (event.target === backdrop) { closePalette(); return; }
+      const item = event.target.closest("[data-palette-path]");
+      if (item && origin === vaultRoot && !syncPaused && !vaultSwitching) {
+        closePalette();
+        await openFile(item.dataset.palettePath);
+      }
+    };
+  }
+
+  function openDialog(kind, target = "", targetType = "", parent = selectedFolder()) {
+    dialog = { kind, target, targetType, parent };
     const isDelete = kind === "delete";
     const labels = {
       file: "新建 Markdown 笔记",
@@ -963,8 +1221,9 @@
     root.insertAdjacentHTML(
       "beforeend",
       `<div class="ws-dialog-backdrop">
-        <div class="ws-dialog">
+        <div class="ws-dialog" role="dialog" aria-modal="true" aria-label="${labels[kind]}">
           <strong>${labels[kind]}</strong>
+          ${["file", "folder"].includes(kind) ? `<label class="ws-create-location">创建位置<select class="ws-parent-select" aria-label="创建位置"><option value="">根目录</option>${flatten(tree, "folder").map((folder) => `<option value="${attr(folder.path)}" ${folder.path === parent ? "selected" : ""}>${esc(folder.path)}</option>`).join("")}</select></label>` : ""}
           ${
             isDelete
               ? `<div>将删除「${esc(target.split("/").pop())}」${targetType === "folder" ? "及其全部子项" : ""}，此操作不可恢复。</div>`
@@ -1003,45 +1262,51 @@
   }
 
   async function confirmDialog() {
-    if (!dialog) return;
+    if (!dialog || syncPaused || vaultSwitching) return;
     const current = dialog;
     const value = root.querySelector(".ws-dialog-input")?.value.trim();
+    const parent = root.querySelector(".ws-parent-select")?.value ?? current.parent;
+    if (current.kind !== "delete" && !value) return;
+    const origin = vaultRoot;
     closeDialog();
-    let nextPath = null;
+    try {
+      await saveActive();
+      if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
+      let nextPath = null;
+      if (current.kind === "file") nextPath = await api.workspace.createFile(parent, value);
+      if (current.kind === "folder") nextPath = await api.workspace.createFolder(parent, value);
+      if (current.kind === "rename") nextPath = await api.workspace.rename(current.target, value);
+      if (current.kind === "delete") await api.workspace.remove(current.target);
+      if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
 
-    if (current.kind === "file" && value) {
-      nextPath = await api.workspace.createFile(selectedFolder(), value);
-      expandAncestors(nextPath);
-      await refreshTree(nextPath);
-      await openFile(nextPath);
-    }
-    if (current.kind === "folder" && value) {
-      nextPath = await api.workspace.createFolder(selectedFolder(), value);
-      expanded.add(nextPath);
-      expandAncestors(nextPath);
-      await refreshTree(nextPath);
-    }
-    if (current.kind === "rename" && value) {
-      nextPath = await api.workspace.rename(current.target, value);
-      if (current.targetType === "folder") {
-        expanded = window.DMTreeState.remap(expanded, current.target, nextPath);
-        persistExpanded();
+      if (current.kind === "file" || current.kind === "folder") {
+        if (current.kind === "folder") expanded.add(nextPath);
+        expandAncestors(nextPath);
+        await refreshTree(nextPath);
+        if (current.kind === "file") await openFile(nextPath);
       }
-      if (activePath === current.target) activePath = nextPath;
-      if (activePath?.startsWith(`${current.target}/`)) {
-        activePath = `${nextPath}${activePath.slice(current.target.length)}`;
+      if (current.kind === "rename") {
+        if (current.targetType === "folder") {
+          expanded = window.DMTreeState.remap(expanded, current.target, nextPath);
+          persistExpanded();
+        }
+        if (activePath === current.target) activePath = nextPath;
+        if (activePath?.startsWith(`${current.target}/`)) {
+          activePath = `${nextPath}${activePath.slice(current.target.length)}`;
+        }
+        await refreshTree(nextPath);
       }
-      await refreshTree(nextPath);
-    }
-    if (current.kind === "delete") {
-      await api.workspace.remove(current.target);
-      if (activePath === current.target || activePath?.startsWith(`${current.target}/`)) {
-        activePath = null;
-        content = "";
-        savedContent = "";
+      if (current.kind === "delete") {
+        if (activePath === current.target || activePath?.startsWith(`${current.target}/`)) {
+          activePath = null;
+          content = "";
+          savedContent = "";
+        }
+        selectedPath = "";
+        await refreshTree();
       }
-      selectedPath = "";
-      await refreshTree();
+    } catch (error) {
+      alert(error?.message || "文件操作失败，请重试");
     }
   }
 
@@ -1096,7 +1361,7 @@
   }
 
   window.addEventListener("keydown", async (event) => {
-    if (syncPaused) { event.preventDefault(); return; }
+    if (syncPaused || vaultSwitching) { event.preventDefault(); return; }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
       await saveActive();
@@ -1121,7 +1386,8 @@
 
   // 快速便签中新建、编辑或改名后，完整笔记即时同步对应文件
   api.onWorkspaceChanged?.((change = {}) => {
-    if (syncPaused) return;
+    if (syncPaused || vaultSwitching) return;
+    const origin = vaultRoot;
     void (async () => {
       for (const item of change.renames || []) {
         expanded = window.DMTreeState.remap(expanded, item.from, item.to);
@@ -1133,8 +1399,12 @@
         selectedPath = rename.to;
       }
       await refreshTree(activePath);
+      if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
       if (activePath && content === savedContent) {
-        content = await api.workspace.read(activePath);
+        const target = activePath;
+        const nextContent = await api.workspace.read(target);
+        if (syncPaused || vaultSwitching || origin !== vaultRoot || activePath !== target || content !== savedContent) return;
+        content = nextContent;
         savedContent = content;
         renderShell();
       }
@@ -1171,10 +1441,8 @@
       },
     });
     modulesReady = Boolean(modulesInstance);
-    const result = await api.workspace.list();
-    tree = result.tree;
-    vaultRoot = result.root;
-    restoreExpanded();
+    await loadVaults();
+    applyTree(await api.workspace.list());
     const first = flatten(tree, "file")[0];
     if (first) {
       activePath = first.path;

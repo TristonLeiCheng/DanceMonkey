@@ -1,13 +1,17 @@
 {
   "name": "dance-monkey",
   "productName": "DanceMonkey",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "private": true,
   "description": "DM (DanceMonkey) 桌面磨砂玻璃笔记与待办",
   "main": "electron/main.js",
   "scripts": {
     "test": "node --test test/*.test.js",
     "test:e2e": "node test/e2e-ui.mjs",
+    "test:e2e:ai": "node test/e2e-ai.mjs",
+    "test:e2e:personas": "node test/e2e-personas.mjs",
+    "test:e2e:outlook": "node test/e2e-outlook.mjs",
+    "test:e2e:screenshot": "node test/e2e-screenshot.mjs",
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "desktop": "node desktop.mjs",
@@ -24,7 +28,9 @@
     "electron": "^44.4.1"
   },
   "dependencies": {
+    "@azure/msal-node": "^7.1.1",
     "dompurify": "^3.4.15",
+    "htmlparser2": "^10.1.0",
     "isomorphic-git": "^1.44.3",
     "marked": "^18.0.13",
     "undici": "^7.29.1"

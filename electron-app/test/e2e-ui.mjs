@@ -4,10 +4,27 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+const { createPkb } = createRequire(import.meta.url)("../electron/pkb");
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "dm-ui-e2e-"));
 const cwd = path.resolve(import.meta.dirname, "..");
 const children = [];
+const secondVault = path.join(root, "个人笔记库");
+fs.mkdirSync(path.join(secondVault, "工作资料/会议记录"), { recursive: true });
+fs.mkdirSync(path.join(secondVault, "仅B目录"));
+fs.writeFileSync(path.join(secondVault, "工作资料/会议记录/本周计划.md"), "B 库独立内容");
+const firstVault = path.join(root, "documents", "NoteVault");
+fs.mkdirSync(firstVault, { recursive: true });
+const configDirectory = path.join(root, "app-data", "DanceMonkey");
+fs.mkdirSync(configDirectory, { recursive: true });
+fs.writeFileSync(path.join(configDirectory, "config.json"), JSON.stringify({
+  notesRootPath: fs.realpathSync(firstVault),
+  notesVaults: [
+    { root: fs.realpathSync(firstVault), name: "工作笔记库" },
+    { root: fs.realpathSync(secondVault), name: "个人笔记库" },
+  ],
+}));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function freePort() {
@@ -83,9 +100,10 @@ try {
     };
   };
   await connect(target.webSocketDebuggerUrl);
-  const send = (method, params = {}) => new Promise((resolve) => {
+  const send = (method, params = {}) => new Promise((resolve, reject) => {
     const id = ++serial;
-    pending.set(id, resolve);
+    const timeout = setTimeout(() => { pending.delete(id); reject(new Error(`CDP request timed out: ${method}`)); }, 20000);
+    pending.set(id, (response) => { clearTimeout(timeout); resolve(response); });
     socket.send(JSON.stringify({ id, method, params }));
   });
   const evaluate = async (expression) => {
@@ -109,14 +127,37 @@ try {
   assert.equal(await evaluate(`document.querySelectorAll(".ws-theme-select option").length >= 6`), true);
   assert.equal(await evaluate(`(()=>{const button=document.querySelector('.tree-expander'); return button?.tagName === 'BUTTON' && button.getAttribute('aria-expanded') === 'true' && button.getAttribute('aria-label').includes('折叠文件夹')})()`), true);
   await evaluate(`document.querySelector('.tree-expander').click()`);
-  assert.equal(await evaluate(`JSON.parse(localStorage.getItem("lumen-workspace-expanded-folders")).length === 0 && document.querySelector('.tree-expander').getAttribute('aria-expanded') === 'false'`), true);
+  assert.equal(await evaluate(`JSON.parse(localStorage.getItem(window.DMTreeState.storageKey(document.querySelector('.ws-vault-path').title))).length === 0 && document.querySelector('.tree-expander').getAttribute('aria-expanded') === 'false'`), true);
   await evaluate(`window.__e2eBeforeReload = true; location.reload()`);
   await waitFor(() => evaluate(`!window.__e2eBeforeReload && document.readyState === "complete" && document.querySelector('.tree-expander')?.getAttribute('aria-expanded') === 'false'`), { process: electron });
   await evaluate(`(()=>{const button=document.querySelector('.tree-expander'); button.focus(); button.click()})()`);
-  assert.equal(await evaluate(`document.querySelector('.tree-expander').getAttribute('aria-expanded') === 'true' && JSON.parse(localStorage.getItem("lumen-workspace-expanded-folders")).length === 1`), true);
+  assert.equal(await evaluate(`document.querySelector('.tree-expander').getAttribute('aria-expanded') === 'true' && JSON.parse(localStorage.getItem(window.DMTreeState.storageKey(document.querySelector('.ws-vault-path').title))).length === 1`), true);
   assert.equal(await evaluate(`Boolean(document.querySelector('.tree-name[data-action="tree-open"]'))`), true);
+  assert.equal(await evaluate(`Boolean(document.querySelector('.tree-expander svg')) && getComputedStyle(document.querySelector('.tree-expander')).borderTopWidth === '0px'`), true);
+  // A selected nested folder must not prevent explicit creation at the vault root.
+  await evaluate(`document.querySelector('.tree-row[data-type="folder"] .tree-name').click(); document.querySelector('[data-action="new-root-folder"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('.ws-parent-select').value`), "");
+  await evaluate(`document.querySelector('.ws-dialog-input').value = '工作资料'; document.querySelector('[data-dialog="confirm"]').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('.tree-row[data-path="工作资料"]'))`), { process: electron });
+  await evaluate(`document.querySelector('[data-action="new-folder"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('.ws-parent-select').value`), "工作资料");
+  await evaluate(`document.querySelector('.ws-dialog-input').value = '会议记录'; document.querySelector('[data-dialog="confirm"]').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('.tree-row[data-path="工作资料/会议记录"]'))`), { process: electron });
+  await evaluate(`document.querySelector('[data-action="new-file"]').click(); document.querySelector('.ws-dialog-input').value = '本周计划'; document.querySelector('[data-dialog="confirm"]').click()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-doc-name')?.textContent === '本周计划.md'`), { process: electron });
+  await evaluate(`document.querySelector('[data-action="select-root"]').click(); document.querySelector('[data-action="new-folder"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('.ws-parent-select').value`), "");
+  await evaluate(`document.querySelector('[data-dialog="cancel"]').click()`);
+  if (process.env.DM_E2E_NOTES_SCREENSHOT) {
+    const capture = await send("Page.captureScreenshot", { format: "png" });
+    fs.writeFileSync(process.env.DM_E2E_NOTES_SCREENSHOT, Buffer.from(capture.result.data, "base64"));
+  }
   await evaluate(`(()=>{ const select=document.querySelector(".ws-theme-select"); select.value="frost-green"; select.dispatchEvent(new Event("change",{bubbles:true})); const opacity=document.querySelector(".ws-opacity"); opacity.value="67"; opacity.dispatchEvent(new Event("input",{bubbles:true})); opacity.dispatchEvent(new Event("change",{bubbles:true})); })()`);
   assert.equal(await evaluate(`localStorage.getItem("lumen-workspace-theme") === "frost-green" && localStorage.getItem("lumen-workspace-opacity") === "67"`), true);
+  if (process.env.DM_E2E_NOTES_LIGHT_SCREENSHOT) {
+    const capture = await send("Page.captureScreenshot", { format: "png" });
+    fs.writeFileSync(process.env.DM_E2E_NOTES_LIGHT_SCREENSHOT, Buffer.from(capture.result.data, "base64"));
+  }
   await evaluate(`document.querySelector('[data-action="maximize"]').click()`);
   await waitFor(() => evaluate(`document.querySelector(".workspace-root").classList.contains("maximized")`), { process: electron });
   assert.equal(await evaluate(`getComputedStyle(document.querySelector(".workspace-root")).padding === "0px"`), true);
@@ -155,6 +196,32 @@ try {
   assert.equal(await evaluate(`document.getElementById('root').inert`), false);
   assert.equal(await evaluate(`document.querySelector('.ws-editor').value`), "GitHub flush test");
   assert.equal(await evaluate(`document.querySelector('.ws-save-state').textContent`), "已保存");
+  // Model downloaded JSON on disk, then run the real editor resume handshake.
+  // The unbound preview still prepares/resumes both windows without contacting GitHub.
+  await evaluate(`document.querySelector('[data-action="section"][data-value="projects"]').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('.pm-task-title'))`), { process: electron });
+  const syncedTaskFile = path.join(githubState.root, "Journal", "task-module.json");
+  const syncedProjectFile = path.join(githubState.root, "Journal", "zentask-projects.json");
+  const syncedTasks = JSON.parse(fs.readFileSync(syncedTaskFile, "utf8"));
+  const syncedProjects = JSON.parse(fs.readFileSync(syncedProjectFile, "utf8"));
+  syncedTasks.Items[0].Title = "另一设备更新的任务";
+  syncedProjects.Items[0].Name = "另一设备更新的项目";
+  fs.writeFileSync(syncedTaskFile, JSON.stringify(syncedTasks));
+  fs.writeFileSync(syncedProjectFile, JSON.stringify(syncedProjects));
+  const refreshedTasks = await evaluate(`window.lumen.githubSync.preview()`);
+  assert.match(refreshedTasks.error, /绑定/);
+  assert.equal(await evaluate(`document.body.textContent.includes('另一设备更新的项目') && document.body.textContent.includes('另一设备更新的任务') && Boolean(document.querySelector('.pm-task-title'))`), true);
+
+  // A sync requested while a task form is open must preserve its unsaved DOM draft.
+  await evaluate(`document.querySelector('.pm-task-title').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('form.module-modal input[name="title"]'))`), { process: electron });
+  await evaluate(`window.__taskDraftInput = document.querySelector('form.module-modal input[name="title"]'); window.__taskDraftInput.value = '尚未保存的任务草稿'; window.__taskDraftInput.dispatchEvent(new Event('input',{bubbles:true}));`);
+  const blockedTaskDraft = await evaluate(`window.lumen.githubSync.preview()`);
+  assert.equal(blockedTaskDraft.success, false);
+  assert.match(blockedTaskDraft.error, /任务\/项目编辑/);
+  assert.equal(await evaluate(`document.querySelector('form.module-modal input[name="title"]') === window.__taskDraftInput && window.__taskDraftInput.value === '尚未保存的任务草稿' && !document.getElementById('root').inert`), true);
+  assert.equal(fs.readFileSync(syncedTaskFile, "utf8").includes("尚未保存的任务草稿"), false);
+  await evaluate(`document.querySelector('[data-module-action="close-modal"]').click()`);
   await evaluate(`document.querySelector('[data-action="section"][data-value="settings"]').click()`);
   await waitFor(() => evaluate(`document.body.textContent.includes('GitHub 笔记同步')`), { process: electron });
   assert.equal(await evaluate(`document.body.textContent.includes('Client ID')`), true);
@@ -178,7 +245,79 @@ try {
   assert.equal(configured.auth.connected, false);
   assert.equal(await evaluate(`document.querySelector('[data-module-action="github-connect"]').disabled`), false);
   assert.equal(await evaluate(`document.querySelector('[data-module-action="github-preview"]').disabled`), true);
-  console.log(`UI E2E passed on isolated ports ${serverPort}/${debugPort}: notes/projects, GitHub settings and editor flush/resume (no remote access)`);
+  // Switch through the real dropdown; same relative names must never carry content or tree state across vaults.
+  await evaluate(`document.querySelector('[data-action="section"][data-value="notes"]').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('.ws-vault-select'))`), { process: electron });
+  const vaultList = await evaluate(`window.lumen.vaults.list()`);
+  const originalRoot = vaultList.activeRoot;
+  const otherRoot = vaultList.vaults.find((vault) => vault.root !== originalRoot)?.root;
+  assert.ok(otherRoot, "the isolated fixture must register a second vault");
+  const notePath = "工作资料/会议记录/本周计划.md";
+  await evaluate(`window.lumen.setState({ notes: [{ id: 'vault-a-quick-note', notebookId: 'inbox', title: 'A 库便签', body: '只属于 A 库', updatedAt: Date.now() }], activeNoteId: 'vault-a-quick-note' })`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-doc-name')?.textContent === '本周计划.md' && Boolean(document.querySelector('.tree-row[data-path="Journal"]'))`), { process: electron });
+  const originalExpanded = await evaluate(`localStorage.getItem(window.DMTreeState.storageKey(${JSON.stringify(originalRoot)}))`);
+  await evaluate(`(()=>{ const editor=document.querySelector('.ws-editor'); editor.value='A 库切换前未保存的内容'; editor.dispatchEvent(new Event('input',{bubbles:true})); const select=document.querySelector('.ws-vault-select'); select.value=${JSON.stringify(otherRoot)}; select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-vault-path')?.title === ${JSON.stringify(otherRoot)} && !document.getElementById('root').inert`), { process: electron });
+  assert.equal(fs.readFileSync(path.join(originalRoot, notePath), "utf8"), "A 库切换前未保存的内容");
+  assert.equal(await evaluate(`Boolean(document.querySelector('.ws-editor'))`), false);
+  assert.equal(await evaluate(`Boolean(document.querySelector('.tree-row[data-path="仅B目录"]'))`), true);
+  const otherState = await evaluate(`window.lumen.githubSync.status()`);
+  assert.equal(otherState.root, otherRoot);
+  assert.equal(otherState.sync.binding, null);
+  assert.equal((await evaluate(`window.lumen.zenTask.load()`)).tasks.length, 0);
+  assert.equal((await evaluate(`window.lumen.getState()`)).notes.length, 0);
+  await evaluate(`document.querySelector('.tree-row[data-path="工作资料/会议记录"] .tree-expander').click()`);
+  await evaluate(`document.querySelector(${JSON.stringify(`.tree-row[data-path="${notePath}"] .tree-name`)}).click()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-editor')?.value === 'B 库独立内容'`), { process: electron });
+  await evaluate(`document.querySelector('.tree-row[data-path="工作资料"] .tree-expander').click()`);
+  const otherExpanded = await evaluate(`localStorage.getItem(window.DMTreeState.storageKey(${JSON.stringify(otherRoot)}))`);
+  await evaluate(`(()=>{const select=document.querySelector('.ws-vault-select'); select.value=${JSON.stringify(originalRoot)}; select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-vault-path')?.title === ${JSON.stringify(originalRoot)} && !document.getElementById('root').inert`), { process: electron });
+  assert.equal(await evaluate(`localStorage.getItem(window.DMTreeState.storageKey(${JSON.stringify(originalRoot)}))`), originalExpanded);
+  assert.equal(await evaluate(`Boolean(document.querySelector('.tree-row[data-path="仅B目录"]'))`), false);
+  assert.equal((await evaluate(`window.lumen.zenTask.load()`)).tasks.length, 2);
+  const restoredNotes = (await evaluate(`window.lumen.getState()`)).notes;
+  assert.equal(restoredNotes.length, 1);
+  assert.equal(restoredNotes[0].body, "只属于 A 库");
+  await evaluate(`document.querySelector(${JSON.stringify(`.tree-row[data-path="${notePath}"] .tree-name`)}).click()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-editor')?.value === 'A 库切换前未保存的内容'`), { process: electron });
+  await evaluate(`(()=>{const select=document.querySelector('.ws-vault-select'); select.value=${JSON.stringify(otherRoot)}; select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-vault-path')?.title === ${JSON.stringify(otherRoot)} && !document.getElementById('root').inert`), { process: electron });
+  assert.equal(await evaluate(`localStorage.getItem(window.DMTreeState.storageKey(${JSON.stringify(otherRoot)}))`), otherExpanded);
+  assert.equal(await evaluate(`document.querySelector('.tree-row[data-path="工作资料"] .tree-expander').getAttribute('aria-expanded')`), "false");
+  assert.equal(fs.readFileSync(path.join(otherRoot, notePath), "utf8"), "B 库独立内容");
+  await evaluate(`window.__vaultReload = true; location.reload()`);
+  await waitFor(() => evaluate(`!window.__vaultReload && document.querySelector('.ws-vault-path')?.title === ${JSON.stringify(otherRoot)}`), { process: electron });
+  assert.equal(await evaluate(`document.querySelector('.tree-row[data-path="工作资料"] .tree-expander').getAttribute('aria-expanded')`), "false");
+  // PKB setup preview is non-mutating. Seed only the isolated fixture, never bypass production confirmation.
+  await evaluate(`document.querySelector('[data-action="pkb-setup"]').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('[data-pkb="initialize"]'))`), { process: electron });
+  assert.equal(fs.existsSync(path.join(otherRoot, "_System/pkb.json")), false);
+  await evaluate(`document.querySelector('[data-pkb="cancel"]').click()`);
+  createPkb(otherRoot).initialize();
+  await evaluate(`document.querySelector('[data-action="refresh"]').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('.tree-row[data-path="30_Knowledge"]'))`), { process: electron });
+  await evaluate(`document.querySelector('[data-action="pkb-note"]').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('.ws-pkb-type'))`), { process: electron });
+  await evaluate(`(()=>{document.querySelector('.ws-dialog-input').value='PKB 验收';document.querySelector('[data-pkb="create"]').click();})()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-editor')?.value.includes('PKB 验收')`), { process: electron });
+  const createdText = await evaluate(`document.querySelector('.ws-editor').value`);
+  assert.match(createdText, /id:/);
+  assert.match(createdText, /sensitivity:/);
+  await evaluate(`(()=>{const e=document.querySelector('.ws-editor');e.value+='\\n正文唯一检索词 pkb-body-needle';e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'s',ctrlKey:true,bubbles:true}))`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-save-state')?.textContent === '已保存'`), { process: electron });
+  await evaluate(`document.querySelector('[data-action="pkb-search"]').click()`);
+  await evaluate(`(()=>{const e=document.querySelector('.ws-palette-input');e.value='pkb-body-needle';e.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));})()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('[data-palette-path]'))`), { process: electron });
+  assert.equal(await evaluate(`document.querySelector('.ws-palette-list').textContent.includes('pkb-body-needle')`), true);
+  await evaluate(`document.querySelector('[data-palette-path]').click()`);
+  await waitFor(() => evaluate(`!document.querySelector('.ws-palette-backdrop') && document.querySelector('.ws-editor')?.value.includes('pkb-body-needle')`), { process: electron });
+  if (process.env.DM_E2E_PKB_SCREENSHOT) {
+    const capture = await send("Page.captureScreenshot", { format: "png" });
+    fs.writeFileSync(process.env.DM_E2E_PKB_SCREENSHOT, Buffer.from(capture.result.data, "base64"));
+  }
+  console.log(`UI E2E passed on isolated ports ${serverPort}/${debugPort}: root creation, notes/projects, per-vault state, GitHub settings, PKB preview/templates/full-text search (no remote access)`);
 } finally {
   try { socket?.close(); } catch {}
   for (const record of children.reverse()) await stop(record);

@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function preload() {
+function preload(pendingChannel = "workspace:write") {
   let api;
   const listeners = new Map();
   const calls = [];
@@ -14,7 +14,7 @@ function preload() {
     invoke: async (channel, ...args) => {
       calls.push([channel, ...args]);
       if (channel === "githubSync:generation") return 4;
-      if (channel === "workspace:write") return new Promise((resolve) => { finishWrite = resolve; });
+      if (channel === pendingChannel) return new Promise((resolve) => { finishWrite = resolve; });
       return {};
     },
     on: (channel, cb) => listeners.set(channel, cb),
@@ -41,6 +41,50 @@ test("preload editor prepare acknowledgement waits for all in-flight note IPC wr
   assert.equal(harness.sent[0][0], "githubSync:editor-ready");
   assert.equal(harness.sent[0][1].id, "operation");
   assert.equal(harness.calls.find(([channel]) => channel === "workspace:write")[3], 4);
+});
+
+test("vault switches are not tracked as writes but task mutations are", async () => {
+  const switching = preload("vaults:select");
+  switching.api.githubSync.onEditor(async () => {});
+  const change = switching.api.vaults.select("/B");
+  await new Promise(setImmediate);
+  await switching.listeners.get("githubSync:editor")({}, { id: "switch", phase: "prepare", generation: 4 });
+  assert.equal(switching.sent.length, 1);
+  switching.finishWrite();
+  await change;
+
+  const tasks = preload("zentask:addTask");
+  tasks.api.githubSync.onEditor(async () => {});
+  const write = tasks.api.zenTask.addTask({ title: "A task" });
+  await new Promise(setImmediate);
+  const prepare = tasks.listeners.get("githubSync:editor")({}, { id: "tasks", phase: "prepare", generation: 4 });
+  await new Promise(setImmediate);
+  assert.equal(tasks.sent.length, 0);
+  tasks.finishWrite();
+  await Promise.all([write, prepare]);
+  assert.equal(tasks.calls.find(([channel]) => channel === "zentask:addTask")[2], 4);
+});
+
+test("PKB initialization does not deadlock editor preparation and template writes are tracked", async () => {
+  const setup = preload("pkb:initialize");
+  setup.api.githubSync.onEditor(async () => {});
+  const initializing = setup.api.pkb.initialize("/A");
+  await new Promise(setImmediate);
+  await setup.listeners.get("githubSync:editor")({}, { id: "pkb", phase: "prepare", generation: 4 });
+  assert.equal(setup.sent.length, 1);
+  setup.finishWrite();
+  await initializing;
+
+  const notes = preload("pkb:createNote");
+  notes.api.githubSync.onEditor(async () => {});
+  const writing = notes.api.pkb.createNote({ root: "/A", title: "new" });
+  await new Promise(setImmediate);
+  const preparing = notes.listeners.get("githubSync:editor")({}, { id: "template", phase: "prepare", generation: 4 });
+  await new Promise(setImmediate);
+  assert.equal(notes.sent.length, 0);
+  notes.finishWrite();
+  await Promise.all([writing, preparing]);
+  assert.equal(notes.calls.find(([channel]) => channel === "pkb:createNote")[2], 4);
 });
 
 test("preload resume adopts the new write generation before editor callback", async () => {

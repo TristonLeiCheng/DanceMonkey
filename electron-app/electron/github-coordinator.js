@@ -10,7 +10,7 @@ function createGitHubCoordinator({ getParticipants, timeout = 15000 }) {
     const pending = waiting.get(payload.id);
     if (!pending || !pending.senders.has(sender)) return;
     pending.senders.delete(sender);
-    if (payload.error) pending.fail(new Error("笔记编辑器未能保存或刷新，请重试。"));
+    if (payload.error) pending.fail(new Error("笔记编辑器未能保存或刷新，请先完成或关闭任务/项目编辑后重试。"));
     else if (!pending.senders.size) pending.finish();
   }
 

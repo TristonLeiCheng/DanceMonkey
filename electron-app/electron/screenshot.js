@@ -2,8 +2,10 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
+const { Blob } = require("node:buffer");
 const { pathToFileURL } = require("node:url");
-const { clipboard, desktopCapturer, nativeImage, screen } = require("electron");
+const { clipboard, ClipboardItem, desktopCapturer, nativeImage, screen } = require("electron");
+const { getPkbPaths } = require("./pkb");
 
 function stamp() {
   const now = new Date();
@@ -12,7 +14,16 @@ function stamp() {
 }
 
 function resolveScreenshotsDir(notesRoot) {
-  const dir = path.join(notesRoot, "Inbox", "Screenshots");
+  // Resolved fresh on every call (never cached) so that initializing a PKB
+  // manifest mid-session immediately redirects screenshots to the new
+  // location, even if this notesRoot was captured in a closure earlier.
+  const dir = path.join(notesRoot, getPkbPaths(notesRoot).screenshots);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function resolveCapturesDir(notesRoot) {
+  const dir = path.join(notesRoot, getPkbPaths(notesRoot).captures);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -21,23 +32,31 @@ function toFileUrl(filePath) {
   return pathToFileURL(path.resolve(filePath)).href;
 }
 
-function savePngAndClipboard(image, notesRoot, prefix = "DM") {
+async function copyImageToClipboard(image, png = image.toPNG()) {
+  // Electron 44 replaces writeImage with the asynchronous, MIME-based API.
+  if (typeof ClipboardItem === "function" && typeof clipboard.write === "function") {
+    await clipboard.write([
+      new ClipboardItem({ "image/png": new Blob([png], { type: "image/png" }) }),
+    ]);
+  } else if (typeof clipboard.writeImage === "function") {
+    await clipboard.writeImage(image);
+  } else {
+    throw new Error("当前运行环境不支持复制图片。");
+  }
+}
+
+async function savePngAndClipboard(image, notesRoot, prefix = "DM") {
   const dir = resolveScreenshotsDir(notesRoot);
   const filePath = path.join(dir, `${prefix}_${stamp()}.png`);
-  clipboard.writeImage(image);
   const png = image.toPNG();
-  fs.writeFileSync(filePath, png);
+  await copyImageToClipboard(image, png);
+  await fsp.writeFile(filePath, png);
   return filePath;
 }
 
-/** 先写剪贴板立即返回，磁盘写入异步，显著降低主进程阻塞感 */
+/** 剪贴板和磁盘写入均完成后才返回成功。保留原有调用入口。 */
 async function savePngAndClipboardFast(image, notesRoot, prefix = "DM") {
-  const dir = resolveScreenshotsDir(notesRoot);
-  const filePath = path.join(dir, `${prefix}_${stamp()}.png`);
-  clipboard.writeImage(image);
-  const png = image.toPNG();
-  await fsp.writeFile(filePath, png);
-  return filePath;
+  return savePngAndClipboard(image, notesRoot, prefix);
 }
 
 function displayUnderCursor() {
@@ -83,8 +102,7 @@ function cropImage(image, rect, scale = 1) {
 function saveScreenshotAsNote(pngSourcePath, notesRoot) {
   if (!fs.existsSync(pngSourcePath)) throw new Error("图片文件不存在。");
   const shotsDir = resolveScreenshotsDir(notesRoot);
-  const capturesDir = path.join(notesRoot, "Inbox", "Captures");
-  fs.mkdirSync(capturesDir, { recursive: true });
+  const capturesDir = resolveCapturesDir(notesRoot);
 
   const noteStamp = new Date();
   const pad = (n) => String(n).padStart(2, "0");
@@ -97,7 +115,7 @@ function saveScreenshotAsNote(pngSourcePath, notesRoot) {
 
   const mdName = `capture-${tag}.md`;
   const mdPath = path.join(capturesDir, mdName);
-  const relImg = `../Screenshots/${imgName}`;
+  const relImg = path.relative(capturesDir, destImg).replaceAll("\\", "/");
   const title = `${noteStamp.getFullYear()}-${pad(noteStamp.getMonth() + 1)}-${pad(noteStamp.getDate())} ${pad(noteStamp.getHours())}:${pad(noteStamp.getMinutes())}`;
   fs.writeFileSync(mdPath, `# 截图 ${title}\n\n![截图](${relImg})\n`, "utf8");
   return {
@@ -138,7 +156,7 @@ function watermarkMeta() {
   };
 }
 
-function saveEditedPng(base64OrDataUrl, notesRoot, prefix = "DM_edit") {
+async function saveEditedPng(base64OrDataUrl, notesRoot, prefix = "DM_edit") {
   const raw = String(base64OrDataUrl || "");
   const base64 = raw.includes(",") ? raw.split(",")[1] : raw;
   const buffer = Buffer.from(base64, "base64");
@@ -149,6 +167,7 @@ function saveEditedPng(base64OrDataUrl, notesRoot, prefix = "DM_edit") {
 
 module.exports = {
   captureDisplayImage,
+  copyImageToClipboard,
   cropImage,
   displayUnderCursor,
   loadNativeImage,
@@ -158,6 +177,7 @@ module.exports = {
   saveScreenshotAsNote,
   saveEditedPng,
   resolveScreenshotsDir,
+  resolveCapturesDir,
   toFileUrl,
   watermarkMeta,
 };

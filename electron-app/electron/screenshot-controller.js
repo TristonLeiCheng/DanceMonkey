@@ -1,8 +1,9 @@
 const path = require("node:path");
-const { BrowserWindow, clipboard, screen } = require("electron");
+const { BrowserWindow, screen } = require("electron");
 const { pathToFileURL } = require("node:url");
 const {
   captureDisplayImage,
+  copyImageToClipboard,
   cropImage,
   loadNativeImage,
   savePngAndClipboardFast,
@@ -316,8 +317,8 @@ function createScreenshotController({
       return { success: true };
     }
     if (action === "continue") {
-      if (lastCaptureMode === "region") return beginRegionCapture();
-      return captureQuick();
+      if (lastCaptureMode === "region") return capture(beginRegionCapture);
+      return capture(captureQuick);
     }
     return { success: true };
   }
@@ -325,7 +326,7 @@ function createScreenshotController({
   async function copyCurrent() {
     try {
       const image = loadNativeImage(currentImagePath);
-      clipboard.writeImage(image);
+      await copyImageToClipboard(image);
       return { success: true };
     } catch (error) {
       return { success: false, error: error?.message || "复制失败" };
@@ -343,8 +344,9 @@ function createScreenshotController({
   }
 
   async function saveEditorImage(payload = {}) {
+    pendingWrites += 1;
     try {
-      const filePath = saveEditedPng(payload.dataUrl, getNotesRoot(), "DM_edit");
+      const filePath = await saveEditedPng(payload.dataUrl, getNotesRoot(), "DM_edit");
       currentImagePath = filePath;
       return {
         success: true,
@@ -354,6 +356,8 @@ function createScreenshotController({
       };
     } catch (error) {
       return { success: false, error: error?.message || "保存失败" };
+    } finally {
+      pendingWrites -= 1;
     }
   }
 
@@ -363,7 +367,7 @@ function createScreenshotController({
       const base64 = raw.includes(",") ? raw.split(",")[1] : raw;
       const image = require("electron").nativeImage.createFromBuffer(Buffer.from(base64, "base64"));
       if (image.isEmpty()) throw new Error("图片无效");
-      clipboard.writeImage(image);
+      await copyImageToClipboard(image);
       return { success: true };
     } catch (error) {
       return { success: false, error: error?.message || "复制失败" };
@@ -425,10 +429,20 @@ function createScreenshotController({
     return watermarkMeta();
   }
 
+  let pendingCaptures = 0;
+  const capture = async (operation) => {
+    try {
+      getNotesRoot();
+      pendingCaptures += 1;
+    } catch (error) { return { success: false, error: error.message }; }
+    try { return await operation(); } finally { pendingCaptures -= 1; }
+  };
+
   return {
     get writing() { return pendingWrites > 0; },
-    captureQuick,
-    beginRegionCapture,
+    get busy() { return pendingCaptures > 0 || pendingWrites > 0 || Boolean(pendingRegion) || [regionWindow, choiceWindow, editorWindow, resultWindow].some((win) => win && !win.isDestroyed()); },
+    captureQuick: () => capture(captureQuick),
+    beginRegionCapture: () => capture(beginRegionCapture),
     finishRegionCapture,
     handleChoice,
     openEditorWindow,

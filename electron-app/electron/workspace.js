@@ -1,8 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { getPkbPaths } = require("./pkb");
 
-const QUICK_NOTES_FOLDER = "Journal/Stickies";
 const QUICK_NOTE_MARKER = /^<!-- lumen-quick-note:([^\s>]+) -->\r?\n?/i;
 const QUICK_NOTE_MARKERS = /^(?:<!-- lumen-quick-note:[^\s>]+ -->\r?\n?)+/i;
 
@@ -20,12 +20,22 @@ function writeAtomic(target, content) {
 function createWorkspace(notesRootPath) {
   fs.mkdirSync(path.resolve(notesRootPath), { recursive: true });
   const root = fs.realpathSync(path.resolve(notesRootPath));
-  const quickNotesRoot = path.join(root, QUICK_NOTES_FOLDER);
+
+  // Resolved dynamically (not cached at creation time) because a PKB
+  // manifest may be initialized after this workspace object already exists,
+  // which should immediately redirect where quick notes live.
+  function quickNotesFolder() {
+    return getPkbPaths(root).quickNotes;
+  }
+
+  function quickNotesRootDir() {
+    return path.join(root, quickNotesFolder());
+  }
 
   function ensureRoot() {
     fs.mkdirSync(root, { recursive: true });
-    resolveSafe(QUICK_NOTES_FOLDER);
-    fs.mkdirSync(quickNotesRoot, { recursive: true });
+    resolveSafe(quickNotesFolder());
+    fs.mkdirSync(quickNotesRootDir(), { recursive: true });
   }
 
   function resolveSafe(relativePath = "") {
@@ -106,7 +116,7 @@ function createWorkspace(notesRootPath) {
   }
 
   function isQuickNote(absolutePath) {
-    const relative = path.relative(quickNotesRoot, absolutePath);
+    const relative = path.relative(quickNotesRootDir(), absolutePath);
     return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
   }
 
@@ -137,6 +147,7 @@ function createWorkspace(notesRootPath) {
 
   function listQuickNotes() {
     ensureRoot();
+    const quickNotesRoot = quickNotesRootDir();
     return fs
       .readdirSync(quickNotesRoot, { withFileTypes: true })
       .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".md"))
@@ -169,12 +180,12 @@ function createWorkspace(notesRootPath) {
         absolute = resolveSafe(current.filePath);
         const wantedName = safeName(note.title || "未命名便签", "file");
         if (path.basename(absolute) !== wantedName) {
-          const target = uniquePath(QUICK_NOTES_FOLDER, note.title || "未命名便签", "file");
+          const target = uniquePath(quickNotesFolder(), note.title || "未命名便签", "file");
           fs.renameSync(absolute, target);
           absolute = target;
         }
       } else {
-        absolute = uniquePath(QUICK_NOTES_FOLDER, note.title || "未命名便签", "file");
+        absolute = uniquePath(quickNotesFolder(), note.title || "未命名便签", "file");
       }
 
       const existingRaw = fs.existsSync(absolute) ? fs.readFileSync(absolute, "utf8") : "";
@@ -251,10 +262,12 @@ function createWorkspace(notesRootPath) {
       fs.rmSync(target, { recursive: true, force: false });
       return true;
     },
-    quickNotesFolder: QUICK_NOTES_FOLDER,
+    get quickNotesFolder() {
+      return quickNotesFolder();
+    },
     listQuickNotes,
     syncQuickNotes,
   };
 }
 
-module.exports = { createWorkspace };
+module.exports = { createWorkspace, writeAtomic };

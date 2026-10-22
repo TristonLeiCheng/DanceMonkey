@@ -72,8 +72,9 @@ function createStore(userDataPath) {
       return state;
     },
     set(partial) {
-      state = { ...state, ...partial, revision: state.revision + 1 };
-      write(state);
+      const next = { ...state, ...partial, revision: state.revision + 1 };
+      write(next);
+      state = next;
       return state;
     },
   };

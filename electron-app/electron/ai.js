@@ -86,13 +86,17 @@ function createAiService(configStore) {
     return publicSettings(configStore.write(allowed));
   }
 
-  async function chat(payload, onChunk) {
-    const config = configStore.read();
+  async function chat(payload = {}, onChunk = () => {}, capturedConfig) {
+    const config = capturedConfig || configStore.read();
     if (!String(config.apiKey || "").trim()) throw new Error("请先在 AI 设置中填写 API Key。");
 
     const requestId = payload.requestId || crypto.randomUUID();
+    if (active.has(requestId)) throw new Error("该请求正在执行，请勿重复发送。");
     const controller = new AbortController();
     active.set(requestId, controller);
+    const bounded = (value, fallback, min, max) => Number.isFinite(Number(value))
+      ? Math.max(min, Math.min(max, Number(value))) : fallback;
+    const timer = setTimeout(() => controller.abort(), bounded(payload.timeoutMs, 180000, 1000, 300000));
     const systemPrompt =
       String(payload.systemPrompt || config.globalChatSystemPrompt || "").trim() ||
       DEFAULT_SYSTEM_PROMPT;
@@ -104,8 +108,8 @@ function createAiService(configStore) {
     const body = {
       model: String(payload.model || config.model || "gpt-3.5-turbo").trim(),
       messages: [{ role: "system", content: systemPrompt }, ...history],
-      temperature: 0.7,
-      max_tokens: 4096,
+      temperature: bounded(payload.temperature, 0.7, 0, 2),
+      max_tokens: Math.round(bounded(payload.maxTokens, 4096, 128, 16384)),
       stream: true,
     };
 
@@ -135,31 +139,35 @@ function createAiService(configStore) {
       let buffer = "";
       let fullText = "";
       let done = false;
+      const consumeLine = (line) => {
+        if (!line.startsWith("data:")) return;
+        const data = line.slice(5).trim();
+        if (!data || data === "[DONE]") return;
+        let parsed;
+        try { parsed = JSON.parse(data); } catch { return; }
+        if (parsed.error) throw new Error(errorMessage(data, response.status));
+        const chunk = parsed?.choices?.[0]?.delta?.content;
+        if (typeof chunk === "string" && chunk) {
+          fullText += chunk;
+          onChunk(chunk);
+        }
+      };
       while (!done) {
         const next = await reader.read();
         done = next.done;
         buffer += decoder.decode(next.value || new Uint8Array(), { stream: !done });
         const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          const data = line.slice(5).trim();
-          if (!data || data === "[DONE]") continue;
-          try {
-            const chunk = JSON.parse(data)?.choices?.[0]?.delta?.content;
-            const text = typeof chunk === "string" ? chunk : "";
-            if (text) {
-              fullText += text;
-              onChunk(text);
-            }
-          } catch {}
-        }
+        for (const line of lines) consumeLine(line);
       }
+      if (buffer.trim()) consumeLine(buffer);
+      if (!fullText.trim()) throw new Error("模型未返回有效文本，请重试或检查模型设置。");
       return fullText;
     } catch (error) {
-      if (error?.name === "AbortError") throw new Error("已停止生成。");
+      if (error?.name === "AbortError") throw new Error("请求超时或已停止生成。");
       throw error;
     } finally {
+      clearTimeout(timer);
       active.delete(requestId);
     }
   }
@@ -233,10 +241,21 @@ function createAiService(configStore) {
   }
 
   function cancel(requestId) {
-    return active.get(requestId)?.abort() ?? false;
+    const controller = active.get(requestId);
+    if (!controller) return false;
+    controller.abort();
+    return true;
   }
 
-  return { getSettings, saveSettings, chat, analyzeImage, cancel };
+  // Multi-call tasks keep the same provider and model even if another window
+  // changes the application's AI settings while the task is in progress.
+  function createSession() {
+    const config = { ...configStore.read() };
+    return { getSettings: () => publicSettings(config), cancel,
+      chat: (payload, onChunk) => chat(payload, onChunk, config) };
+  }
+
+  return { getSettings, saveSettings, chat, analyzeImage, cancel, createSession };
 }
 
 module.exports = { createAiService, resolveEndpoint };

@@ -263,10 +263,16 @@
     let aiSettings = null;
     let aiDraft = "";
     let aiBusy = false;
+    let aiStopping = false;
     let aiRequestId = null;
     let aiStreamingText = "";
     let aiError = "";
+    let aiNotice = "";
     let activeSnippet = "";
+    const aiStarters = [
+      { title: "理清一件事", detail: "把想法变成下一步", prompt: "帮我梳理下面这件事，提炼重点并列出下一步行动：\n" },
+      { title: "润色一段话", detail: "表达更清晰、自然", prompt: "请帮我润色下面这段话，保留原意，让表达更清晰自然：\n" },
+    ];
     let leaveTimer = null;
     let railGraceUntil = 0;
     const RAIL_LEAVE_DELAY_MS = 750;
@@ -280,6 +286,7 @@
     let zenProjects = [];
     let quickLinks = [];
     let zenError = "";
+    let zenDraft = "";
 
     function zenField(item, name, fallback = "") {
       const camel = name[0].toLowerCase() + name.slice(1);
@@ -363,6 +370,16 @@
       } else {
         try {
           if (!noteSaveError) adopt(await api.getState());
+          zenTasks = [];
+          zenProjects = [];
+          try {
+            applyZen(await api.zenTask.load());
+            zenError = "";
+          } catch (error) {
+            zenError = error?.message || "无法加载当前笔记库的任务";
+          }
+          renamingId = null;
+          pendingDeleteId = null;
           skipRender = false;
           render();
         } finally {
@@ -382,11 +399,12 @@
     });
     api.ai.onChunk(({ requestId, chunk }) => {
       if (requestId !== aiRequestId) return;
+      const messages = root.querySelector(".ai-messages");
+      const follow = !messages || messages.scrollHeight - messages.scrollTop - messages.clientHeight < 64;
       aiStreamingText += chunk;
       const bubble = root.querySelector(".ai-message.streaming .ai-message-body");
       if (bubble) bubble.innerHTML = renderAiMarkdown(aiStreamingText);
-      const messages = root.querySelector(".ai-messages");
-      if (messages) messages.scrollTop = messages.scrollHeight;
+      if (messages && follow) messages.scrollTop = messages.scrollHeight;
     });
 
     function focusLater(selector) {
@@ -464,6 +482,7 @@
 
     window.addEventListener("keydown", (e) => {
       if (syncPaused) { e.preventDefault(); return; }
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === "Escape") {
         if (sheet) {
           sheet = null;
@@ -620,7 +639,7 @@
           <div><strong>${stats.urgent}</strong><span>紧急</span></div>
           <div><strong>${stats.overdue}</strong><span>逾期</span></div>
         </div>
-        <input class="zen-input" placeholder="添加任务，按 Enter" />
+        <input class="zen-input" value="${escapeAttr(zenDraft)}" placeholder="添加任务，按 Enter" />
         ${zenError ? `<div class="zen-error">${escapeHtml(zenError)}</div>` : ""}
         <div class="zen-list">
           ${open.map(row).join("")}
@@ -670,39 +689,47 @@
 
     function renderAiChat() {
       const messages = [...(state.aiMessages || [])];
-      if (aiBusy) messages.push({ role: "assistant", content: aiStreamingText, streaming: true });
+      if (aiBusy && aiRequestId) messages.push({ role: "assistant", content: aiStreamingText, streaming: true });
       const rows = messages
-        .map((message) => `<div class="ai-message ${message.role} ${message.streaming ? "streaming" : ""}">
-          <div class="ai-message-role">${message.role === "user" ? "你" : "AI"}</div>
+        .map((message) => `<article class="ai-message ${message.role === "user" ? "user" : "assistant"} ${message.streaming ? "streaming" : ""}">
+          <div class="ai-message-role">${message.role === "user" ? "你" : `<span class="ai-avatar" aria-hidden="true">${icons.ai}</span> DM AI`}${message.streaming ? `<span class="ai-stream-label">${aiStopping ? "正在停止" : "正在生成"}</span>` : ""}</div>
           <div class="ai-message-body">${message.role === "assistant" ? renderAiMarkdown(message.content) : escapeHtml(message.content).replaceAll("\n", "<br>")}</div>
-        </div>`)
+        </article>`)
         .join("");
       return `<div class="ai-wrap">
         <div class="ai-toolbar">
-          <select class="ai-model-select" ${aiBusy ? "disabled" : ""}>
+          <label class="ai-model-picker"><span class="ai-model-dot" aria-hidden="true"></span><select class="ai-model-select" aria-label="选择 AI 模型" title="选择 AI 模型" ${aiBusy ? "disabled" : ""}>
+            ${!aiSettings?.model && !aiSettings?.modelProfiles?.length ? '<option value="">配置 AI 模型</option>' : ""}
             ${(aiSettings?.modelProfiles || []).map((profile) => `<option value="${escapeAttr(profile.model)}" ${profile.model === aiSettings?.model ? "selected" : ""}>${escapeHtml(profile.name || profile.model)}</option>`).join("")}
             ${aiSettings?.model && !(aiSettings.modelProfiles || []).some((profile) => profile.model === aiSettings.model) ? `<option selected value="${escapeAttr(aiSettings.model)}">${escapeHtml(aiSettings.model)}</option>` : ""}
-          </select>
-          <select class="ai-snippet-select" ${aiBusy ? "disabled" : ""}>
-            <option value="">Prompt</option>
-            ${(aiSettings?.promptSnippets || []).map((snippet, index) => `<option value="${index}" ${String(index) === activeSnippet ? "selected" : ""}>${escapeHtml(snippet.title || `片段 ${index + 1}`)}</option>`).join("")}
-          </select>
-          <button class="ghost visible" data-act="screenshot-region" ${aiBusy ? "disabled" : ""}>框选</button>
-          <button class="ghost visible" data-act="screenshot-quick" ${aiBusy ? "disabled" : ""}>截屏</button>
-          <button class="ghost visible" data-act="clear-ai" ${aiBusy ? "disabled" : ""}>新对话</button>
-          <button class="ghost visible" data-act="open-ai-settings">设置</button>
+          </select></label>
+          <button class="ai-toolbar-action" data-act="clear-ai" title="清空消息，开始新对话" ${aiBusy ? "disabled" : ""}>${icons.plus}<span>新对话</span></button>
+          <button class="ai-toolbar-settings" data-act="open-ai-settings" aria-label="AI 设置" title="AI 设置" ${aiBusy ? "disabled" : ""}>${icons.settings}</button>
         </div>
-        <div class="ai-messages">${rows || '<div class="ai-empty">有什么可以帮你？<small>可截屏后 AI 分析 · Ctrl+Shift+S 全屏 / Ctrl+Shift+R 框选</small></div>'}</div>
-        ${aiError ? `<div class="ai-error">${escapeHtml(aiError)}</div>` : ""}
-        <div class="ai-composer">
-          <textarea class="ai-input" placeholder="输入问题，Enter 发送，Shift+Enter 换行" ${aiBusy ? "disabled" : ""}>${escapeHtml(aiDraft)}</textarea>
-          <button class="ai-send ${aiBusy ? "stop" : ""}" data-act="${aiBusy ? "stop-ai" : "send-ai"}">${aiBusy ? "停止" : "发送"}</button>
+        <div class="ai-messages" role="log" aria-label="对话消息" aria-live="off">${rows || `<div class="ai-empty"><div class="ai-empty-mark" aria-hidden="true">${icons.ai}</div><span class="ai-eyebrow">DM · 随时聊聊</span><h2>把想法说出来</h2><p>梳理思路，打磨文字，<br>或者一起看看屏幕上的内容。</p><div class="ai-starters">${aiStarters.map((starter, index) => `<button type="button" data-act="ai-starter" data-index="${index}"><strong>${starter.title}<span aria-hidden="true">↗</span></strong><small>${starter.detail}</small></button>`).join("")}</div></div>`}</div>
+        ${aiError ? `<div class="ai-error" role="alert">${escapeHtml(aiError)}</div>` : ""}
+        <div class="ai-composer-area">
+          <div class="ai-composer">
+            <textarea class="ai-input" rows="2" aria-label="输入消息" placeholder="想聊些什么？" ${aiBusy ? "disabled" : ""}>${escapeHtml(aiDraft)}</textarea>
+            <div class="ai-composer-bottom"><div class="ai-composer-tools">
+              <button class="ai-tool" data-act="screenshot-region" title="框选屏幕 · Ctrl+Shift+R" ${aiBusy ? "disabled" : ""}>${icons.expand}<span>框选</span></button>
+              <button class="ai-tool" data-act="screenshot-quick" title="截取全屏 · Ctrl+Shift+S" ${aiBusy ? "disabled" : ""}>${icons.workspace}<span>截屏</span></button>
+              <select class="ai-snippet-select" aria-label="提示词片段" title="提示词片段" ${aiBusy ? "disabled" : ""}>
+                <option value="">默认提示词</option>
+                ${(aiSettings?.promptSnippets || []).map((snippet, index) => `<option value="${index}" ${String(index) === activeSnippet ? "selected" : ""}>${escapeHtml(snippet.title || `片段 ${index + 1}`)}</option>`).join("")}
+              </select>
+            </div><button class="ai-send ${aiBusy ? "stop" : ""}" data-act="${aiBusy ? "stop-ai" : "send-ai"}" aria-label="${aiBusy ? "停止生成" : "发送消息"}" title="${aiBusy ? "停止生成" : "发送消息 · Enter"}" ${aiStopping || (aiBusy && !aiRequestId) || (!aiBusy && !aiDraft.trim()) ? "disabled" : ""}>${aiBusy ? `<span class="ai-stop-icon" aria-hidden="true"></span>${aiStopping ? "停止中" : "停止"}` : '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'}</button></div>
+          </div>
+          <div class="ai-composer-hint" role="status">${aiBusy ? `<span class="ai-status-dot" aria-hidden="true"></span>${aiStopping ? "正在停止生成…" : "正在回复，可随时停止"}` : aiNotice || "Enter 发送 · Shift+Enter 换行"}</div>
         </div>
       </div>`;
     }
 
     function render() {
       if (!state) return;
+      const previousMessages = root.querySelector(".ai-messages");
+      const previousScroll = previousMessages?.scrollTop || 0;
+      const followMessages = !previousMessages || previousMessages.scrollHeight - previousScroll - previousMessages.clientHeight < 64;
       document.documentElement.dataset.theme = state.theme;
 
       const notebook = state.notebooks.find((n) => n.id === state.activeNotebookId);
@@ -815,6 +842,8 @@
       root.innerHTML = html;
       options.onMode?.(mode);
       bind();
+      const nextMessages = root.querySelector(".ai-messages");
+      if (nextMessages) nextMessages.scrollTop = followMessages ? nextMessages.scrollHeight : previousScroll;
     }
 
     function bind() {
@@ -911,7 +940,16 @@
         if (act === "clear-ai") {
           aiDraft = "";
           aiError = "";
+          aiNotice = "";
           void persist({ aiMessages: [] });
+        }
+        if (act === "ai-starter" && !aiBusy) {
+          const starter = aiStarters[Number(btn.dataset.index)];
+          if (starter) {
+            aiDraft = starter.prompt;
+            render();
+            focusLater(".ai-input");
+          }
         }
         if (act === "new" && tab === "notes") {
           const note = {
@@ -1044,10 +1082,12 @@
 
       const zenInput = root.querySelector(".zen-input");
       if (zenInput) {
+        zenInput.oninput = () => { zenDraft = zenInput.value; };
         zenInput.onkeydown = (e) => {
           if (e.key !== "Enter") return;
           const text = zenInput.value.trim();
           if (!text) return;
+          zenDraft = "";
           zenInput.value = "";
           void api.zenTask
             .addTask({ title: text })
@@ -1097,18 +1137,7 @@
         };
       }
 
-      const aiInput = root.querySelector(".ai-input");
-      if (aiInput) {
-        aiInput.oninput = () => {
-          aiDraft = aiInput.value;
-        };
-        aiInput.onkeydown = (e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            void sendAi();
-          }
-        };
-      }
+      bindAiComposer();
 
       const modelSelect = root.querySelector(".ai-model-select");
       if (modelSelect) {
@@ -1122,10 +1151,31 @@
       if (snippetSelect) {
         snippetSelect.onchange = () => {
           activeSnippet = snippetSelect.value;
-          const snippet = aiSettings?.promptSnippets?.[Number(activeSnippet)];
-          if (snippet) aiSettings = { ...aiSettings, globalChatSystemPrompt: snippet.systemPrompt || "" };
         };
       }
+    }
+
+    function bindAiComposer() {
+      const input = root.querySelector(".ai-input");
+      if (!input) return;
+      const resize = () => {
+        input.style.height = "auto";
+        input.style.height = `${Math.min(132, Math.max(58, input.scrollHeight))}px`;
+      };
+      input.oninput = () => {
+        aiDraft = input.value;
+        resize();
+        const send = root.querySelector('[data-act="send-ai"]');
+        if (send) send.disabled = aiBusy || !aiDraft.trim();
+      };
+      input.onkeydown = (event) => {
+        if (event.isComposing || event.keyCode === 229) return;
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          void sendAi();
+        }
+      };
+      resize();
     }
 
     async function ensureAiSettings() {
@@ -1189,42 +1239,68 @@
     async function sendAi() {
       const text = aiDraft.trim();
       if (!text || aiBusy) return;
-      await ensureAiSettings();
-      aiDraft = "";
-      aiError = "";
       aiBusy = true;
+      aiStopping = false;
+      aiError = "";
+      aiNotice = "";
       aiStreamingText = "";
       aiRequestId = newId();
-      const messages = [...(state.aiMessages || []), { role: "user", content: text }];
-      state = { ...state, aiMessages: messages };
       render();
-      const result = await api.ai.chat({
-        requestId: aiRequestId,
-        model: aiSettings.model,
-        systemPrompt: aiSettings.globalChatSystemPrompt,
-        messages,
-      });
-      aiBusy = false;
-      if (result.success) {
-        const assistantText = aiStreamingText || result.text || "";
-        aiStreamingText = "";
-        aiRequestId = null;
-        await persist({
-          aiMessages: [...messages, { role: "assistant", content: assistantText }],
+      let messages = null;
+      try {
+        await ensureAiSettings();
+        if (aiStopping) { aiNotice = "已停止"; return; }
+        aiDraft = "";
+        messages = [...(state.aiMessages || []), { role: "user", content: text }];
+        state = { ...state, aiMessages: messages };
+        render();
+        const box = root.querySelector(".ai-messages");
+        if (box) box.scrollTop = box.scrollHeight;
+        const snippet = activeSnippet === "" ? null : aiSettings?.promptSnippets?.[Number(activeSnippet)];
+        const result = await api.ai.chat({
+          requestId: aiRequestId,
+          model: aiSettings.model,
+          systemPrompt: snippet ? snippet.systemPrompt || "" : aiSettings.globalChatSystemPrompt,
+          messages,
         });
-      } else {
-        aiError = result.error || "AI 请求失败";
-        aiStreamingText = "";
+        const assistantText = aiStreamingText || result.text || "";
+        if (aiStopping) aiNotice = assistantText ? "已停止，已保留生成的内容" : "已停止";
+        else if (!result.success) aiError = result.error || "AI 请求失败";
+        messages = assistantText ? [...messages, { role: "assistant", content: assistantText }] : messages;
         aiRequestId = null;
         state = { ...state, aiMessages: messages };
         await persist({ aiMessages: messages });
+      } catch (error) {
+        aiError = error?.message || "AI 暂时无法回复，请稍后再试";
+        if (!messages) aiDraft = text;
+        else {
+          if (aiRequestId && aiStreamingText) messages = [...messages, { role: "assistant", content: aiStreamingText }];
+          if (aiStopping) { aiNotice = aiStreamingText ? "已停止，已保留生成的内容" : "已停止"; aiError = ""; }
+          aiRequestId = null;
+          state = { ...state, aiMessages: messages };
+          try { await persist({ aiMessages: messages }); }
+          catch (saveError) { aiError = `对话保存失败：${saveError?.message || "请稍后再试"}`; }
+        }
+      } finally {
+        aiBusy = false;
+        aiStopping = false;
+        aiStreamingText = "";
+        aiRequestId = null;
+        render();
+        focusLater(".ai-input");
       }
-      focusLater(".ai-input");
     }
 
     async function stopAi() {
-      if (!aiRequestId) return;
-      await api.ai.cancel(aiRequestId);
+      if (!aiRequestId || aiStopping) return;
+      aiStopping = true;
+      render();
+      try { await api.ai.cancel(aiRequestId); }
+      catch (error) {
+        aiStopping = false;
+        aiError = error?.message || "暂时无法停止，请重试";
+        render();
+      }
     }
 
     function createBook() {

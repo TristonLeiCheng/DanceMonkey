@@ -14,6 +14,14 @@ const { createScreenshotController } = require("./screenshot-controller");
 const { createStore } = require("./store");
 const { createWorkspace } = require("./workspace");
 const { createZenTaskStore } = require("./zentask");
+const { createVaultRegistry, registerVaultIpc } = require("./vaults");
+const { registerPkbIpc } = require("./pkb-ipc");
+const { createPersonaService } = require("./personas");
+const { registerPersonaIpc } = require("./persona-ipc");
+const { createOutlookAuth } = require("./outlook-auth");
+const { createOutlookMailClient } = require("./outlook-mail");
+const { createOutlookImporter } = require("./outlook-import");
+const { registerOutlookIpc } = require("./outlook-ipc");
 const platform = createPlatformAdapter();
 
 app.setName("DM");
@@ -237,15 +245,60 @@ function openWorkspace(section = "notes") {
 app.whenReady().then(() => {
   legacyConfig = createLegacyConfig(app.getPath("appData"));
   store = createStore(app.getPath("userData"));
-  workspaceStore = createWorkspace(legacyConfig.notesRoot(app.getPath("documents")));
+  const initialRoot = legacyConfig.notesRoot(app.getPath("documents"));
+  if (legacyConfig.read().notesVaults?.length && !fs.existsSync(initialRoot)) {
+    dialog.showErrorBox("笔记库不可用", "上次使用的笔记库目录不存在，请恢复目录或修正配置中的 notesRootPath 后重启。不会自动建立空库。");
+    app.quit();
+    return;
+  }
+  workspaceStore = createWorkspace(initialRoot);
+  const vaultRegistry = createVaultRegistry({ config: legacyConfig, root: workspaceStore.root,
+    protectedRoots: [app.getPath("userData"), path.dirname(legacyConfig.file)] });
   aiService = createAiService(legacyConfig);
   zenTaskStore = createZenTaskStore(workspaceStore.root);
   githubNotes = registerGitHubSync({
     app, ipcMain, safeStorage, shell, clipboard, dialog, BrowserWindow, fetch: fetchWithSystemProxy,
     root: workspaceStore.root,
     getWindows: () => [overlay, workspaceWindow],
-    isFolderSyncBusy: () => syncAbortControllers.size > 0 || Boolean(screenshotController?.writing),
+    isFolderSyncBusy: () => syncAbortControllers.size > 0 || Boolean(screenshotController?.busy),
     refreshNotes: () => refreshQuickNotes(),
+  });
+  registerPkbIpc({
+    ipcMain, dialog, BrowserWindow, getRoot: () => workspaceStore.root, githubNotes,
+    refreshNotes: () => refreshQuickNotes(),
+  });
+  const personaService = createPersonaService({ userDataPath: app.getPath("userData"), aiService });
+  registerPersonaIpc({
+    ipcMain, dialog, BrowserWindow,
+    service: personaService,
+    trusted: githubNotes.trusted,
+    getWorkspace: () => workspaceStore,
+  });
+  const outlookAuth = createOutlookAuth({ directory: path.join(app.getPath("userData"), "outlook"),
+    safeStorage, openExternal: (url) => shell.openExternal(url), fetch: fetchWithSystemProxy });
+  const outlookImporter = createOutlookImporter({ auth: outlookAuth,
+    mail: createOutlookMailClient({ fetch: fetchWithSystemProxy }), personas: personaService });
+  registerOutlookIpc({ ipcMain, trusted: githubNotes.trusted, auth: outlookAuth, importer: outlookImporter });
+  app.on("before-quit", () => outlookImporter.cancelAll());
+  registerVaultIpc({
+    ipcMain, dialog, BrowserWindow, registry: vaultRegistry,
+    trusted: githubNotes.trusted,
+    busy: () => githubNotes.busy,
+    switchVault: async (nextRoot) => githubNotes.switchRoot(nextRoot, () => {
+      vaultRegistry.prepare(nextRoot);
+      const nextWorkspace = createWorkspace(nextRoot);
+      const nextZen = createZenTaskStore(nextRoot);
+      const notes = nextWorkspace.listQuickNotes();
+      nextWorkspace.list();
+      const previous = store.get();
+      const projected = { notes, activeNoteId: notes[0]?.id || null, activeNotebookId: "inbox" };
+      // Both persistent writes must succeed before publishing the new store objects.
+      store.set(projected);
+      try { vaultRegistry.activate(nextRoot); }
+      catch (error) { store.set(previous); throw error; }
+      workspaceStore = nextWorkspace;
+      zenTaskStore = nextZen;
+    }),
   });
   quickAccessService = createQuickAccessService(legacyConfig, shell, {
     desktop: app.getPath("desktop"),
@@ -281,6 +334,7 @@ app.whenReady().then(() => {
   folderSyncScheduler.start();
   screenshotController = createScreenshotController({
     getNotesRoot: () => {
+      if (githubNotes.busy) throw new Error("正在同步或切换笔记库，请稍后再截图。");
       githubNotes.assertWritable();
       return workspaceStore.root;
     },
@@ -483,25 +537,12 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("ai:cancel", (_event, requestId) => aiService.cancel(requestId));
   ipcMain.handle("zentask:load", () => zenTaskStore.load());
-  ipcMain.handle("zentask:addTask", (_event, input) => zenTaskStore.addTask(input));
-  ipcMain.handle("zentask:addTasksBatch", (_event, inputs) => zenTaskStore.addTasksBatch(inputs));
-  ipcMain.handle("zentask:updateTask", (_event, id, input) =>
-    zenTaskStore.updateTask(id, input),
-  );
-  ipcMain.handle("zentask:toggleTask", (_event, id) => zenTaskStore.toggleTask(id));
-  ipcMain.handle("zentask:deleteTask", (_event, id) => zenTaskStore.deleteTask(id));
-  ipcMain.handle("zentask:addProject", (_event, input) =>
-    zenTaskStore.addProject(input),
-  );
-  ipcMain.handle("zentask:updateProject", (_event, id, input) =>
-    zenTaskStore.updateProject(id, input),
-  );
-  ipcMain.handle("zentask:deleteMilestone", (_event, projectId, milestoneId, reassignTo) =>
-    zenTaskStore.deleteMilestone(projectId, milestoneId, reassignTo),
-  );
-  ipcMain.handle("zentask:deleteProject", (_event, id) =>
-    zenTaskStore.deleteProject(id),
-  );
+  for (const method of ["addTask", "addTasksBatch", "updateTask", "toggleTask", "deleteTask", "addProject", "updateProject", "deleteMilestone", "deleteProject"]) {
+    ipcMain.handle(`zentask:${method}`, (_event, ...args) => {
+      githubNotes.assertWritable(args.pop());
+      return zenTaskStore[method](...args);
+    });
+  }
   ipcMain.handle("quickAccess:list", () => quickAccessService.list());
   ipcMain.handle("quickAccess:add", (_event, input) => quickAccessService.add(input));
   ipcMain.handle("quickAccess:update", (_event, id, input) =>

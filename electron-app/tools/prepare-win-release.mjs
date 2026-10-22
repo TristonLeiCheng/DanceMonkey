@@ -22,7 +22,7 @@ const manifest = {
   entryExe: "DanceMonkey.exe",
   sha256: hash.digest("hex").toUpperCase(),
   releaseNotes:
-    "新增 GitHub 私有笔记库手动同步：网页授权、仓库选择、差异预览、冲突副本与失败恢复；改进设置引导和笔记保存保护。支持 Windows 与 macOS，无需安装 Git。仅在用户确认后上传笔记。",
+    "新增人物分身：导入文章、笔记、聊天记录和 Outlook 来信，独立聊天、纠正与更新；支持出生年月、星座、简历、事件及 MBTI 观察测算。新增多笔记库与 PKB 基础功能，改进 AI 界面及任务/项目同步。",
 };
 fs.writeFileSync(path.join(targetDir, "update-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 console.log(`Windows update package: ${target}`);

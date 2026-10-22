@@ -2,14 +2,41 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const defaultGit = require("isomorphic-git");
+const { createPkbPolicy, assertRemoteGovernorsAllowed } = require("./pkb-policy");
+const { assertTaskReferences } = require("./task-sync-data");
 
 const EXTENSIONS = new Set([".md", ".png", ".jpg", ".jpeg", ".gif", ".webp"]);
+// Only the two Zen Task stores participate; arbitrary JSON may contain secrets
+// or device-specific configuration and must remain outside the sync scope.
+const TASK_FILE = "Journal/task-module.json";
+const PROJECT_FILE = "Journal/zentask-projects.json";
+const TASK_DATA_FILES = new Set([TASK_FILE, PROJECT_FILE]);
 const LIMITS = { fileBytes: 10 * 1024 * 1024, totalBytes: 200 * 1024 * 1024, files: 5000 };
 const oidOf = (data) => crypto.createHash("sha1").update(`blob ${data.length}\0`).update(data).digest("hex");
 const inside = (parent, child) => child === parent || child.startsWith(`${parent}${path.sep}`);
 
 function allowed(file) {
-  return !file.split("/").some((part) => part.startsWith(".")) && EXTENSIONS.has(path.posix.extname(file).toLowerCase());
+  if ([...TASK_DATA_FILES].some((name) => name.toLowerCase() === file.toLowerCase()) && !TASK_DATA_FILES.has(file)) {
+    throw new Error(`任务/项目数据路径大小写不兼容，请使用标准路径：${file}`);
+  }
+  return !file.split("/").some((part) => part.startsWith(".")) &&
+    (EXTENSIONS.has(path.posix.extname(file).toLowerCase()) || TASK_DATA_FILES.has(file));
+}
+
+function validateTaskData(file, content, source) {
+  if (!TASK_DATA_FILES.has(file)) return;
+  try {
+    const parsed = JSON.parse(content.toString("utf8"));
+    // Match the legacy array and upper/lower-case envelopes accepted by Zen
+    // Task, without normalizing or dropping fields from the transmitted bytes.
+    const items = Array.isArray(parsed) ? parsed : parsed?.Items || parsed?.items;
+    if (!Array.isArray(items) || items.some((item) => !item || typeof item !== "object" || Array.isArray(item))) {
+      throw new Error("invalid-items");
+    }
+    return items;
+  } catch {
+    throw new Error(`${source}任务/项目数据格式无效：${file}。需要 JSON 数组或包含 Items/items 数组的对象，未修改本地数据。`);
+  }
 }
 
 function validatePath(file) {
@@ -123,6 +150,9 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
   }
 
   function scanLocal() {
+    // Fresh policy instance per scan: caches never outlive one preview()/sync()
+    // pass, so a manifest edited between calls is always re-checked.
+    createPkbPolicy().assertLocalRootAllowed(root, { label: "笔记库" });
     const files = Object.create(null), data = Object.create(null);
     let bytes = 0, visited = 0;
     function walk(folder, prefix = "", depth = 0) {
@@ -139,6 +169,7 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
         const stat = fs.statSync(target);
         if (stat.size > LIMITS.fileBytes) throw new Error(`单文件超过 10 MiB：${file}`);
         const content = fs.readFileSync(target);
+        validateTaskData(file, content, "本地");
         bytes += content.length;
         if (bytes > LIMITS.totalBytes || Object.keys(files).length >= LIMITS.files) throw new Error("笔记库超过 5000 个文件或 200 MiB，请缩小同步范围。");
         data[file] = content;
@@ -200,6 +231,7 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
         if (item.type !== "blob" || !["100644", "100755"].includes(String(item.mode))) throw new Error(`远端文件不是普通文件：${file}`);
         const { blob } = await git.readBlob({ ...options, oid: item.oid });
         if (blob.length > LIMITS.fileBytes) throw new Error(`远端文件超过 10 MiB：${file}`);
+        validateTaskData(file, Buffer.from(blob), "远端");
         bytes += blob.length;
         if (bytes > LIMITS.totalBytes || Object.keys(files).length >= LIMITS.files) throw new Error("远端笔记超过 5000 个文件或 200 MiB。");
         files[file] = item.oid;
@@ -208,6 +240,21 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
     }
     await walk(commit.tree);
     validatePaths(Object.keys(files));
+    // PKB sensitive-directory guard on the remote tree, so a protected file
+    // already pushed to GitHub by another device blocks download/merge here
+    // too, not just local-root syncing. This reads at most one small
+    // `_System/pkb.json` blob per candidate PKB root found in `entries`; it
+    // never adds `.json` to the general EXTENSIONS allow-list used for
+    // normal note content.
+    await assertRemoteGovernorsAllowed({
+      entries,
+      localPkb: createPkbPolicy().locateGovernors(root).length > 0,
+      label: "GitHub 远端",
+      fetchManifestBlob: async (oid) => {
+        const { blob } = await git.readBlob({ ...options, oid });
+        return Buffer.from(blob);
+      },
+    });
     return { head, entries, files, data };
   }
 
@@ -271,6 +318,17 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
     validatePaths(Object.keys(merged));
     for (const file of plan.downloads) safeTarget(file);
     for (const item of plan.deletions) if (item.side === "local") safeTarget(item.path);
+    if (!plan.conflicts.length) {
+      const mergedData = Object.create(null);
+      for (const file of TASK_DATA_FILES) {
+        if (merged[file]) mergedData[file] = merged[file].oid === local.files[file] ? local.data[file] : remote.data[file];
+      }
+      const taskState = (data) => ({
+        tasks: data[TASK_FILE] ? validateTaskData(TASK_FILE, data[TASK_FILE], "待同步") : [],
+        projects: data[PROJECT_FILE] ? validateTaskData(PROJECT_FILE, data[PROJECT_FILE], "待同步") : [],
+      });
+      assertTaskReferences({ local: taskState(local.data), remote: taskState(remote.data), merged: taskState(mergedData) });
+    }
     return merged;
   }
 

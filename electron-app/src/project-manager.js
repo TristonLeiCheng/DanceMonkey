@@ -243,7 +243,20 @@
       if (!selectedId) return;
       try { await loadFiles(); } catch { filesLoaded = false; }
     }
-    return { render, renderModal, handleAction, bind, open, closeModal, refreshFiles };
+    function resetVault() {
+      selectedId = "";
+      picker = null;
+      dialog = null;
+      files = [];
+      filesLoaded = false;
+      focusedTaskId = "";
+      milestoneFilter = "all";
+      taskQuery = "";
+      pageError = "";
+      renderedAttention = [];
+    }
+    return { render, renderModal, handleAction, bind, open, closeModal, refreshFiles, resetVault,
+      hasPendingEdits: () => Boolean(picker || dialog) };
   }
   window.DMProjectManager = { create };
 })();

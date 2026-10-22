@@ -44,6 +44,10 @@
     let aiStreamingText = "";
     let aiRequestId = null;
     let aiError = "";
+    let aiNotice = "";
+    let aiStopped = false;
+    let aiFollowOutput = true;
+    let aiScrollTop = 0;
     let aiSnippet = "";
     let unsubscribeChunk = null;
     let unsubscribeSyncProgress = null;
@@ -56,6 +60,10 @@
     let unsubscribeUpdateProgress = null;
     const githubUI = window.DMGitHubSyncUI?.create(api, {
       esc, attr, beforeRender: () => { appSettings = readSettingsForm(); },
+    });
+    const personaManager = window.DMPersonaManager?.create(api, {
+      esc, attr, rerender,
+      openSettings: () => handleAction("ai-settings"),
     });
     const projectManager = window.DMProjectManager.create({
       api, esc, attr, rerender,
@@ -73,11 +81,32 @@
     });
 
     const AI_PROMPTS = [
-      ["总结要点", "请用条目总结下面内容的核心结论与待办：\n\n"],
-      ["拆解任务", "请把下面目标拆成可执行任务，标注优先级与依赖：\n\n"],
-      ["润色表达", "请把下面文字润色得更清晰专业，保留原意：\n\n"],
-      ["写周报", "请根据下面工作记录写一份简洁周报（本周完成 / 风险 / 下周计划）：\n\n"],
+      ["梳理要点", "请用条目总结下面内容的核心结论与待办：\n\n", "从长篇内容中，找到真正重要的事", "outline"],
+      ["拆解计划", "请把下面目标拆成可执行任务，标注优先级与依赖：\n\n", "让一个目标，变成清楚的下一步", "plan"],
+      ["润色文字", "请把下面文字润色得更清晰专业，保留原意：\n\n", "保留你的意思，让表达更清晰", "edit"],
+      ["整理周报", "请根据下面工作记录写一份简洁周报（本周完成 / 风险 / 下周计划）：\n\n", "整理本周进展、收获与下一周计划", "report"],
     ];
+
+    function aiIcon(name) {
+      const paths = {
+        spark: '<path d="m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4Z"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        settings: '<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/>',
+        crop: '<path d="M8 3v13h13M3 8h13v13"/>',
+        camera: '<path d="M8 6 9.5 4h5L16 6h4v14H4V6Z"/><circle cx="12" cy="13" r="4"/>',
+        arrow: '<path d="M12 19V5m-6 6 6-6 6 6"/>',
+        down: '<path d="M12 5v14m-6-6 6 6 6-6"/>',
+        stop: '<rect x="7" y="7" width="10" height="10" rx="1" fill="currentColor" stroke="none"/>',
+        copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/>',
+        check: '<path d="m5 12 4 4L19 6"/>',
+        retry: '<path d="M4 10a8 8 0 1 1 1 7M4 4v6h6"/>',
+        outline: '<path d="M9 6h11M9 12h11M9 18h7M4 6h.01M4 12h.01M4 18h.01"/>',
+        plan: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/><path d="M14 7h3v7M7 14v3h7"/>',
+        edit: '<path d="m15 5 4 4M4 20l4-1L20 7l-4-4L4 15Z"/>',
+        report: '<path d="M6 3h9l3 3v15H6Z M10 10h4M10 14h4M10 18h2"/>',
+      };
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.spark}</svg>`;
+    }
 
     function blankSyncDraft(partial = {}) {
       return {
@@ -155,6 +184,7 @@
     }
 
     async function loadAll() {
+      await personaManager?.load();
       await Promise.all([loadZen(), loadLinks(), loadSync(), loadAi(), loadAppSettings()]);
       if (!unsubscribeSyncProgress && api.folderSync?.onProgress) {
         unsubscribeSyncProgress = api.folderSync.onProgress((payload) => {
@@ -176,8 +206,8 @@
     }
 
     async function persistAiMessages(messages) {
-      aiMessages = messages;
       if (api.setState) await api.setState({ aiMessages: messages });
+      aiMessages = messages;
     }
 
     function renderMarkdown(value) {
@@ -189,10 +219,13 @@
     }
 
     function updateStreamingDom() {
+      const box = document.querySelector(".ws-ai-messages");
+      const follow = aiFollowOutput;
       const body = document.querySelector(".ws-ai-message.streaming .ws-ai-message-body");
-      if (body) body.innerHTML = renderMarkdown(aiStreamingText);
+      if (body && aiStreamingText) body.innerHTML = renderMarkdown(aiStreamingText);
       const status = document.querySelector(".ws-ai-status");
-      if (status) status.textContent = aiBusy ? "正在生成…" : `${aiMessages.length} 条消息`;
+      if (status) status.textContent = aiStreamingText ? "正在回复" : "正在思考";
+      if (box && follow) box.scrollTop = box.scrollHeight;
     }
 
     function isDone(task) {
@@ -462,82 +495,78 @@
       if (aiBusy) rows.push({ role: "assistant", content: aiStreamingText, streaming: true });
       if (!rows.length) {
         return `<div class="ws-ai-empty">
-          <h2>有什么可以帮你？</h2>
-          <p>与侧边快捷面板共用对话记录与 API 配置。可用 Ctrl+Shift+S 全屏截图、Ctrl+Shift+R 框选后 AI 分析。</p>
+          <div class="ws-ai-emblem">${aiIcon("spark")}</div>
+          <span class="ws-ai-eyebrow">留一点空间，给新的想法</span>
+          <h2>今天，想一起完成什么？</h2>
+          <p>梳理一段文字，拆解一个目标，或聊聊眼前的问题。</p>
           <div class="ws-ai-prompts">
-            ${AI_PROMPTS.map(
-              ([label], index) =>
-                `<button type="button" data-module-action="ai-prompt" data-value="${index}">${esc(label)}</button>`,
+            ${AI_PROMPTS.map(([label, , description, icon], index) =>
+              `<button type="button" data-module-action="ai-prompt" data-value="${index}">
+                <span class="ws-ai-prompt-icon">${aiIcon(icon)}</span>
+                <span><strong>${esc(label)}</strong><small>${esc(description)}</small></span>
+                <span class="ws-ai-prompt-arrow" aria-hidden="true">↗</span>
+              </button>`,
             ).join("")}
           </div>
         </div>`;
       }
-      return rows
-        .map(
-          (message) => `<article class="ws-ai-message ${message.role} ${message.streaming ? "streaming" : ""}">
-            <div class="ws-ai-role">${message.role === "user" ? "你" : "AI"}</div>
-            <div class="ws-ai-message-body">${
-              message.role === "assistant"
-                ? renderMarkdown(message.content)
-                : esc(message.content).replaceAll("\n", "<br>")
-            }</div>
-          </article>`,
-        )
-        .join("");
+      return `<div class="ws-ai-thread">${rows.map((message, index) => {
+        const assistant = message.role === "assistant";
+        return `<article class="ws-ai-message ${assistant ? "assistant" : "user"} ${message.streaming ? "streaming" : ""}">
+          <div class="ws-ai-message-meta">${assistant ? `<span class="ws-ai-avatar">${aiIcon("spark")}</span><span>DM 助手</span>` : '<span>你</span>'}${message.streaming ? '<span class="ws-ai-live-dot" aria-hidden="true"></span>' : ""}</div>
+          <div class="ws-ai-message-body">${assistant
+            ? message.streaming && !message.content
+              ? '<span class="ws-ai-thinking"><i></i><i></i><i></i><span>正在想一想…</span></span>'
+              : renderMarkdown(message.content)
+            : esc(message.content).replaceAll("\n", "<br>")}</div>
+          ${assistant && !message.streaming && message.content ? `<div class="ws-ai-message-actions"><button type="button" data-module-action="ai-copy" data-value="${index}" aria-label="复制回复" title="复制 Markdown 原文">${aiIcon("copy")}<span>复制</span></button></div>` : ""}
+        </article>`;
+      }).join("")}</div>`;
     }
 
     function renderAi() {
       const settings = aiSettings || {};
       const profiles = settings.modelProfiles || [];
-      return `<section class="module-page ws-ai-page">
-        <div class="module-heading">
-          <div>
-            <h1>AI 问答</h1>
-            <p>OpenAI 兼容接口 · 多轮上下文 · 流式输出</p>
-          </div>
+      const count = aiMessages.filter((message) => message.role === "user").length;
+      const canRetry = Boolean(aiError && aiMessages.at(-1)?.role === "user");
+      return `<section class="module-page ws-ai-page ${aiMessages.length ? "has-conversation" : "is-empty"}">
+        <header class="ws-ai-header">
+          <div class="ws-ai-heading"><span class="ws-ai-header-icon">${aiIcon("spark")}</span><div><h1>AI 问答</h1><p>想法、文字与下一步</p></div></div>
           <div class="ws-ai-heading-actions">
-            <button type="button" data-module-action="screenshot-region" ${aiBusy ? "disabled" : ""}>框选</button>
-            <button type="button" data-module-action="screenshot-quick" ${aiBusy ? "disabled" : ""}>截屏</button>
-            <button type="button" data-module-action="ai-clear" ${aiBusy ? "disabled" : ""}>新对话</button>
-            <button class="module-primary" type="button" data-module-action="ai-settings">设置</button>
+            <button class="ws-ai-new" type="button" data-module-action="ai-clear" ${aiBusy || !aiMessages.length ? "disabled" : ""}>${aiIcon("plus")}<span>新对话</span></button>
+            <button type="button" class="ws-ai-icon-button" data-module-action="ai-settings" aria-label="AI 设置" title="AI 设置" ${aiBusy ? "disabled" : ""}>${aiIcon("settings")}</button>
           </div>
+        </header>
+        <div class="ws-ai-conversation">
+          <div class="ws-ai-messages" role="region" aria-label="对话消息" tabindex="0">${renderAiMessages()}</div>
+          <button class="ws-ai-to-bottom" type="button" data-module-action="ai-bottom" ${aiFollowOutput ? "hidden" : ""}>${aiIcon("down")}回到最新</button>
         </div>
-        <div class="ws-ai-toolbar">
-          <label class="ws-ai-field">
-            <span>模型</span>
-            <select class="ws-ai-model" ${aiBusy ? "disabled" : ""}>
-              ${profiles
-                .map(
-                  (profile) =>
-                    `<option value="${attr(profile.model)}" ${profile.model === settings.model ? "selected" : ""}>${esc(profile.name || profile.model)}</option>`,
-                )
-                .join("")}
-              ${
-                settings.model && !profiles.some((profile) => profile.model === settings.model)
-                  ? `<option selected value="${attr(settings.model)}">${esc(settings.model)}</option>`
-                  : ""
-              }
-            </select>
-          </label>
-          <label class="ws-ai-field">
-            <span>Prompt</span>
-            <select class="ws-ai-snippet" ${aiBusy ? "disabled" : ""}>
-              <option value="">默认系统提示</option>
-              ${(settings.promptSnippets || [])
-                .map(
-                  (snippet, index) =>
-                    `<option value="${index}" ${String(index) === aiSnippet ? "selected" : ""}>${esc(snippet.title || `片段 ${index + 1}`)}</option>`,
-                )
-                .join("")}
-            </select>
-          </label>
-          <div class="ws-ai-status">${aiBusy ? "正在生成…" : `${aiMessages.length} 条消息`}</div>
-        </div>
-        <div class="ws-ai-messages">${renderAiMessages()}</div>
-        ${aiError ? `<div class="module-error ws-ai-error">${esc(aiError)}</div>` : ""}
-        <div class="ws-ai-composer">
-          <textarea class="ws-ai-input" rows="3" placeholder="输入问题，Enter 发送，Shift+Enter 换行" ${aiBusy ? "disabled" : ""}>${esc(aiDraft)}</textarea>
-          <button class="module-primary ws-ai-send ${aiBusy ? "stop" : ""}" type="button" data-module-action="${aiBusy ? "ai-stop" : "ai-send"}">${aiBusy ? "停止" : "发送"}</button>
+        <div class="ws-ai-compose-area">
+          ${aiError ? `<div class="ws-ai-error" role="alert"><span>${esc(aiError)}</span>${canRetry ? `<button type="button" data-module-action="ai-retry" ${aiBusy ? "disabled" : ""}>${aiIcon("retry")}重新尝试</button>` : ""}</div>` : ""}
+          <div class="ws-ai-composer ${aiBusy ? "is-generating" : ""}">
+            <label class="visually-hidden" for="ws-ai-input">给 AI 发消息</label>
+            <textarea id="ws-ai-input" class="ws-ai-input" rows="2" placeholder="写下你的问题，或放入一段想整理的文字…" ${aiBusy ? "disabled" : ""}>${esc(aiDraft)}</textarea>
+            <div class="ws-ai-composer-tools">
+              <div class="ws-ai-tools-left">
+                <label class="ws-ai-field ws-ai-model-field"><span class="visually-hidden">选择模型</span><span class="ws-ai-model-dot" aria-hidden="true"></span>
+                  <select class="ws-ai-model" aria-label="选择模型" ${aiBusy ? "disabled" : ""}>
+                    ${profiles.map((profile) => `<option value="${attr(profile.model)}" ${profile.model === settings.model ? "selected" : ""}>${esc(profile.name || profile.model)}</option>`).join("")}
+                    ${settings.model && !profiles.some((profile) => profile.model === settings.model) ? `<option selected value="${attr(settings.model)}">${esc(settings.model)}</option>` : ""}
+                    ${!settings.model && !profiles.length ? '<option value="">选择模型</option>' : ""}
+                  </select>
+                </label>
+                <label class="ws-ai-field ws-ai-snippet-field"><span class="visually-hidden">对话提示词</span><select class="ws-ai-snippet" aria-label="对话提示词" ${aiBusy ? "disabled" : ""}>
+                  <option value="" ${aiSnippet === "" ? "selected" : ""}>默认助手</option>
+                  ${(settings.promptSnippets || []).map((snippet, index) => `<option value="${index}" ${String(index) === aiSnippet ? "selected" : ""}>${esc(snippet.title || `提示词 ${index + 1}`)}</option>`).join("")}
+                </select></label>
+                <span class="ws-ai-tool-divider" aria-hidden="true"></span>
+                <button class="ws-ai-tool" type="button" data-module-action="screenshot-region" title="框选截图" aria-label="框选截图" ${aiBusy ? "disabled" : ""}>${aiIcon("crop")}<span>框选</span></button>
+                <button class="ws-ai-tool" type="button" data-module-action="screenshot-quick" title="全屏截图" aria-label="全屏截图" ${aiBusy ? "disabled" : ""}>${aiIcon("camera")}</button>
+              </div>
+              <button class="ws-ai-send ${aiBusy ? "stop" : ""}" type="button" data-module-action="${aiBusy ? "ai-stop" : "ai-send"}" aria-label="${aiBusy ? "停止生成" : "发送消息"}" title="${aiBusy ? "停止生成" : "发送消息"}" ${!aiBusy && !aiDraft.trim() ? "disabled" : ""}>${aiIcon(aiBusy ? "stop" : "arrow")}</button>
+            </div>
+          </div>
+          <div class="ws-ai-composer-caption"><span class="ws-ai-status" role="status">${aiBusy ? aiStreamingText ? "正在回复" : "正在思考" : esc(aiNotice) || (count ? `${count} 轮对话` : "从一个问题开始")}</span><span><kbd>Enter</kbd> 发送 <span class="ws-ai-key-separator">/</span> <kbd>Shift + Enter</kbd> 换行</span></div>
         </div>
       </section>`;
     }
@@ -736,6 +765,7 @@
 
     function render(section) {
       if (section !== "settings") githubUI?.pause();
+      if (section === "personas") return personaManager?.render() || '<div class="module-empty">请在桌面版中使用人物分身。</div>';
       if (section === "ai") return renderAi();
       if (section === "settings") return renderAppSettings();
       if (section === "tasks") return renderTasks();
@@ -928,11 +958,14 @@
         aiDraft = "";
         aiError = "";
         aiStreamingText = "";
+        aiNotice = "";
+        aiFollowOutput = true;
         await persistAiMessages([]);
         rerender();
         return true;
       }
       if (action === "ai-prompt") {
+        if (aiBusy) return true;
         const prompt = AI_PROMPTS[Number(id)];
         if (prompt) {
           aiDraft = prompt[1];
@@ -949,8 +982,43 @@
         await sendAi();
         return true;
       }
+      if (action === "ai-retry") {
+        await sendAi(true);
+        return true;
+      }
+      if (action === "ai-copy") {
+        const message = aiMessages[Number(id)];
+        if (!message || message.role !== "assistant") return true;
+        try {
+          await navigator.clipboard.writeText(String(message.content || ""));
+          const button = document.querySelector(`[data-module-action="ai-copy"][data-value="${Number(id)}"]`);
+          if (button) { button.innerHTML = `${aiIcon("check")}<span>已复制</span>`; button.setAttribute("aria-label", "回复已复制"); }
+        } catch {
+          aiNotice = "复制失败，请选中文字后复制";
+          const status = document.querySelector(".ws-ai-status");
+          if (status) status.textContent = aiNotice;
+        }
+        return true;
+      }
+      if (action === "ai-bottom") {
+        aiFollowOutput = true;
+        const box = document.querySelector(".ws-ai-messages");
+        if (box) box.scrollTop = box.scrollHeight;
+        const button = document.querySelector(".ws-ai-to-bottom");
+        if (button) button.hidden = true;
+        return true;
+      }
       if (action === "ai-stop") {
-        if (aiRequestId && api.ai?.cancel) await api.ai.cancel(aiRequestId);
+        if (!aiBusy || aiStopped) return true;
+        aiStopped = true;
+        const status = document.querySelector(".ws-ai-status");
+        if (status) status.textContent = "正在停止…";
+        const stop = document.querySelector('[data-module-action="ai-stop"]');
+        if (stop) stop.disabled = true;
+        if (aiRequestId && api.ai?.cancel) {
+          try { await api.ai.cancel(aiRequestId); }
+          catch { aiNotice = "正在结束当前回复…"; }
+        }
         return true;
       }
       if (action === "ai-test") {
@@ -1325,61 +1393,67 @@
       }
     }
 
-    async function sendAi() {
+    async function sendAi(retry = false) {
       if (aiBusy) return;
+      const input = document.querySelector(".ws-ai-input");
+      const draft = String(input?.value ?? aiDraft).trim();
+      if (retry ? aiMessages.at(-1)?.role !== "user" : !draft) return;
       if (!api.ai?.chat) {
         aiError = "浏览器预览不连接 AI，请使用桌面模式。";
         rerender();
         return;
       }
-      const input = document.querySelector(".ws-ai-input");
-      const draft = String(input?.value ?? aiDraft).trim();
-      if (!draft) return;
-
-      if (!aiSettings) aiSettings = await api.ai.getSettings();
-      const modelSelect = document.querySelector(".ws-ai-model");
-      const snippetSelect = document.querySelector(".ws-ai-snippet");
-      if (modelSelect?.value) {
-        aiSettings = { ...aiSettings, model: modelSelect.value };
-        await api.ai.saveSettings(aiSettings);
-      }
-      if (snippetSelect) aiSnippet = snippetSelect.value;
-      const snippet = aiSettings.promptSnippets?.[Number(aiSnippet)];
-      const systemPrompt = snippet?.systemPrompt || aiSettings.globalChatSystemPrompt || "";
-
-      const history = [...aiMessages, { role: "user", content: draft }];
-      aiDraft = "";
-      aiError = "";
+      const selectedModel = document.querySelector(".ws-ai-model")?.value;
+      const selectedSnippet = document.querySelector(".ws-ai-snippet")?.value;
+      if (selectedSnippet !== undefined) aiSnippet = selectedSnippet;
+      const history = retry ? [...aiMessages] : [...aiMessages, { role: "user", content: draft }];
+      // Own the turn before the first asynchronous settings or persistence call.
       aiBusy = true;
+      aiStopped = false;
+      aiError = "";
+      aiNotice = "";
       aiStreamingText = "";
-      aiRequestId = `ws-ai-${Date.now()}`;
-      await persistAiMessages(history);
+      aiFollowOutput = true;
+      aiRequestId = `ws-ai-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      let historySaved = retry;
       rerender();
-
-      unsubscribeChunk?.();
-      unsubscribeChunk = api.ai.onChunk?.(({ requestId, chunk }) => {
-        if (requestId !== aiRequestId) return;
-        aiStreamingText += chunk;
-        updateStreamingDom();
-      });
-
       try {
-        const result = await api.ai.chat({
-          requestId: aiRequestId,
-          model: aiSettings.model,
-          systemPrompt,
-          messages: history,
-        });
-        if (result.success) {
-          await persistAiMessages([
-            ...history,
-            { role: "assistant", content: result.text || aiStreamingText || "" },
-          ]);
-        } else {
-          aiError = result.error || "AI 请求失败";
+        if (!aiSettings) aiSettings = await api.ai.getSettings();
+        if (selectedModel && selectedModel !== aiSettings.model) {
+          aiSettings = { ...aiSettings, model: selectedModel };
+          await api.ai.saveSettings(aiSettings);
         }
+        if (aiStopped) { aiNotice = "已停止"; return; }
+        const snippet = aiSnippet !== "" ? aiSettings.promptSnippets?.[Number(aiSnippet)] : null;
+        const systemPrompt = snippet?.systemPrompt || aiSettings.globalChatSystemPrompt || "";
+        if (!retry) await persistAiMessages(history);
+        historySaved = true;
+        aiDraft = "";
+        rerender();
+        if (aiStopped) { aiNotice = "已停止"; return; }
+        unsubscribeChunk?.();
+        unsubscribeChunk = api.ai.onChunk?.(({ requestId, chunk }) => {
+          if (requestId !== aiRequestId) return;
+          aiStreamingText += chunk;
+          updateStreamingDom();
+        });
+        const result = await api.ai.chat({ requestId: aiRequestId, model: aiSettings.model, systemPrompt, messages: history });
+        if (!result.success && !aiStopped) throw new Error(result.error || "回复未完成，请重试。");
+        const answer = result.text || aiStreamingText || "";
+        if (answer.trim()) await persistAiMessages([...history, { role: "assistant", content: answer }]);
+        else if (!aiStopped) throw new Error("没有收到回复内容，请重试或检查模型设置。");
+        if (aiStopped) aiNotice = answer ? "已停止 · 已保留生成内容" : "已停止";
       } catch (cause) {
-        aiError = cause?.message || "AI 请求失败";
+        if (aiStopped) {
+          aiNotice = "已停止";
+          if (historySaved && aiStreamingText) {
+            try {
+              await persistAiMessages([...history, { role: "assistant", content: aiStreamingText }]);
+              aiNotice = "已停止 · 已保留生成内容";
+            } catch (error) { aiError = error?.message || "保存回复失败，请重试。"; }
+          }
+        } else aiError = cause?.message || "回复未完成，请重试。";
+        if (!historySaved) aiDraft = draft;
       } finally {
         unsubscribeChunk?.();
         unsubscribeChunk = null;
@@ -1387,11 +1461,7 @@
         aiStreamingText = "";
         aiRequestId = null;
         rerender();
-        requestAnimationFrame(() => {
-          const box = document.querySelector(".ws-ai-messages");
-          if (box) box.scrollTop = box.scrollHeight;
-          document.querySelector(".ws-ai-input")?.focus();
-        });
+        requestAnimationFrame(() => document.querySelector(".ws-ai-input")?.focus());
       }
     }
 
@@ -1418,6 +1488,7 @@
     }
 
     function bindSearch(scope) {
+      personaManager?.bind(scope);
       projectManager.bind(scope);
       const taskProject = scope.querySelector('form[data-form="task"] select[name="projectId"]');
       if (taskProject) taskProject.onchange = () => {
@@ -1455,43 +1526,51 @@
     }
 
     function bindAi(scope) {
+      const box = scope.querySelector(".ws-ai-messages");
+      if (box) {
+        box.onscroll = () => {
+          aiScrollTop = box.scrollTop;
+          aiFollowOutput = box.scrollHeight - box.scrollTop - box.clientHeight < 64;
+          const button = scope.querySelector(".ws-ai-to-bottom");
+          if (button) button.hidden = aiFollowOutput;
+        };
+        requestAnimationFrame(() => { box.scrollTop = aiFollowOutput ? box.scrollHeight : aiScrollTop; });
+      }
       const input = scope.querySelector(".ws-ai-input");
       if (input) {
+        const resize = () => {
+          input.style.height = "auto";
+          input.style.height = `${Math.min(168, Math.max(56, input.scrollHeight))}px`;
+          input.style.overflowY = input.scrollHeight > 168 ? "auto" : "hidden";
+        };
         input.oninput = () => {
           aiDraft = input.value;
+          resize();
+          const send = scope.querySelector('[data-module-action="ai-send"]');
+          if (send) send.disabled = !aiDraft.trim();
         };
         input.onkeydown = (event) => {
+          if (event.isComposing || event.keyCode === 229) return;
           if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             void sendAi();
           }
         };
-        requestAnimationFrame(() => {
-          const box = scope.querySelector(".ws-ai-messages");
-          if (box) box.scrollTop = box.scrollHeight;
-        });
+        requestAnimationFrame(resize);
       }
       const modelSelect = scope.querySelector(".ws-ai-model");
       if (modelSelect) {
         modelSelect.onchange = async () => {
-          if (!aiSettings || !api.ai?.saveSettings) return;
-          aiSettings = { ...aiSettings, model: modelSelect.value };
-          await api.ai.saveSettings(aiSettings);
+          if (!aiSettings || !api.ai?.saveSettings || aiBusy) return;
+          try {
+            const settings = { ...aiSettings, model: modelSelect.value };
+            await api.ai.saveSettings(settings);
+            aiSettings = settings;
+          } catch (cause) { aiError = cause?.message || "保存模型设置失败"; rerender(); }
         };
       }
       const snippetSelect = scope.querySelector(".ws-ai-snippet");
-      if (snippetSelect) {
-        snippetSelect.onchange = () => {
-          aiSnippet = snippetSelect.value;
-          const snippet = aiSettings?.promptSnippets?.[Number(aiSnippet)];
-          if (snippet) {
-            aiSettings = {
-              ...aiSettings,
-              globalChatSystemPrompt: snippet.systemPrompt || "",
-            };
-          }
-        };
-      }
+      if (snippetSelect) snippetSelect.onchange = () => { aiSnippet = snippetSelect.value; };
     }
 
     function syncAiMessages(messages) {
@@ -1500,7 +1579,22 @@
       rerender();
     }
 
-    return { pauseGitHub: () => githubUI?.pause(), loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id) };
+    function prepareSync() {
+      if (["task", "project"].includes(modal?.type) || projectManager.hasPendingEdits()) {
+        throw new Error("请先保存或关闭任务、项目编辑窗口，再同步或切换笔记库。");
+      }
+    }
+
+    async function reloadVault() {
+      modal = null;
+      error = "";
+      tasks = [];
+      projects = [];
+      projectManager.resetVault();
+      await Promise.all([loadZen(), githubUI?.load()]);
+    }
+
+    return { pauseGitHub: () => githubUI?.pause(), prepareSync, reloadSyncedTasks: loadZen, reloadVault, loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id) };
   }
 
   window.DMWorkspaceModules = { create };

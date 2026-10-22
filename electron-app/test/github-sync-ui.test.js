@@ -60,6 +60,24 @@ test("selecting is not binding: confirmation enables preview, then preview enabl
   assert.match(ui.render(), /data-module-action="github-sync" >/);
 });
 
+test("changing vault clears the previous preview and manual binding fields", async () => {
+  let root = "/vault-a";
+  const { ui } = setup({ githubSync: {
+    status: async () => ({ success: true, root, auth: { connected: true, login: "test" }, sync: { binding: root === "/vault-a" ? { owner: "test", repo: "notes-a", branch: "main" } : null } }),
+    preview: async () => ({ success: true, id: "a-preview", uploads: ["only-a.md"], conflicts: [] }),
+  } });
+  await ui.load();
+  await ui.handleAction("github-preview");
+  assert.match(ui.render(), /only-a.md/);
+  root = "/vault-b";
+  await ui.load();
+  const html = ui.render();
+  assert.doesNotMatch(html, /only-a\.md|value="notes-a"|test\/notes-a/);
+  assert.match(html, /data-github-field="repo" value=""/);
+  assert.match(html, /data-module-action="github-sync" disabled/);
+  assert.match(html, /\/vault-b/);
+});
+
 test("browser preview never presents a working GitHub connection", () => {
   const { ui } = setup();
   assert.match(ui.render(), /Electron/);
@@ -77,6 +95,29 @@ test("UI presents real binding, escaped conflict paths and disables conflicted s
   assert.match(html, /&lt;script>.md/);
   assert.match(html, /data-module-action="github-sync" disabled/);
   assert.doesNotMatch(html, /<script>/);
+});
+
+test("task and project sync preview labels exact data paths and preserves conflict protection", async () => {
+  const { ui } = setup({ githubSync: {
+    status: async () => ({ success: true, auth: { connected: true }, sync: { binding: { owner: "o", repo: "r", branch: "main" } } }),
+    preview: async () => ({
+      success: true, id: "data-preview",
+      uploads: ["Journal/task-module.json"],
+      downloads: ["Journal/zentask-projects.json", "notes/task-module.json.md"],
+      deletions: [{ path: "Journal/task-module.json", side: "local" }, { path: "Journal/zentask-projects.json", side: "remote" }],
+      conflicts: ["Journal/zentask-projects.json"],
+    }),
+  } });
+  await ui.load(); await ui.handleAction("github-preview");
+  const html = ui.render();
+  assert.match(html, /<li>任务数据 · Journal\/task-module\.json<\/li>/);
+  assert.match(html, /<li>项目数据 · Journal\/zentask-projects\.json<\/li>/);
+  assert.match(html, /<li>任务数据 · Journal\/task-module\.json（本地删除）<\/li>/);
+  assert.match(html, /<li>项目数据 · Journal\/zentask-projects\.json（远端删除）<\/li>/);
+  assert.match(html, /<li>notes\/task-module\.json\.md<\/li>/);
+  assert.match(html, /data-module-action="github-sync" disabled/);
+  assert.match(html, /不逐条自动合并/);
+  assert.match(html, /其他 JSON、应用设置、API Key 和隐藏目录不上传/);
 });
 
 test("device polling respects interval and leaving settings cancels authorization", async () => {

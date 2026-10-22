@@ -4,6 +4,7 @@ const { createGitHubAuth } = require("./github-auth");
 const { createGitHubSync } = require("./github-sync");
 const { createGitHubTransport } = require("./github-transport");
 const { createGitHubCoordinator } = require("./github-coordinator");
+const { createSyncDirectories } = require("./github-vaults");
 
 function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialog, BrowserWindow, fetch,
   root, getWindows, isFolderSyncBusy, refreshNotes }) {
@@ -14,8 +15,10 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
     appSlug: process.env.DM_GITHUB_APP_SLUG || defaults.appSlug,
     openExternal: (url) => shell.openExternal(url) });
   let device = null;
-  const sync = createGitHubSync({ root, directory: path.join(directory, "sync"),
+  const syncDirectory = createSyncDirectories(directory, root);
+  const makeSync = (nextRoot) => createGitHubSync({ root: nextRoot, directory: syncDirectory(nextRoot),
     http: createGitHubTransport(fetch), getToken: () => auth.getToken() });
+  let sync = makeSync(root);
   const coordinator = createGitHubCoordinator({
     getParticipants: () => getWindows().filter((win) => win && !win.isDestroyed()).map((win) => win.webContents),
   });
@@ -138,7 +141,7 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
       type: "warning",
       title: "确认 GitHub 笔记同步",
       message: `同步到 ${binding.owner}/${binding.repo} · ${binding.branch}？`,
-      detail: `本地目录：${root}\n上传 ${preview.uploads?.length || 0} 项，下载 ${preview.downloads?.length || 0} 项，删除 ${preview.deletions?.length || 0} 项。\n笔记和图片会上传至 GitHub，删除的内容仍可能保留在 Git 历史中。应用配置和任务 JSON 不会上传。\n操作前会保留本地备份；这不是端到端加密。`,
+      detail: `本地目录：${root}\n上传 ${preview.uploads?.length || 0} 项，下载 ${preview.downloads?.length || 0} 项，删除 ${preview.deletions?.length || 0} 项。\n笔记、图片、任务和项目数据会上传至 GitHub，删除的内容仍可能保留在 Git 历史中。仅同步 Journal/task-module.json 和 Journal/zentask-projects.json 两个业务 JSON；应用配置、API Key 和其他 JSON 不会上传。\n任务和项目按整个文件处理冲突，不自动合并记录。操作前会保留本地备份；这不是端到端加密。`,
       buttons: ["取消", "确认同步"], defaultId: 0, cancelId: 0, noLink: true,
     });
     if (result.response !== 1) return { cancelled: true };
@@ -149,7 +152,7 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
     return sync.sync({ previewId: current.id });
   }));
   handle("openBackup", async () => {
-    const target = path.join(directory, "sync");
+    const target = syncDirectory(root);
     fs.mkdirSync(target, { recursive: true });
     const error = await shell.openPath(target);
     if (error) throw new Error("无法打开同步备份目录。");
@@ -157,6 +160,27 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
   });
 
   return {
+    trusted,
+    runLocalOperation: (operation) => withEditors(() => {
+      preview = null;
+      return operation();
+    }),
+    switchRoot: async (nextRoot, commit) => {
+      if (nextRoot === root) return;
+      return withEditors(async () => {
+        if (!fs.existsSync(nextRoot) || fs.realpathSync(nextRoot) !== nextRoot || !fs.statSync(nextRoot).isDirectory()) {
+          throw new Error("笔记库目录已变化，请重新选择目录。");
+        }
+        const nextSync = makeSync(nextRoot);
+        if (nextSync.status().error) throw new Error(nextSync.status().error);
+        // Commit is synchronous: no renderer can observe a half-switched context.
+        commit();
+        root = nextRoot;
+        sync = nextSync;
+        preview = null;
+        device = null;
+      });
+    },
     assertWritable: (generation) => coordinator.assertWritable(generation),
     get busy() { return operationBusy || coordinator.busy; },
   };

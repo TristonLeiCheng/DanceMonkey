@@ -45,7 +45,10 @@ try {
     "attach", "-nobrowse", "-noautoopen", "-mountpoint", mountPath, writableDmg,
   ], { stdio: "inherit" });
   mounted = true;
-  fs.cpSync(appPath, path.join(mountPath, "DanceMonkey.app"), { recursive: true });
+  const mountedApp = path.join(mountPath, "DanceMonkey.app");
+  // Keep framework links relative; resolving them to build-machine paths breaks signing.
+  fs.cpSync(appPath, mountedApp, { recursive: true, verbatimSymlinks: true });
+  execFileSync("codesign", ["--verify", "--deep", "--strict", mountedApp], { stdio: "inherit" });
   fs.symlinkSync("/Applications", path.join(mountPath, "Applications"));
   execFileSync("hdiutil", ["detach", "-force", mountPath], { stdio: "inherit" });
   mounted = false;

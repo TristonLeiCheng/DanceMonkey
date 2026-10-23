@@ -1509,6 +1509,51 @@
   gap: 14px;
 }
 
+.ws-settings-page [hidden] {
+  display: none !important;
+}
+
+.ws-settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--ws-line);
+  border-radius: 10px;
+  background: var(--ws-panel);
+}
+
+.ws-settings-tabs .ws-settings-tab {
+  flex: 0 1 auto;
+  min-height: 34px;
+  padding: 6px 16px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ws-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ws-settings-tabs .ws-settings-tab:hover {
+  color: var(--ws-text);
+  background: var(--ws-hover);
+}
+
+.ws-settings-tabs .ws-settings-tab[aria-selected="true"] {
+  color: var(--ws-text);
+  border-color: var(--ws-line);
+  background: var(--ws-hover);
+  font-weight: 600;
+}
+
+.ws-settings-tab:focus-visible,
+.ws-settings-page [role="tabpanel"]:focus-visible {
+  outline: 2px solid var(--ws-text);
+  outline-offset: 2px;
+}
+
 .ws-settings-form {
   display: flex;
   flex-direction: column;
@@ -1609,6 +1654,22 @@
   background: var(--ws-panel);
   color: var(--ws-text);
   font: inherit;
+}
+
+.ws-settings-form .ws-settings-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--ws-text);
+  line-height: 1.6;
+}
+
+.ws-settings-form .ws-settings-check input {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
 }
 
 @media (max-width: 720px) {
@@ -1739,3 +1800,47 @@
   font-size: 11px;
   white-space: pre-wrap;
 }
+
+/* Updates sit outside the draggable title bar and stay visible in every section. */
+.ws-update-slot { position: relative; flex: none; -webkit-app-region: no-drag; }
+.ws-update-restart {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--ws-accent);
+  border-radius: 4px;
+  color: var(--ws-accent);
+  background: var(--ws-hover);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ws-update-restart:hover { background: var(--ws-line); }
+.ws-update-restart:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 2px; }
+.ws-update-restart:disabled { opacity: 0.6; cursor: wait; }
+.ws-update-notice {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  z-index: 20;
+  width: 250px;
+  padding: 10px 12px;
+  border: 1px solid var(--ws-accent);
+  border-radius: 6px;
+  color: var(--ws-text);
+  background: rgb(var(--ws-surface) / 0.98);
+  font-size: 12px;
+}
+
+.ws-quit-btn {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: var(--ws-muted);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ws-quit-btn:hover { color: #ff6b6b; background: rgba(255, 107, 107, 0.12); }
+.ws-quit-btn:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 1px; }

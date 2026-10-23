@@ -10,22 +10,11 @@ function createProxyEnforcement() {
   };
 }
 
-function createAppUpdateService({ getInstallDirectory, getCurrentVersion }) {
-  return {
-    getInstallDirectory,
-    getCurrentVersion,
-    checkAndPrepare() {
-      throw new Error("macOS 版本暂不支持应用内更新，请下载安装新版 DMG。");
-    },
-    launchUpdaterAndRestart() {
-      throw new Error("macOS 版本暂不支持应用内更新，请下载安装新版 DMG。");
-    },
-  };
-}
+const { createMacAppUpdateService: createAppUpdateService } = require("../mac-app-update");
 
 module.exports = {
   createProxyEnforcement,
   createAppUpdateService,
   supportsSystemProxyWrite: false,
-  supportsInAppUpdate: false,
+  supportsInAppUpdate: true,
 };

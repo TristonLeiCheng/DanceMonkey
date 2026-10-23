@@ -8,16 +8,34 @@ const { createSyncDirectories } = require("./github-vaults");
 
 function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialog, BrowserWindow, fetch,
   root, getWindows, isFolderSyncBusy, refreshNotes }) {
+  let shuttingDown = false;
+  let shutdownController = new AbortController();
+  let activeOperation = Promise.resolve();
+  async function fetchForSync(url, options = {}) {
+    const signal = options.signal ? AbortSignal.any([options.signal, shutdownController.signal]) : shutdownController.signal;
+    signal.throwIfAborted();
+    let abort;
+    try {
+      return await Promise.race([
+        fetch(url, { ...options, signal }),
+        new Promise((_, reject) => {
+          abort = () => reject(new Error("GitHub 操作已停止。"));
+          signal.addEventListener("abort", abort, { once: true });
+          if (signal.aborted) abort();
+        }),
+      ]);
+    } finally { if (abort) signal.removeEventListener("abort", abort); }
+  }
   const directory = path.join(app.getPath("userData"), "github-notes");
   const defaults = require("./github-app.json");
-  const auth = createGitHubAuth({ directory: path.join(directory, "auth"), safeStorage, fetch,
+  const auth = createGitHubAuth({ directory: path.join(directory, "auth"), safeStorage, fetch: fetchForSync,
     clientId: process.env.DM_GITHUB_CLIENT_ID || defaults.clientId,
     appSlug: process.env.DM_GITHUB_APP_SLUG || defaults.appSlug,
     openExternal: (url) => shell.openExternal(url) });
   let device = null;
   const syncDirectory = createSyncDirectories(directory, root);
   const makeSync = (nextRoot) => createGitHubSync({ root: nextRoot, directory: syncDirectory(nextRoot),
-    http: createGitHubTransport(fetch), getToken: () => auth.getToken() });
+    http: createGitHubTransport(fetchForSync), getToken: () => auth.getToken() });
   let sync = makeSync(root);
   const coordinator = createGitHubCoordinator({
     getParticipants: () => getWindows().filter((win) => win && !win.isDestroyed()).map((win) => win.webContents),
@@ -41,6 +59,7 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
     return result;
   };
   const handle = (name, operation) => ipcMain.handle(`githubSync:${name}`, async (event, input) => {
+    if (shuttingDown) return { success: false, error: "正在退出软件，请稍候。" };
     if (!trusted(event)) return { success: false, error: "此操作只能从 DM 主窗口发起。" };
     try { return { success: true, ...await operation(event, input) }; }
     catch (error) {
@@ -50,9 +69,12 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
     }
   });
   const exclusive = async (operation) => {
+    if (shuttingDown) throw new Error("正在退出软件，请稍候。");
     if (operationBusy) throw new Error("已有 GitHub 操作正在进行，请稍后重试。");
     operationBusy = true;
-    try { return await operation(); } finally { operationBusy = false; }
+    let finish;
+    activeOperation = new Promise((resolve) => { finish = resolve; });
+    try { return await operation(); } finally { operationBusy = false; finish(); }
   };
   const withEditors = (operation) => exclusive(async () => {
     auth.cancel();
@@ -160,6 +182,13 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
   });
 
   return {
+    async shutdown() {
+      shuttingDown = true;
+      shutdownController.abort();
+      await auth.cancel();
+      await activeOperation;
+    },
+    resume() { shuttingDown = false; shutdownController = new AbortController(); },
     trusted,
     runLocalOperation: (operation) => withEditors(() => {
       preview = null;

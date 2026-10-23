@@ -286,7 +286,7 @@ catch {
     try { Write-UpdateLog "FAILED: $failure" } catch {}
     try {
         Add-Type -AssemblyName PresentationFramework
-        [System.Windows.MessageBox]::Show("升级失败：$failure$([Environment]::NewLine)日志：$logPath", 'DM 更新') | Out-Null
+        [System.Windows.MessageBox]::Show("更新失败，请重新打开应用后重试。", 'DM 更新') | Out-Null
     } catch {}
     exit 1
 }
@@ -362,16 +362,19 @@ function createAppUpdateService({ getInstallDirectory, getCurrentVersion, isStar
     const tag = String(release.tag_name || "").trim();
     if (!tag) throw new Error("GitHub 发行版缺少 tag_name 字段。");
     const version = tag.replace(/^[vV]/, "").trim();
+    const current = buildCheckResult({ version });
+    if (!current.isUpdateAvailable) return current;
     const zipAssets = (Array.isArray(release.assets) ? release.assets : [])
       .map((asset) => ({
         name: String(asset.name || ""),
         url: String(asset.browser_download_url || ""),
+        sha256: /^sha256:[a-f0-9]{64}$/i.test(asset.digest || "") ? asset.digest.slice(7) : "",
       }))
       .filter((asset) => asset.name && asset.url && /\.zip$/i.test(asset.name));
     if (!zipAssets.length) {
       throw new Error("GitHub 最新发行版中未找到可用的 .zip 升级包。");
     }
-    let packageUrl = zipAssets[0].url;
+    let selectedAsset = zipAssets[0];
     const keyword = String(assetKeyword || "").trim();
     if (keyword) {
       const matched = zipAssets.find((asset) =>
@@ -380,11 +383,12 @@ function createAppUpdateService({ getInstallDirectory, getCurrentVersion, isStar
       if (!matched) {
         throw new Error(`GitHub 最新发行版中未找到文件名包含 '${keyword}' 的 .zip 升级包。`);
       }
-      packageUrl = matched.url;
+      selectedAsset = matched;
     }
     return buildCheckResult({
       version,
-      packageUrl,
+      packageUrl: selectedAsset.url,
+      sha256: selectedAsset.sha256,
       entryExe: "DanceMonkey.exe",
       releaseNotes: release.body || "",
     });
@@ -465,7 +469,7 @@ function createAppUpdateService({ getInstallDirectory, getCurrentVersion, isStar
     const repository = String(options.updateGitHubRepo || "TristonLeiCheng/DanceMonkey").trim();
     const assetKeyword = String(options.updateAssetKeyword || "win-x64").trim();
     onProgress?.(
-      manifestUrl ? "正在检查最新版本..." : "正在检查 GitHub 最新 Release...",
+      "正在检查更新…",
     );
     const check = manifestUrl
       ? await checkForUpdate(manifestUrl)
@@ -495,4 +499,6 @@ module.exports = {
   compareVersions,
   resolvePayloadRoot,
   validateElectronPayload,
+  copySourceToFile,
+  validateSha256,
 };

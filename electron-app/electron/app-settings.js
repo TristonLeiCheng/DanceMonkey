@@ -1,4 +1,6 @@
+const petModel = require("./pet-model");
 const SETTINGS_KEYS = [
+  ...Object.keys(petModel.DEFAULTS),
   "globalChatHotkey",
   "quickScreenshotHotkey",
   "regionScreenshotHotkey",
@@ -17,6 +19,7 @@ const SETTINGS_KEYS = [
 ];
 
 const DEFAULT_SETTINGS = {
+  ...petModel.DEFAULTS,
   globalChatHotkey: "Alt+Q",
   quickScreenshotHotkey: "Ctrl+Shift+S",
   regionScreenshotHotkey: "Ctrl+Shift+R",
@@ -64,6 +67,7 @@ function pickSettings(config = {}) {
   next.updateGitHubRepo =
     String(next.updateGitHubRepo || "").trim() || "TristonLeiCheng/DanceMonkey";
   next.updateAssetKeyword = String(next.updateAssetKeyword || "").trim() || "win-x64";
+  Object.assign(next, petModel.normalizeSettings(config));
   return next;
 }
 
@@ -124,15 +128,16 @@ function validateSettings(input = {}) {
   return next;
 }
 
-function createAppSettings(configStore, { proxyEnforcement, onHotkeysChanged } = {}) {
+function createAppSettings(configStore, { proxyEnforcement, onHotkeysChanged, onPetChanged } = {}) {
   function get() {
     return pickSettings(configStore.read());
   }
 
   async function save(input) {
-    const validated = validateSettings(input);
+    const validated = validateSettings({ ...get(), ...input });
     const saved = configStore.write(validated);
     const settings = pickSettings(saved);
+    onPetChanged?.(settings);
     if (proxyEnforcement) {
       await proxyEnforcement.startOrUpdate(settings);
     }

@@ -83,3 +83,33 @@ test("updater launch waits until detached process has spawned", async () => {
   await service.launchUpdaterAndRestart({ scriptPath: "C:\\Temp\\apply-update.ps1" });
   assert.equal(unrefCalled, true);
 });
+
+function releaseClientFixture(release) {
+  const vm = require("node:vm");
+  const module = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../electron/app-update.js"), "utf8"), {
+    module, URL, Buffer, process,
+    require: (name) => name === "./system-proxy" ? { fetchWithSystemProxy: async () => ({ ok: true, json: async () => release }) } : require(name),
+  });
+  return module.exports.createAppUpdateService({ getCurrentVersion: () => "3.5.0", getInstallDirectory: () => "" });
+}
+
+test("GitHub release selects Mac architecture ZIP and retains its SHA256 digest", async () => {
+  const hash = "ab".repeat(32);
+  const client = releaseClientFixture({ tag_name: "v3.6.0", assets: [
+    { name: "DanceMonkey-win-x64-3.6.0.zip", browser_download_url: "https://example.com/windows.zip" },
+    { name: "DanceMonkey-darwin-arm64-3.6.0.zip", browser_download_url: "https://example.com/arm.zip", digest: `sha256:${hash}` },
+    { name: "DanceMonkey-darwin-x64-3.6.0.zip", browser_download_url: "https://example.com/intel.zip", digest: `sha256:${hash}` },
+  ] });
+  for (const [arch, name] of [["arm64", "arm"], ["x64", "intel"]]) {
+    const result = await client.checkForUpdateFromGitHub("owner/repo", `darwin-${arch}`);
+    assert.equal(result.isUpdateAvailable, true);
+    assert.equal(result.manifest.packageUrl, `https://example.com/${name}.zip`);
+    assert.equal(result.manifest.sha256, hash);
+  }
+});
+
+test("already-current release does not require an update asset for this platform", async () => {
+  const client = releaseClientFixture({ tag_name: "v3.5.0", assets: [] });
+  assert.equal((await client.checkForUpdateFromGitHub("owner/repo", "darwin-arm64")).isUpdateAvailable, false);
+});

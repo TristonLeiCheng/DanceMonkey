@@ -1,9 +1,13 @@
-const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, safeStorage, screen, shell } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerSaveBlocker, safeStorage, screen, shell, Tray } = require("electron");
+const { createDesktopPet } = require("./desktop-pet");
 const { registerGitHubSync } = require("./github-ipc");
 const { fetchWithSystemProxy } = require("./system-proxy");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createAiService } = require("./ai");
+const { createAppQuitController } = require("./app-quit");
+const { installDesktopIntegration } = require("./desktop-integration");
+const { createAppUpdateController } = require("./app-update-controller");
 const { createAppSettings, toAccelerator } = require("./app-settings");
 const { createFolderSyncService, defaultProfile } = require("./folder-sync");
 const { createFolderSyncScheduler, normalizeProfiles } = require("./folder-sync-scheduler");
@@ -25,6 +29,7 @@ const { registerOutlookIpc } = require("./outlook-ipc");
 const platform = createPlatformAdapter();
 
 app.setName("DM");
+if (process.platform === "win32") app.setAppUserModelId("com.dancemonkey.desktop");
 app.commandLine.appendSwitch("enable-transparent-visuals");
 if (process.env.DM_E2E_ROOT) {
   // UI tests are isolated from the user's vault and settings.
@@ -91,6 +96,10 @@ let quickAccessService;
 let folderSyncService;
 let folderSyncScheduler;
 let appUpdateService;
+let appUpdateController;
+let quitController;
+let desktopIntegration;
+let desktopPet;
 let screenshotController;
 let appSettings;
 let proxyEnforcement;
@@ -196,11 +205,23 @@ function applyShell(next) {
   overlay.webContents.send("shell:mode", next);
 }
 
+function showApplication() {
+  if (quitController?.pending) return;
+  if (workspaceWindow && !workspaceWindow.isDestroyed()) {
+    if (workspaceWindow.isMinimized()) workspaceWindow.restore();
+    workspaceWindow.show();
+    workspaceWindow.focus();
+  } else openWorkspace();
+}
+
+const appWindowIcon = path.join(__dirname, "../assets", process.platform === "win32" ? "logo.ico" : "logo.png");
+
 function openWorkspace(section = "notes") {
   if (githubNotes?.busy && (!workspaceWindow || workspaceWindow.isDestroyed())) return;
   const hash = workspaceHash(section);
   if (workspaceWindow && !workspaceWindow.isDestroyed()) {
     workspaceWindow.webContents.send("workspace:section", section || "notes");
+    if (workspaceWindow.isMinimized()) workspaceWindow.restore();
     workspaceWindow.show();
     workspaceWindow.focus();
     return;
@@ -213,6 +234,7 @@ function openWorkspace(section = "notes") {
     minWidth: 820,
     minHeight: 560,
     frame: false,
+    icon: appWindowIcon,
     ...windowSurface,
     show: false,
     webPreferences: {
@@ -223,7 +245,7 @@ function openWorkspace(section = "notes") {
       additionalArguments: softwareRender ? ["--lumen-software-render"] : [],
     },
   });
-  workspaceWindow.on("close", (event) => { if (githubNotes?.busy) event.preventDefault(); });
+  workspaceWindow.on("close", (event) => { if (githubNotes?.busy && !quitController?.allowed) event.preventDefault(); });
   workspaceWindow.setMenuBarVisibility(false);
   void workspaceWindow.loadURL(rendererUrl(hash));
   workspaceWindow.once("ready-to-show", () => {
@@ -279,7 +301,6 @@ app.whenReady().then(() => {
   const outlookImporter = createOutlookImporter({ auth: outlookAuth,
     mail: createOutlookMailClient({ fetch: fetchWithSystemProxy }), personas: personaService });
   registerOutlookIpc({ ipcMain, trusted: githubNotes.trusted, auth: outlookAuth, importer: outlookImporter });
-  app.on("before-quit", () => outlookImporter.cancelAll());
   registerVaultIpc({
     ipcMain, dialog, BrowserWindow, registry: vaultRegistry,
     trusted: githubNotes.trusted,
@@ -342,6 +363,7 @@ app.whenReady().then(() => {
     store,
     getOverlay: () => overlay,
     getWorkspaceWindow: () => workspaceWindow,
+    getPetWindow: () => desktopPet?.window,
     openWorkspace,
     applyShell,
     isDev,
@@ -350,8 +372,31 @@ app.whenReady().then(() => {
   appSettings = createAppSettings(legacyConfig, {
     proxyEnforcement,
     onHotkeysChanged: () => registerAllHotkeys(),
+    onPetChanged: (settings) => {
+      desktopPet?.sync(settings);
+      broadcastPetSettings(settings);
+    },
   });
+  function broadcastPetSettings(settings) {
+    desktopIntegration?.refreshMenu();
+    for (const win of [overlay, workspaceWindow]) {
+      if (win && !win.isDestroyed()) win.webContents.send("settings:pet-changed", settings);
+    }
+  }
+  desktopPet = createDesktopPet({
+    BrowserWindow, screen, Menu, powerSaveBlocker, configStore: legacyConfig,
+    getTasks: () => githubNotes?.busy ? null : zenTaskStore.load().tasks,
+    openWorkspace,
+    captureQuick: () => { void screenshotController.captureQuick(); },
+    captureRegion: () => { void screenshotController.beginRegionCapture(); },
+    requestQuit: () => { void quitController?.request(); },
+    onSettingsChanged: broadcastPetSettings,
+    onError: (error) => dialog.showErrorBox("桌面宠物设置未能保存", error.message),
+  });
+  desktopPet.registerIpc(ipcMain);
   appUpdateService = platform.createAppUpdateService({
+    getExecutablePath: () => process.execPath,
+    getUserDataDirectory: () => app.getPath("userData"),
     getInstallDirectory: () =>
       app.isPackaged ? path.dirname(process.execPath) : path.resolve(app.getAppPath()),
     getCurrentVersion: () => {
@@ -379,6 +424,20 @@ app.whenReady().then(() => {
       }
     },
   });
+  appUpdateController = createAppUpdateController({
+    service: appUpdateService,
+    getSettings: () => appSettings.get(),
+    supported: platform.supportsInAppUpdate,
+    automatic: app.isPackaged && !process.env.DM_E2E_ROOT,
+    broadcast: (state) => {
+      for (const win of [overlay, workspaceWindow]) {
+        if (win && !win.isDestroyed()) win.webContents.send("appUpdate:state", state);
+      }
+    },
+    canApply: () => !githubNotes?.busy && !syncAbortControllers.size && !screenshotController?.busy,
+    quit: () => setTimeout(() => app.quit(), 400),
+  });
+  appUpdateController.start();
   void proxyEnforcement.startOrUpdate(appSettings.get()).catch((error) => {
     console.warn("proxy enforcement start failed", error?.message || error);
   });
@@ -401,9 +460,10 @@ app.whenReady().then(() => {
   overlay = new BrowserWindow({
     ...boundsForMode("collapsed"),
     frame: false,
+    icon: appWindowIcon,
     ...windowSurface,
     alwaysOnTop: true,
-    skipTaskbar: true,
+    skipTaskbar: false,
     resizable: false,
     // 收起态只有几像素宽，需显式放开系统默认的窗口最小尺寸限制
     minWidth: 1,
@@ -422,6 +482,43 @@ app.whenReady().then(() => {
     },
   });
 
+  quitController = createAppQuitController({
+    getWindows: () => [overlay, workspaceWindow],
+    stopBackground: async () => {
+      appUpdateController.stop();
+      folderSyncScheduler.stop();
+      for (const controller of syncAbortControllers.values()) controller.abort();
+      aiService.cancelAll();
+      personaService.cancelAll();
+      outlookImporter.cancelAll();
+      await githubNotes.shutdown();
+      while (syncAbortControllers.size || screenshotController.writing) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    },
+    resumeBackground: () => {
+      githubNotes.resume();
+      appUpdateController.start();
+      folderSyncScheduler.start();
+    },
+    cleanup: async () => { await proxyEnforcement.stop(); desktopPet.dispose(); globalShortcut.unregisterAll(); },
+    quit: () => app.quit(),
+    onError: (message) => dialog.showErrorBox("未能退出软件", message),
+  });
+  desktopIntegration = installDesktopIntegration({ app, Menu, Tray, nativeImage, platform: process.platform,
+    icon: path.join(__dirname, "../assets/logo.png"),
+    trayIcon: path.join(__dirname, "../assets", process.platform === "darwin" ? "trayTemplate.png" : "logo.ico"),
+    showApplication,
+    getPetEnabled: () => desktopPet.enabled,
+    togglePet: () => desktopPet.toggle(),
+    requestQuit: () => { void quitController.request(); },
+  });
+  desktopPet.sync(appSettings.get());
+  overlay.on("close", (event) => {
+    if (!quitController.allowed) { event.preventDefault(); void quitController.request(); }
+  });
+  overlay.on("focus", () => { if (mode === "collapsed" && !quitController.pending) applyShell("panel"); });
+
   overlay.setAlwaysOnTop(true, "screen-saver");
   overlay.setMenuBarVisibility(false);
   void overlay.loadURL(rendererUrl());
@@ -434,12 +531,7 @@ app.whenReady().then(() => {
   });
 
   // 再次启动时唤出既有窗口，而不是让用户以为程序没反应
-  app.on("second-instance", () => {
-    if (!overlay || overlay.isDestroyed()) return;
-    applyShell("panel");
-    overlay.show();
-    overlay.focus();
-  });
+  app.on("second-instance", showApplication);
 
   // 面板失焦才收起；快捷轨只靠鼠标离开收起，避免一展开就被 blur 打回细条
   overlay.on("blur", () => {
@@ -668,7 +760,8 @@ app.whenReady().then(() => {
   ipcMain.handle("window:close", (event) =>
     BrowserWindow.fromWebContents(event.sender)?.close(),
   );
-  ipcMain.handle("app:quit", () => app.quit());
+  ipcMain.handle("app:quit", () => quitController.request());
+  ipcMain.on("app:quit-ready", (event, payload) => quitController.acknowledge(event.sender, payload));
   ipcMain.handle("app:version", () => app.getVersion());
   ipcMain.handle("screenshot:quick", () => screenshotController.captureQuick());
   ipcMain.handle("screenshot:region", () => screenshotController.beginRegionCapture());
@@ -710,71 +803,9 @@ app.whenReady().then(() => {
       return { success: false, error: error?.message || "应用代理失败" };
     }
   });
-  ipcMain.handle("appUpdate:info", () => ({
-    currentVersion: appUpdateService.getCurrentVersion(),
-    installDirectory: appUpdateService.getInstallDirectory(),
-  }));
-  ipcMain.handle("appUpdate:check", async (event, options = {}) => {
-    try {
-      const settings = { ...appSettings.get(), ...(options || {}) };
-      if (options?.save !== false) {
-        await appSettings.save({
-          ...appSettings.get(),
-          updateManifestUrl: settings.updateManifestUrl,
-          updateGitHubRepo: settings.updateGitHubRepo,
-          updateAssetKeyword: settings.updateAssetKeyword,
-        });
-      }
-      const sendProgress = (message) => {
-        if (!event.sender.isDestroyed()) {
-          event.sender.send("appUpdate:progress", { message });
-        }
-      };
-      const result = await appUpdateService.checkAndPrepare(
-        {
-          updateManifestUrl: settings.updateManifestUrl,
-          updateGitHubRepo: settings.updateGitHubRepo,
-          updateAssetKeyword: settings.updateAssetKeyword,
-        },
-        sendProgress,
-      );
-      return {
-        success: true,
-        isUpdateAvailable: result.isUpdateAvailable,
-        currentVersionText: result.currentVersionText,
-        latestVersionText: result.latestVersionText,
-        message: result.message,
-        releaseNotes: result.manifest?.releaseNotes || "",
-        launchInfo: result.launchInfo
-          ? {
-              installDirectory: result.launchInfo.installDirectory,
-              exeName: result.launchInfo.exeName,
-              sourceDirectory: result.launchInfo.sourceDirectory,
-              scriptPath: result.launchInfo.scriptPath,
-              updateStartupEntry: result.launchInfo.updateStartupEntry,
-            }
-          : null,
-      };
-    } catch (error) {
-      return { success: false, error: error?.message || "检查更新失败" };
-    }
-  });
-  ipcMain.handle("appUpdate:apply", async (_event, launchInfo) => {
-    try {
-      if (!launchInfo?.scriptPath || !launchInfo?.sourceDirectory || !launchInfo?.installDirectory) {
-        throw new Error("升级信息不完整，请重新检查更新。");
-      }
-      await appUpdateService.launchUpdaterAndRestart({
-        ...launchInfo,
-        exeName: launchInfo.exeName || "DanceMonkey.exe",
-        updateStartupEntry: Boolean(launchInfo.updateStartupEntry),
-      });
-      setTimeout(() => app.quit(), 400);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error?.message || "启动升级失败" };
-    }
-  });
+  ipcMain.handle("appUpdate:info", () => appUpdateController.getState());
+  ipcMain.handle("appUpdate:check", () => appUpdateController.check());
+  ipcMain.handle("appUpdate:apply", () => appUpdateController.apply());
 
   function registerHotkey(accelerator, handler) {
     try {
@@ -823,16 +854,16 @@ app.whenReady().then(() => {
   }
 
   registerAllHotkeys();
+  appUpdateService.confirmStartup?.();
 });
 
-app.on("before-quit", (event) => {
-  if (githubNotes?.busy) { event.preventDefault(); return; }
-  folderSyncScheduler?.stop();
-  void proxyEnforcement?.stop?.();
-});
-
-app.on("window-all-closed", () => {
+app.on("before-quit", (event) => quitController?.beforeQuit(event));
+app.on("will-quit", () => {
+  desktopPet?.dispose();
+  desktopIntegration?.dispose();
   globalShortcut.unregisterAll();
-  proxyEnforcement?.stop();
-  app.quit();
+});
+app.on("window-all-closed", () => {
+  if (quitController) void quitController.request();
+  else app.quit();
 });

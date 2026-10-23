@@ -10,6 +10,19 @@ function writeNotes(channel, ...args) {
   return request;
 }
 
+let beforeQuitHandler = async () => {};
+ipcRenderer.on("app:quitting", async (_event, payload) => {
+  try {
+    await beforeQuitHandler(payload.phase);
+    if (payload.phase === "prepare") {
+      await Promise.all([...noteWrites]);
+      ipcRenderer.send("app:quit-ready", { id: payload.id });
+    }
+  } catch {
+    if (payload.phase === "prepare") ipcRenderer.send("app:quit-ready", { id: payload.id, error: true });
+  }
+});
+
 contextBridge.exposeInMainWorld("lumen", {
   platform: process.platform,
   // 软件渲染下 backdrop-filter 几乎无效，界面需要退回不依赖模糊的实心样式
@@ -104,6 +117,11 @@ contextBridge.exposeInMainWorld("lumen", {
     get: () => ipcRenderer.invoke("settings:get"),
     save: (payload) => ipcRenderer.invoke("settings:save", payload),
     applyProxy: () => ipcRenderer.invoke("settings:apply-proxy"),
+    onPetChanged: (cb) => {
+      const listener = (_event, settings) => cb(settings);
+      ipcRenderer.on("settings:pet-changed", listener);
+      return () => ipcRenderer.removeListener("settings:pet-changed", listener);
+    },
   },
   githubSync: {
     status: () => ipcRenderer.invoke("githubSync:status"),
@@ -138,12 +156,12 @@ contextBridge.exposeInMainWorld("lumen", {
   },
   appUpdate: {
     info: () => ipcRenderer.invoke("appUpdate:info"),
-    check: (options) => ipcRenderer.invoke("appUpdate:check", options),
-    apply: (launchInfo) => ipcRenderer.invoke("appUpdate:apply", launchInfo),
-    onProgress: (cb) => {
+    check: () => ipcRenderer.invoke("appUpdate:check"),
+    apply: () => ipcRenderer.invoke("appUpdate:apply"),
+    onState: (cb) => {
       const listener = (_event, payload) => cb(payload);
-      ipcRenderer.on("appUpdate:progress", listener);
-      return () => ipcRenderer.removeListener("appUpdate:progress", listener);
+      ipcRenderer.on("appUpdate:state", listener);
+      return () => ipcRenderer.removeListener("appUpdate:state", listener);
     },
   },
   zenTask: {
@@ -191,6 +209,10 @@ contextBridge.exposeInMainWorld("lumen", {
     },
   },
   quitApp: () => ipcRenderer.invoke("app:quit"),
+  onBeforeQuit: (callback) => {
+    beforeQuitHandler = callback;
+    return () => { if (beforeQuitHandler === callback) beforeQuitHandler = async () => {}; };
+  },
   getAppVersion: () => ipcRenderer.invoke("app:version"),
   window: {
     minimize: () => ipcRenderer.invoke("window:minimize"),

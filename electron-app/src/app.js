@@ -19,6 +19,7 @@
     power: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 4.6v7.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M7.6 7.3a6.2 6.2 0 1 0 8.8 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
     link: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.1.1l1.8-1.8a5 5 0 0 0-7.1-7.1L10.6 5.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M14 11a5 5 0 0 0-7.1-.1L5.1 12.7a5 5 0 0 0 7.1 7.1l1.2-1.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
     settings: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M12 3.75v1.7M12 18.55v1.7M3.75 12h1.7M18.55 12h1.7M6.05 6.05l1.2 1.2M16.75 16.75l1.2 1.2M17.95 6.05l-1.2 1.2M7.25 16.75l-1.2 1.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    capture: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="4.5" width="17" height="12.5" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M8 21h8M12 17v4M8 8h8v5H8z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     workspace: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4.5" y="4.5" width="6.5" height="6.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><rect x="13" y="4.5" width="6.5" height="6.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><rect x="4.5" y="13" width="6.5" height="6.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><rect x="13" y="13" width="6.5" height="6.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/></svg>',
   };
 
@@ -258,7 +259,6 @@
     let renamingId = null;
     let renameValue = "";
     let pendingDeleteId = null;
-    let pendingQuit = false;
     let newBookName = "";
     let aiSettings = null;
     let aiDraft = "";
@@ -361,6 +361,22 @@
     api.onState((next) => {
       if (adopt(next) && !skipRender && !syncPaused) render();
     });
+    api.onBeforeQuit?.(async (phase) => {
+      if (phase === "resume") {
+        delete root.dataset.quitting;
+        root.inert = syncPaused;
+        return;
+      }
+      root.dataset.quitting = "true";
+      root.inert = true;
+      if (phase === "prepare") {
+        await pendingNoteSave.catch(() => {});
+        if (noteSaveError) {
+          adopt(await api.setState({ notes: state.notes, activeNoteId: state.activeNoteId }));
+          noteSaveError = null;
+        }
+      }
+    });
     api.githubSync?.onEditor(async ({ phase }) => {
       if (phase === "prepare") {
         syncPaused = true;
@@ -384,7 +400,7 @@
           render();
         } finally {
           syncPaused = false;
-          root.inert = false;
+          root.inert = root.dataset?.quitting === "true";
         }
       }
     });
@@ -743,17 +759,14 @@
         html = `<div class="collapsed-hit"><div class="collapsed-bar"></div></div>`;
       } else if (mode === "rail") {
         html = `<div class="rail">
-          <button class="rail-btn" data-act="quick-ai">${icons.ai}<span class="tooltip">AI 问答</span></button>
-          <button class="rail-btn" data-act="quick-note">${icons.note}<span class="tooltip">快速便签</span></button>
-          <button class="rail-btn" data-act="quick-todo">${icons.check}<span class="tooltip">快速任务</span></button>
-          <button class="rail-home" data-act="open-workspace" data-section="notes" title="打开主界面">
-            <img class="rail-home-avatar" src="assets/logo.png" alt="DanceMonkey 粒子图标" width="32" height="32" draggable="false" />
-            <span class="tooltip">打开主界面</span>
+          <button type="button" class="rail-btn" data-act="quick-ai" title="AI" aria-label="AI">${icons.ai}<span class="tooltip">AI</span></button>
+          <button type="button" class="rail-btn" data-act="quick-todo" title="任务" aria-label="任务">${icons.check}<span class="tooltip">任务</span></button>
+          <button type="button" class="rail-home" data-act="open-workspace" data-section="notes" title="程序主入口" aria-label="程序主入口">
+            <img class="rail-home-avatar" src="assets/logo.png" alt="" width="38" height="38" draggable="false" />
+            <span class="tooltip">程序主入口</span>
           </button>
-          <button class="rail-btn" data-act="open-books">${icons.books}<span class="tooltip">笔记本</span></button>
-          <button class="rail-btn" data-act="open-links">${icons.link}<span class="tooltip">快速访问</span></button>
-          <button class="rail-btn" data-act="open-search">${icons.search}<span class="tooltip">搜索</span></button>
-          <button class="rail-btn" data-act="open-workspace" data-section="settings">${icons.settings}<span class="tooltip">软件设置</span></button>
+          <button type="button" class="rail-btn" data-act="screenshot-quick" title="全屏截图" aria-label="全屏截图">${icons.capture}<span class="tooltip">全屏截图</span></button>
+          <button type="button" class="rail-btn" data-act="open-search" title="搜索" aria-label="搜索">${icons.search}<span class="tooltip">搜索</span></button>
         </div>`;
       } else {
         const noteItems = notes
@@ -776,7 +789,7 @@
             <button class="icon-btn ${state.pinned ? "on" : ""}" data-act="pin" title="钉住">${icons.pin}</button>
             <button class="icon-btn" data-act="theme" title="主题">${state.theme === "dark" ? icons.sun : icons.moon}</button>
             <button class="icon-btn" data-act="collapse" title="收起">${icons.close}</button>
-            ${isElectron ? `<button class="icon-btn quit ${pendingQuit ? "armed" : ""}" data-act="quit" title="${pendingQuit ? "再次点击退出 DM" : "退出 DM"}">${icons.power}</button>` : ""}
+            ${isElectron ? `<button class="icon-btn quit" data-act="quit" title="退出软件" aria-label="退出软件">${icons.power}</button>` : ""}
           </header>
           ${
             sheet
@@ -788,7 +801,7 @@
                    ${tab !== "ai" ? `<button class="icon-btn" style="margin-left:auto" data-act="new" title="新建">${icons.plus}</button>` : ""}
                  </div>`
           }
-          <div class="panel-body">
+          <div class="panel-body ${!sheet && (tab === "notes" || tab === "todos") ? "quick-entry-body" : ""}">
             ${
               sheet === "books"
                 ? renderBooksSheet()
@@ -865,20 +878,7 @@
         const act = btn.dataset.act;
         const id = btn.dataset.id;
 
-        // 退出键紧邻收起键，先点亮一次作为确认，点其它地方即取消
-        if (act === "quit") {
-          if (pendingQuit) {
-            void api.quitApp();
-            return;
-          }
-          pendingQuit = true;
-          render();
-          return;
-        }
-        if (pendingQuit) {
-          pendingQuit = false;
-          render();
-        }
+        if (act === "quit") { void api.quitApp(); return; }
 
         if (act === "quick-note") void openPanel("notes", "none");
         if (act === "quick-todo") void openPanel("todos", "todo");
@@ -1194,17 +1194,15 @@
     }
 
     async function runScreenshot(modeName) {
-      if (!api.screenshot) {
-        aiError = "当前环境不支持截屏。";
-        render();
-        return;
-      }
       aiError = "";
-      const result =
-        modeName === "region" ? await api.screenshot.region() : await api.screenshot.quick();
-      if (!result?.success && result?.error) {
-        aiError = result.error;
-        render();
+      try {
+        if (!api.screenshot) throw new Error("当前环境不支持截屏。");
+        const result = modeName === "region" ? await api.screenshot.region() : await api.screenshot.quick();
+        if (!result?.success) throw new Error(result?.error || "截图失败，请重试。");
+      } catch (cause) {
+        aiError = cause?.message || "截图失败，请重试。";
+        if (mode !== "panel" || tab !== "ai" || sheet) await openPanel("ai", "none");
+        else render();
       }
     }
 

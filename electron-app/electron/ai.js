@@ -255,7 +255,8 @@ function createAiService(configStore) {
       chat: (payload, onChunk) => chat(payload, onChunk, config) };
   }
 
-  return { getSettings, saveSettings, chat, analyzeImage, cancel, createSession };
+  return { getSettings, saveSettings, chat, analyzeImage, cancel, createSession,
+    cancelAll: () => { for (const controller of active.values()) controller.abort(); } };
 }
 
 module.exports = { createAiService, resolveEndpoint };

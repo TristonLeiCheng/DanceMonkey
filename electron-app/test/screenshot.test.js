@@ -51,6 +51,7 @@ function fixture(t, options = {}) {
     isVisible() { return this.visible; }
     hide() { this.visible = false; this.hideCount += 1; }
     show() { this.visible = true; }
+    showInactive() { this.visible = true; this.restoredInactive = true; }
     focus() {}
     loadURL() {}
     setMenuBarVisibility() {}
@@ -69,7 +70,7 @@ function fixture(t, options = {}) {
       createFromPath: (file) => makeImage(fs.readFileSync(file)),
     },
     screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => display },
-    desktopCapturer: { getSources: async () => [{ display_id: "1", thumbnail: image }] },
+    desktopCapturer: { getSources: async () => { options.onCapture?.(calls); return [{ display_id: "1", thumbnail: image }]; } },
   };
   if (!options.legacy) {
     electron.ClipboardItem = ClipboardItem;
@@ -91,10 +92,13 @@ function fixture(t, options = {}) {
   const { createScreenshotController } = load("screenshot-controller.js", { "./screenshot": screenshot });
   const appWindows = options.visibleAppWindows ? [new BrowserWindow(), new BrowserWindow()] : [];
   for (const win of appWindows) win.show();
+  const petWindow = options.pet ? new BrowserWindow() : null;
+  petWindow?.show();
   const controller = createScreenshotController({
     getNotesRoot: () => { if (rootError) throw rootError; return root; },
     aiService: {}, store: { get: () => ({}), set: (value) => value },
     getOverlay: () => appWindows[0], getWorkspaceWindow: () => appWindows[1],
+    getPetWindow: () => petWindow,
   });
   function seedCurrentImage() {
     const file = path.join(root, "existing.png");
@@ -103,7 +107,7 @@ function fixture(t, options = {}) {
     controller.closeEditorWindow();
     return file;
   }
-  return { root, image, screenshot, controller, calls, appWindows, seedCurrentImage,
+  return { root, image, screenshot, controller, calls, appWindows, petWindow, seedCurrentImage,
     setWrite: (next) => { write = next; },
     failRoot: (error = null) => { rootError = error; },
   };
@@ -249,4 +253,18 @@ test("an unavailable vault releases editor-save and capture locks, allowing a la
   assert.deepEqual(fs.readFileSync(result.imagePath), PNG);
   assert.equal(f.controller.writing, false);
   assert.equal(f.controller.busy, false);
+});
+
+test("captures hide the desktop pet and restore it without focusing it, including capture failures", async (t) => {
+  for (const fail of [false, true]) {
+    let h;
+    h = fixture(t, { pet: true, onCapture: () => {
+      assert.equal(h.petWindow.isVisible(), false, 'pet cannot appear in desktop capture pixels');
+      if (fail) throw new Error('capture unavailable');
+    } });
+    const result = await h.controller.captureQuick();
+    assert.equal(result.success, !fail);
+    assert.equal(h.petWindow.isVisible(), true);
+    assert.equal(h.petWindow.restoredInactive, true, 'restoration must not steal focus');
+  }
 });

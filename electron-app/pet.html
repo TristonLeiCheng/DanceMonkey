@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'" />
+  <title>DM 桌面宠物</title>
+  <link rel="stylesheet" href="src/pet.css" />
+</head>
+<body>
+  <button id="bubble" hidden title="打开待办" aria-live="polite"></button>
+  <button id="pet" aria-label="桌面宠物：单击互动，双击打开主界面，拖动移动，右键打开菜单" title="单击互动 · 双击打开主界面 · 拖动移动 · 右键菜单"><canvas width="32" height="32" aria-hidden="true"></canvas></button>
+  <script src="src/pet-sprites.js"></script>
+  <script src="src/pet-atlas.js"></script>
+  <script src="src/pet.js"></script>
+</body>
+</html>

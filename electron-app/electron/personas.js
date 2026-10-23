@@ -536,7 +536,7 @@ function createPersonaService({ userDataPath, aiService }) {
   }
 
   return { list, create, get, updateProfile, addSources, importEmails, captureModel, removeSource, generate, saveCard, chat,
-    newConversation, selectConversation, deleteConversation, restoreCard, remove, cancel };
+    newConversation, selectConversation, deleteConversation, restoreCard, remove, cancel, cancelAll: () => { for (const id of requests.keys()) cancel(id); } };
 }
 
 module.exports = { createPersonaService, LIMITS };

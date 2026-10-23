@@ -19,6 +19,7 @@ function createScreenshotController({
   store,
   getOverlay,
   getWorkspaceWindow,
+  getPetWindow,
   openWorkspace,
   applyShell,
 }) {
@@ -57,7 +58,7 @@ function createScreenshotController({
     const hidden = [];
     const overlay = getOverlay?.();
     const workspace = getWorkspaceWindow?.();
-    for (const win of [overlay, workspace, resultWindow, choiceWindow, editorWindow]) {
+    for (const win of [overlay, workspace, getPetWindow?.(), resultWindow, choiceWindow, editorWindow]) {
       if (win && !win.isDestroyed() && win.isVisible()) {
         win.hide();
         hidden.push(win);
@@ -68,7 +69,10 @@ function createScreenshotController({
 
   function restoreWindows(hidden) {
     for (const win of hidden) {
-      if (win && !win.isDestroyed()) win.show();
+      if (win && !win.isDestroyed()) {
+        if (win === getPetWindow?.()) win.showInactive();
+        else win.show();
+      }
     }
   }
 

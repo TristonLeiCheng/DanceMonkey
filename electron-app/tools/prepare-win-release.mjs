@@ -16,13 +16,13 @@ fs.copyFileSync(source, target);
 
 const hash = crypto.createHash("sha256");
 for await (const chunk of fs.createReadStream(target)) hash.update(chunk);
+const releaseNotesFile = path.resolve(projectRoot, "..", "docs", "releases", `v${version}.md`);
 const manifest = {
   version,
   packageUrl: zipName,
   entryExe: "DanceMonkey.exe",
   sha256: hash.digest("hex").toUpperCase(),
-  releaseNotes:
-    "新增人物分身：导入文章、笔记、聊天记录和 Outlook 来信，独立聊天、纠正与更新；支持出生年月、星座、简历、事件及 MBTI 观察测算。新增多笔记库与 PKB 基础功能，改进 AI 界面及任务/项目同步。",
+  releaseNotes: fs.readFileSync(releaseNotesFile, "utf8").trim(),
 };
 fs.writeFileSync(path.join(targetDir, "update-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 console.log(`Windows update package: ${target}`);

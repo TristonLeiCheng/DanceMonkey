@@ -9,6 +9,8 @@ function createFolderSyncScheduler(options) {
   } = options;
 
   let timer = null;
+  let startupTimer = null;
+  let generation = 0;
   let running = false;
 
   function dueProfiles(now = Date.now()) {
@@ -28,9 +30,11 @@ function createFolderSyncScheduler(options) {
   async function tick() {
     if (running) return;
     running = true;
+    const startedGeneration = generation;
     try {
       const due = dueProfiles();
       for (const profile of due) {
+        if (startedGeneration !== generation) break;
         onTick?.({ type: "start", profileId: profile.id, name: profile.name });
         try {
           const result = await runProfile(profile);
@@ -71,12 +75,17 @@ function createFolderSyncScheduler(options) {
     }, Math.max(15_000, intervalMs));
     if (typeof timer.unref === "function") timer.unref();
     // 延迟首次巡检，避免和应用启动抢主线程
-    setTimeout(() => {
+    startupTimer = setTimeout(() => {
+      startupTimer = null;
       tick().catch(() => {});
-    }, 20_000).unref?.();
+    }, 20_000);
+    startupTimer.unref?.();
   }
 
   function stop() {
+    generation += 1;
+    if (startupTimer) clearTimeout(startupTimer);
+    startupTimer = null;
     if (timer) clearInterval(timer);
     timer = null;
   }

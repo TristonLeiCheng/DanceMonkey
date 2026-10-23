@@ -104,3 +104,13 @@ test("preload reports a failed editor flush without exposing raw errors", async 
   assert.equal(JSON.stringify(harness.sent).includes("private content"), false);
   assert.equal(harness.api.githubSync.getToken, undefined);
 });
+
+test("quit acknowledgement waits for the renderer flush and all pending note writes", async () => {
+  const h = preload(); let flushed = false;
+  h.api.onBeforeQuit(async (phase) => { if (phase === "prepare") flushed = true; });
+  const write = h.api.workspace.write("draft.md", "final text"); await new Promise(setImmediate);
+  const prepare = h.listeners.get("app:quitting")({}, { id: "quit", phase: "prepare" });
+  await new Promise(setImmediate); assert.equal(flushed, true); assert.equal(h.sent.length, 0);
+  h.finishWrite(); await Promise.all([write, prepare]);
+  assert.equal(h.sent[0][0], "app:quit-ready"); assert.equal(h.sent[0][1].id, "quit");
+});

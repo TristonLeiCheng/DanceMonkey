@@ -94,7 +94,7 @@ try {
   controlPort = clipboardPort;
   const configDirectory = path.join(root, "app-data", "DanceMonkey");
   fs.mkdirSync(vault, { recursive: true }); fs.mkdirSync(configDirectory, { recursive: true });
-  fs.writeFileSync(path.join(configDirectory, "config.json"), JSON.stringify({ notesRootPath: vault }));
+  fs.writeFileSync(path.join(configDirectory, "config.json"), JSON.stringify({ notesRootPath: vault, petModeEnabled: true, petPreventSleepEnabled: false }));
   const packageInfo = JSON.parse(fs.readFileSync(path.join(cwd, "package.json"), "utf8"));
   fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: packageInfo.name, version: packageInfo.version, main: "bootstrap.cjs" }));
   // The one test Electron process owns every clipboard operation. All original
@@ -102,7 +102,7 @@ try {
   // Only capture source pixels are mocked; PNG conversion, ClipboardItem, the
   // system clipboard, windows, preload bridges and screenshot IPC remain real.
   fs.writeFileSync(path.join(root, "bootstrap.cjs"), `
-    const { app, clipboard, ClipboardItem, desktopCapturer, nativeImage, screen, session } = require('electron');
+    const { app, BrowserWindow, clipboard, ClipboardItem, desktopCapturer, nativeImage, screen, session } = require('electron');
     const fs = require('node:fs'), path = require('node:path'), http = require('node:http');
     const { Blob } = require('node:buffer');
     const root = ${JSON.stringify(root)}, vault = fs.realpathSync(${JSON.stringify(vault)});
@@ -110,7 +110,8 @@ try {
     app.setPath('userData', path.join(root, 'user-data'));
     app.setPath('documents', path.join(root, 'documents'));
     app.commandLine.appendSwitch('remote-debugging-port', ${JSON.stringify(String(debugPort))});
-    let originals, restorePromise, restored = false, captures = 0, captureSize = null;
+    let originals, restorePromise, restored = false, captures = 0, captureSize = null, petHiddenDuringCapture = true, bootstrapStage = 'clipboard API';
+    const petWindow = () => BrowserWindow.getAllWindows().find(win => win.webContents.getURL().endsWith('/pet.html'));
     async function restoreClipboard() {
       if (restored) return { restored: true };
       if (!originals) throw new Error('Clipboard snapshot not ready');
@@ -135,7 +136,9 @@ try {
       if (typeof ClipboardItem !== 'function' || typeof clipboard.read !== 'function' || typeof clipboard.write !== 'function') {
         throw new Error('This test requires the current Electron ClipboardItem API');
       }
+      bootstrapStage = 'clipboard snapshot';
       const current = await clipboard.read();
+      bootstrapStage = 'clipboard snapshot materialization';
       const materialized = [];
       for (const item of current) {
         const entries = await Promise.all(item.types.map(async type => {
@@ -145,8 +148,10 @@ try {
         materialized.push(new ClipboardItem(Object.fromEntries(entries)));
       }
       originals = materialized;
+      bootstrapStage = 'capture and test control setup';
       fs.writeFileSync(path.join(root, 'clipboard-ready.json'), JSON.stringify({ ready: true }));
       desktopCapturer.getSources = async ({ thumbnailSize }) => {
+        petHiddenDuringCapture = petHiddenDuringCapture && Boolean(petWindow()) && !petWindow().isVisible();
         const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
         const { width, height } = thumbnailSize;
         const pixels = Buffer.alloc(width * height * 4, Buffer.from([64, 128, 192, 255]));
@@ -165,7 +170,7 @@ try {
         try {
           let raw = ''; for await (const chunk of request) raw += chunk;
           const payload = JSON.parse(raw || '{}');
-          if (request.url === '/status') return response.end(JSON.stringify({ ready: true, restored, captures, captureSize, electron: process.versions.electron }));
+          if (request.url === '/status') return response.end(JSON.stringify({ ready: true, restored, captures, captureSize, petHiddenDuringCapture, petVisible: Boolean(petWindow()?.isVisible()), electron: process.versions.electron }));
           if (request.url === '/restore') return response.end(JSON.stringify(await restoreClipboard()));
           if (request.url === '/compare') {
             const items = await clipboard.read();
@@ -190,8 +195,9 @@ try {
         }
       });
       await new Promise(resolve => server.listen(${clipboardPort}, '127.0.0.1', resolve));
+      bootstrapStage = 'application startup';
       require(${JSON.stringify(path.join(cwd, "electron/main.js"))});
-    }).catch(() => { console.error('Screenshot test bootstrap failed before application startup.'); app.exit(1); });
+    }).catch(error => { console.error('Screenshot test bootstrap failed at ' + bootstrapStage + ' (' + error.name + ').'); app.exit(1); });
   `);
 
   const server = start("preview server", process.execPath, ["server.mjs"], { PORT: String(serverPort) });
@@ -208,6 +214,7 @@ try {
   await overlay.evaluate('window.lumen.openWorkspace("ai")');
   const workspace = await connect((await findWindow("#workspace/ai")).webSocketDebuggerUrl);
   await waitFor(() => workspace.evaluate('Boolean(document.querySelector("[data-module-action=screenshot-quick]"))'), { process: electron });
+  await waitFor(async () => (await control("status")).petVisible, { process: electron });
 
   // Exercise the actual camera button that originally returned writeImage errors.
   await workspace.evaluate('document.querySelector("[data-module-action=screenshot-quick]").click()');
@@ -218,6 +225,8 @@ try {
   let clipboardCheck = await control("compare", { file: fullFile });
   assert.equal(clipboardCheck.png && clipboardCheck.matches, true, "quick capture writes a real clipboard PNG matching the saved image");
   const fullSize = (await control("status")).captureSize;
+  assert.equal((await control("status")).petHiddenDuringCapture, true, "pet is hidden from the captured desktop");
+  assert.equal((await control("status")).petVisible, true, "pet returns after the capture");
   assert.deepEqual(clipboardCheck.size, { width: fullSize.width, height: fullSize.height });
 
   await choice.evaluate('setTimeout(() => document.querySelector("[data-act=edit]").click(), 30); true');

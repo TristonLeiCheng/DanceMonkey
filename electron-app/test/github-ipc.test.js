@@ -37,10 +37,10 @@ function setup(t) {
   };
   const module = { exports: {} };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../electron/github-ipc.js"), "utf8"), {
-    module, process: { env: {} }, URL,
+    module, process: { env: {} }, URL, AbortController, AbortSignal,
     require: (name) => {
       if (name === "./github-app.json") return { clientId: "", appSlug: "" };
-      if (name === "./github-auth") return { createGitHubAuth: () => auth };
+      if (name === "./github-auth") return { createGitHubAuth: (options) => { auth.fetch = options.fetch; return auth; } };
       if (name === "./github-sync") return { createGitHubSync: () => sync };
       if (name === "./github-transport") return { createGitHubTransport: () => ({}) };
       if (name === "./github-coordinator") return { createGitHubCoordinator };
@@ -54,10 +54,10 @@ function setup(t) {
     shell: { openExternal: async (url) => { externalUrls.push(url); }, openPath: async () => "" }, safeStorage: {},
     clipboard: { writeText: (text) => copied.push(text) },
     dialog: { showMessageBox: async (_window, options) => { confirmations.push(options); effects.push("confirm"); return { response: current.response }; } },
-    BrowserWindow: { fromWebContents: () => window }, fetch: async () => {}, root: path.join(directory, "notes"),
+    BrowserWindow: { fromWebContents: () => window }, fetch: async () => current.hangFetch ? new Promise(() => {}) : {}, root: path.join(directory, "notes"),
     getWindows: () => [window], isFolderSyncBusy: () => current.busy, refreshNotes: () => {},
   });
-  return { service, directory, effects, confirmations, current, preview, event, handlers, externalUrls, copied,
+  return { service, directory, effects, confirmations, current, preview, event, handlers, externalUrls, copied, auth,
     call: (name, input, source = event) => handlers.get(`githubSync:${name}`)(source, input) };
 }
 
@@ -185,4 +185,20 @@ test("sync stops on conflicts, public visibility changes or overlapping folder s
   assert.equal((await call("preview")).success, false);
   assert.equal(effects.includes("sync"), false);
   assert.equal(effects.includes("confirm"), false);
+});
+
+
+test("shutdown aborts a stuck network operation, releases editor locks and blocks new work", async (t) => {
+  const h = setup(t);
+  h.current.hangFetch = true;
+  h.auth.repositories = async () => { await h.auth.fetch("https://api.github.com/user/repos"); return []; };
+  const pending = h.call("repositories");
+  await new Promise(setImmediate);
+  assert.equal(h.service.busy, true);
+  await h.service.shutdown();
+  assert.equal((await pending).success, false);
+  assert.equal(h.service.busy, false);
+  assert.equal((await h.call("repositories")).success, false);
+  h.current.hangFetch = false; h.service.resume();
+  assert.equal((await h.call("repositories")).success, true);
 });

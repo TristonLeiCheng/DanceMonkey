@@ -2,9 +2,13 @@
 
 > 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。
 
-## 最新版本 · v3.5.0
+## 最新版本 · v3.6.0
 
-[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.5.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.5.0.md)
+[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.6.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.6.0.md)
+
+- **桌面宠物**：恢复 13 种原版像素角色，新增「工程师」狐狸动画，支持情绪互动、拖动定位、任务气泡提醒与防休眠。
+- **设置选项卡**：快捷键、桌面宠物、笔记同步、网络代理（Windows）与关于更新分类配置，切换保留输入草稿。
+- **更新与退出**：支持 Windows / macOS 后台准备更新与重启安装；退出前保存笔记、停止后台任务，提供托盘和 Dock 入口。
 
 - **人物分身**：导入文章、笔记、聊天记录和 Outlook 来信，生成人物卡，独立聊天、纠正和更新。
 - **人物档案**：记录出生年月、星座、简历和事件；支持手动填写 MBTI 或通过 12 道观察题记录倾向。
@@ -242,7 +246,7 @@ dotnet build DanceMonkey.Cli\DanceMonkey.Cli.csproj -c Debug
 
 生产环境可使用根目录 **`publish.bat`** 进行 **Release**、**win-x64**、**自包含单文件** 等发布（参数以脚本内为准）。
 
-在线升级：`publish.bat` 还会额外生成 `publish/win-x64/artifacts/update-manifest.json` 与对应版本 ZIP 包。将这两个文件部署到同一 URL 目录后，在应用的设置页 About 区填入该 manifest 地址，用户点击 `Update` 就会自动检查、下载、替换当前程序并重启。也可在 **GitHub Releases**（`TristonLeiCheng/DanceMonkey`）获取最新 `DanceMonkey-win-x64-*.zip`。
+在线升级：`publish.bat` 还会额外生成 `publish/win-x64/artifacts/update-manifest.json` 与对应版本 ZIP 包。更新源由应用配置管理，用户在 **设置 → 关于与更新** 点击 **检查更新**，准备完成后点击 **安装更新** 即可。Windows 和 macOS 桌面版也会自动检查并在后台准备更新，准备好后在右上角显示 **更新并重启**；更新界面不展示更新源或安装路径。也可在 **GitHub Releases**（`TristonLeiCheng/DanceMonkey`）获取最新 `DanceMonkey-win-x64-*.zip`。
 
 **安装目录建议**：解压到任意本地文件夹（如 `DanceMonkey` 或 `DanceMonkey-win-x64-1.3.20`）后，直接运行其中的 `DanceMonkey.exe`。**应用内升级会在当前目录就地替换**，不会另复制到其它固定目录。若从网络盘（UNC）路径启动，可双击包内的 **`启动 DanceMonkey.bat`**，程序会复制到 `%LOCALAPPDATA%\DanceMonkey\app` 后运行（Windows 禁止从 UNC 直接执行 exe）。
 

@@ -63,6 +63,12 @@
   let modulesReady = false;
   let modulesInstance = null;
 
+  const updateUI = window.DMAppUpdateUI.create(api, { esc, beforeApply: async () => {
+    await saveActive();
+    // Flush a final snapshot if typing continued while the previous save was pending.
+    await saveActive();
+  } });
+
   function createBrowserApi() {
     const key = "lumen-browser-vault";
     const zenKey = "lumen-browser-zentask";
@@ -577,10 +583,12 @@
           <label class="ws-theme-label"><span class="visually-hidden">工作区主题</span><select class="ws-theme-select" aria-label="工作区主题">${THEMES.map(([value, label]) => `<option value="${value}" ${theme === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
           <label class="ws-opacity-label" title="调整工作区背景不透明度"><span>透明度</span><input class="ws-opacity" type="range" min="35" max="100" step="1" value="${backgroundOpacity}" aria-label="工作区背景不透明度" aria-valuetext="${backgroundOpacity}%"><output>${backgroundOpacity}%</output></label>
         </div>
+        <div data-app-update-slot="title" class="ws-update-slot">${updateUI.renderButton()}</div>
         <div class="ws-window-actions">
+          ${isElectron ? '<button class="ws-quit-btn" data-action="quit-app" title="完全退出软件" aria-label="退出软件">退出</button>' : ""}
           <button class="ws-window-btn" data-action="minimize" title="最小化">−</button>
           <button class="ws-window-btn" data-action="maximize" title="最大化">□</button>
-          <button class="ws-window-btn close" data-action="close-window" title="关闭">×</button>
+          <button class="ws-window-btn close" data-action="close-window" title="关闭窗口（程序继续运行）">×</button>
         </div>
       </header>
       <nav class="ws-nav">
@@ -683,7 +691,7 @@
               : section === "sync"
                 ? "本地 / UNC 文件夹同步"
                 : section === "settings"
-                ? "强制代理与全局快捷键"
+                ? "快捷键、桌面宠物与应用配置"
                 : "与旧版 NoteVault / config 同步"
         }</span>
         <span>${isElectron ? "本地文件" : "浏览器预览存储"}</span>
@@ -789,6 +797,11 @@
       const action = control.dataset.action;
       if (syncPaused || vaultSwitching) return;
 
+      if (action === "app-update-check" || action === "app-update-apply") {
+        await updateUI.handleAction(action);
+        return;
+      }
+
       if (action === "pkb-setup") { await openPkbSetup(); return; }
       if (action === "pkb-note") { await openPkbNote(); return; }
       if (action === "pkb-search") { openPkbSearch(); return; }
@@ -808,7 +821,8 @@
       }
       if (action === "minimize") void api.window.minimize();
       if (action === "maximize") void api.window.toggleMaximize();
-      if (action === "close-window") void api.window.close();
+      if (action === "close-window") { await saveActive(); void api.window.close(); }
+      if (action === "quit-app") { void api.quitApp(); return; }
       if (action === "refresh") await refreshTree();
       if (action === "new-file") openDialog("file");
       if (action === "new-folder") openDialog("folder");
@@ -1055,6 +1069,17 @@
     renderShell();
   }
 
+  api.onBeforeQuit?.(async (phase) => {
+    if (phase === "resume") {
+      delete root.dataset.quitting;
+      root.inert = syncPaused || vaultSwitching;
+      return;
+    }
+    root.dataset.quitting = "true";
+    root.inert = true;
+    if (phase === "prepare") await saveActive();
+  });
+
   api.githubSync?.onEditor(async ({ phase }) => {
     if (phase === "prepare") {
       syncPaused = true;
@@ -1092,7 +1117,7 @@
       } finally {
         syncDraftBlocked = false;
         syncPaused = false;
-        root.inert = vaultSwitching;
+        root.inert = root.dataset?.quitting === "true" || vaultSwitching;
       }
     }
   });
@@ -1422,6 +1447,7 @@
       api.getAppVersion?.().catch(() => "") || "",
       api.window.isMaximized?.().catch(() => false) || false,
     ]);
+    await updateUI.load();
     appVersion = String(runtimeVersion || "");
     maximized = Boolean(initialMaximized);
     api.window.onMaximized?.((next) => {
@@ -1432,6 +1458,7 @@
       esc,
       attr,
       rerender: () => renderShell(),
+      updateUI,
       openNote: async (path) => {
         await openFile(path);
         const result = await api.workspace.list();

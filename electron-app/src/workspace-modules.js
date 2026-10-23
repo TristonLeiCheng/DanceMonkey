@@ -54,10 +54,27 @@
     let appSettings = null;
     let settingsMessage = "";
     let settingsError = "";
-    let updateInfo = { currentVersion: "", installDirectory: "" };
-    let updateStatus = "";
-    let updateBusy = false;
-    let unsubscribeUpdateProgress = null;
+    let settingsTab = "shortcuts";
+    const settingsTabs = [
+      { id: "shortcuts", label: "快捷键", description: "设置唤出面板与截图的全局快捷键。" },
+      { id: "pet", label: "桌面宠物", description: "选择宠物外形，调整互动、任务提醒与唤醒行为。" },
+      { id: "sync", label: "笔记同步", description: "连接 GitHub，配置笔记、任务与项目的多设备同步。" },
+      ...(api.platform === "darwin" ? [] : [{ id: "proxy", label: "网络代理", description: "配置 Windows 系统代理及自动刷新方式。" }]),
+      { id: "about", label: "关于与更新", description: "查看当前版本，检查并安装应用更新。" },
+    ];
+    const editableSettingsTab = (id) => ["shortcuts", "pet", "proxy"].includes(id);
+    const petAnimals = { human: "小人", cat: "猫咪", dog: "狗狗", rabbit: "兔子", fox: "狐狸", goose: "大鹅", cockroach: "蟑螂", mosquito: "蚊子", capybara: "水豚", frog: "青蛙", penguin: "企鹅", turtle: "乌龟", hedgehog: "刺猬", "engineer-fox": "工程师" };
+    api.settings?.onPetChanged?.((settings) => {
+      const keys = ["petModeEnabled", "petAnimal", "petDisplaySize", "petMoodDecayEnabled", "petPreventSleepEnabled", "todoReminderEnabled", "todoReminderMinutes"];
+      for (const key of keys) {
+        if (settings[key] === undefined) continue;
+        appSettings = { ...(appSettings || {}), [key]: settings[key] };
+        const input = document.querySelector(`form[data-form="app-settings"] [name="${key}"]`);
+        if (input?.type === "checkbox") input.checked = settings[key];
+        else if (input) input.value = settings[key];
+      }
+    });
+
     const githubUI = window.DMGitHubSyncUI?.create(api, {
       esc, attr, beforeRender: () => { appSettings = readSettingsForm(); },
     });
@@ -167,20 +184,7 @@
       if (api.settings?.get) {
         appSettings = await api.settings.get();
       }
-      if (api.appUpdate?.info) {
-        try {
-          updateInfo = await api.appUpdate.info();
-        } catch {
-          updateInfo = { currentVersion: "", installDirectory: "" };
-        }
-      }
-      if (!unsubscribeUpdateProgress && api.appUpdate?.onProgress) {
-        unsubscribeUpdateProgress = api.appUpdate.onProgress((payload) => {
-          updateStatus = payload?.message || updateStatus;
-          const el = document.querySelector(".ws-settings-update-status");
-          if (el) el.textContent = updateStatus;
-        });
-      }
+      await helpers.updateUI?.load();
     }
 
     async function loadAll() {
@@ -573,22 +577,40 @@
 
     function renderAppSettings() {
       const s = appSettings || {};
-      const isMac = api.platform === "darwin";
       const mode = s.proxyForceMode === "pac" ? "pac" : "manual";
+      const current = settingsTabs.find((tab) => tab.id === settingsTab) || settingsTabs[0];
+      const panel = (id) => `id="settings-panel-${id}" role="tabpanel" aria-labelledby="settings-tab-${id}" data-settings-panel="${id}" tabindex="0" ${settingsTab === id ? "" : "hidden"}`;
       return `<section class="module-page ws-settings-page">
         <div class="module-heading">
           <div>
             <h1>软件设置</h1>
-            <p>${isMac ? "全局快捷键与应用配置" : "全局快捷键、强制代理与在线升级，写入旧版共用的 config.json"}</p>
+            <p data-settings-description>${current.description}</p>
           </div>
-          <div class="ws-ai-heading-actions">
+          <div class="ws-ai-heading-actions" data-settings-actions ${editableSettingsTab(settingsTab) ? "" : "hidden"}>
             <button type="button" data-module-action="settings-reload">重新加载</button>
             <button class="module-primary" type="button" data-module-action="settings-save">保存设置</button>
           </div>
         </div>
 
+        <div class="ws-settings-tabs" role="tablist" aria-label="设置分类">
+          ${settingsTabs.map((tab) => `<button type="button" class="ws-settings-tab" role="tab" id="settings-tab-${tab.id}" aria-controls="settings-panel-${tab.id}" aria-selected="${settingsTab === tab.id}" tabindex="${settingsTab === tab.id ? 0 : -1}" data-settings-tab="${tab.id}">${tab.label}</button>`).join("")}
+        </div>
         <form class="ws-settings-form" data-form="app-settings" onsubmit="return false;">
-          <section class="ws-settings-card">
+          <section class="ws-settings-card" ${panel("pet")}>
+            <h2>桌面宠物</h2>
+            <p class="ws-settings-desc">单击互动，双击打开主界面，拖动调整位置，右键切换外形或使用快捷功能。保存后立即生效，也可从托盘开启。</p>
+            <label class="ws-settings-check"><input type="checkbox" name="petModeEnabled" ${s.petModeEnabled ? "checked" : ""} /><span>开启桌面宠物</span></label>
+            <div class="form-columns">
+              <label>宠物外形<select name="petAnimal">${Object.entries(petAnimals).map(([id, name]) => `<option value="${id}" ${id === (s.petAnimal || "human") ? "selected" : ""}>${name}</option>`).join("")}</select></label>
+              <label>显示大小<select name="petDisplaySize">${[48, 68, 96, 128].map((size) => `<option value="${size}" ${size === (s.petDisplaySize || 68) ? "selected" : ""}>${size} px</option>`).join("")}</select></label>
+            </div>
+            <label class="ws-settings-check"><input type="checkbox" name="petMoodDecayEnabled" ${s.petMoodDecayEnabled !== false ? "checked" : ""} /><span>随互动和陪伴时间变化心情</span></label>
+            <label class="ws-settings-check"><input type="checkbox" name="petPreventSleepEnabled" ${s.petPreventSleepEnabled !== false ? "checked" : ""} /><span>宠物开启期间保持电脑唤醒</span></label>
+            <label class="ws-settings-check"><input type="checkbox" name="todoReminderEnabled" ${s.todoReminderEnabled ? "checked" : ""} /><span>通过宠物气泡提醒待办任务</span></label>
+            <label>任务提醒间隔（分钟）<input type="number" name="todoReminderMinutes" min="45" max="240" value="${attr(s.todoReminderMinutes || 60)}" /></label>
+            <p class="ws-settings-desc">每 45–240 分钟提醒一次，优先关注逾期、今日到期和高优先任务。点击气泡打开待办。</p>
+          </section>
+          <section class="ws-settings-card" ${panel("shortcuts")}>
             <h2>全局快捷键</h2>
             <p class="ws-settings-desc">需包含 Ctrl / Alt / Shift 等修饰键。保存后立即生效。</p>
             <div class="form-columns">
@@ -598,7 +620,7 @@
             </div>
           </section>
 
-          <section class="ws-settings-card" style="${isMac ? "display:none" : ""}">
+          <section class="ws-settings-card" ${panel("proxy")}>
             <h2>强制代理</h2>
             <p class="ws-settings-desc">定时回写 Windows 系统代理，用于对抗组策略覆盖。AI 请求会跟随系统代理/PAC。</p>
             <label class="ws-settings-check">
@@ -643,32 +665,14 @@
             </div>
           </section>
 
-          ${githubUI?.render() || ""}
-          <section class="ws-settings-card">
+          <div ${panel("sync")}>${githubUI?.render() || ""}</div>
+          <section class="ws-settings-card" ${panel("about")}>
             <h2>关于与更新</h2>
-            <p class="ws-settings-desc">当前版本 v${esc(updateInfo.currentVersion || s._currentVersion || "1.0.0")}。${isMac ? "请从发布页下载新版 DMG 更新。" : "优先使用升级清单 URL；留空则检查 GitHub Releases。"}</p>
-            <div style="${isMac ? "display:none" : ""}">
-            <label>升级清单 URL（可选）
-              <input name="updateManifestUrl" value="${attr(s.updateManifestUrl || "")}" placeholder="https://example.com/update-manifest.json 或本地/UNC 路径" />
-            </label>
-            <div class="form-columns">
-              <label>GitHub 仓库
-                <input name="updateGitHubRepo" value="${attr(s.updateGitHubRepo || "TristonLeiCheng/DanceMonkey")}" placeholder="owner/repo" />
-              </label>
-              <label>资源关键字
-                <input name="updateAssetKeyword" value="${attr(s.updateAssetKeyword || "win-x64")}" placeholder="win-x64" />
-              </label>
-            </div>
-            <div class="ws-settings-actions">
-              <button class="module-primary" type="button" data-module-action="settings-check-update" ${updateBusy ? "disabled" : ""}>${updateBusy ? "检查中…" : "检查并更新"}</button>
-            </div>
-            </div>
-            ${updateStatus ? `<p class="ws-settings-update-status">${esc(updateStatus)}</p>` : ""}
-            ${updateInfo.installDirectory ? `<p class="ws-settings-desc">安装目录：${esc(updateInfo.installDirectory)}</p>` : ""}
+            <div data-app-update-slot="settings">${helpers.updateUI?.renderSettings() || '<p class="ws-settings-desc">当前环境不支持应用内更新。</p>'}</div>
           </section>
         </form>
-        ${settingsError ? `<div class="module-error">${esc(settingsError)}</div>` : ""}
-        ${settingsMessage ? `<div class="ws-settings-ok">${esc(settingsMessage)}</div>` : ""}
+        ${settingsError ? `<div class="module-error" role="alert">${esc(settingsError)}</div>` : ""}
+        ${settingsMessage ? `<div class="ws-settings-ok" role="status">${esc(settingsMessage)}</div>` : ""}
       </section>`;
     }
 
@@ -789,6 +793,13 @@
       const isMac = api.platform === "darwin";
       return {
         ...(appSettings || {}),
+        petModeEnabled: Boolean(form.querySelector('[name="petModeEnabled"]')?.checked),
+        petAnimal: values.petAnimal || "human",
+        petDisplaySize: Number(values.petDisplaySize) || 68,
+        petMoodDecayEnabled: Boolean(form.querySelector('[name="petMoodDecayEnabled"]')?.checked),
+        petPreventSleepEnabled: Boolean(form.querySelector('[name="petPreventSleepEnabled"]')?.checked),
+        todoReminderEnabled: Boolean(form.querySelector('[name="todoReminderEnabled"]')?.checked),
+        todoReminderMinutes: Number(values.todoReminderMinutes) || 60,
         globalChatHotkey: values.globalChatHotkey,
         quickScreenshotHotkey: values.quickScreenshotHotkey,
         regionScreenshotHotkey: values.regionScreenshotHotkey,
@@ -801,9 +812,6 @@
         proxyRefreshMinutes: Number(values.proxyRefreshMinutes) || 3,
         proxyPacUrlShanghai: values.proxyPacUrlShanghai || "",
         proxyPacUrlBeijing: values.proxyPacUrlBeijing || "",
-        updateManifestUrl: values.updateManifestUrl || "",
-        updateGitHubRepo: values.updateGitHubRepo || "TristonLeiCheng/DanceMonkey",
-        updateAssetKeyword: values.updateAssetKeyword || "win-x64",
       };
     }
 
@@ -815,8 +823,12 @@
       }
       settingsError = "";
       settingsMessage = "";
+      githubUI?.capture();
       const payload = { ...readSettingsForm(), ...extra };
-      const result = await api.settings.save(payload);
+      appSettings = payload;
+      let result;
+      try { result = await api.settings.save(payload); }
+      catch (cause) { result = { success: false, error: cause?.message || "保存失败" }; }
       if (!result?.success) {
         settingsError = result?.error || "保存失败";
         rerender();
@@ -867,66 +879,6 @@
           proxyForceMode: "pac",
           proxyPacUrl: pac,
         });
-        return true;
-      }
-      if (action === "settings-check-update") {
-        if (!api.appUpdate?.check) {
-          settingsError = "当前环境不支持在线升级";
-          rerender();
-          return true;
-        }
-        const draft = readSettingsForm();
-        updateBusy = true;
-        settingsError = "";
-        settingsMessage = "";
-        updateStatus = draft.updateManifestUrl
-          ? "正在检查最新版本..."
-          : "正在检查 GitHub 最新 Release...";
-        rerender();
-        try {
-          const result = await api.appUpdate.check({
-            updateManifestUrl: draft.updateManifestUrl,
-            updateGitHubRepo: draft.updateGitHubRepo,
-            updateAssetKeyword: draft.updateAssetKeyword,
-          });
-          updateBusy = false;
-          if (!result?.success) {
-            settingsError = result?.error || "检查更新失败";
-            updateStatus = "";
-            rerender();
-            return true;
-          }
-          if (api.settings?.get) appSettings = await api.settings.get();
-          if (!result.isUpdateAvailable) {
-            updateStatus = result.message || `已是最新版本（v${result.currentVersionText}）。`;
-            settingsMessage = updateStatus;
-            rerender();
-            return true;
-          }
-          updateStatus = `已准备升级到 v${result.latestVersionText}`;
-          const notes = result.releaseNotes ? `\n\n更新说明：\n${String(result.releaseNotes).slice(0, 800)}` : "";
-          const confirmed = confirm(
-            `已准备升级到 v${result.latestVersionText}。\n程序将退出，在当前目录就地替换为最新版本，并在完成后自动重新启动。\n\n更新目录：\n${result.launchInfo?.installDirectory || ""}${notes}`,
-          );
-          if (!confirmed) {
-            updateStatus = "已取消升级";
-            rerender();
-            return true;
-          }
-          updateStatus = `正在退出并更新到 v${result.latestVersionText}...`;
-          rerender();
-          const applied = await api.appUpdate.apply(result.launchInfo);
-          if (!applied?.success) {
-            settingsError = applied?.error || "启动升级失败";
-            updateStatus = "";
-            rerender();
-          }
-        } catch (cause) {
-          updateBusy = false;
-          settingsError = cause?.message || "检查更新失败";
-          updateStatus = "";
-          rerender();
-        }
         return true;
       }
       if (action === "ai-settings") {
@@ -1513,6 +1465,38 @@
     }
 
     function bindSettings(scope) {
+      const tabs = [...scope.querySelectorAll("[data-settings-tab]")];
+      const select = (id, focus = false) => {
+        const current = settingsTabs.find((tab) => tab.id === id);
+        if (!current) return;
+        settingsTab = id;
+        for (const tab of tabs) {
+          const selected = tab.dataset.settingsTab === id;
+          tab.setAttribute("aria-selected", String(selected));
+          tab.tabIndex = selected ? 0 : -1;
+          if (selected && focus) tab.focus();
+        }
+        for (const panel of scope.querySelectorAll("[data-settings-panel]")) {
+          panel.hidden = panel.dataset.settingsPanel !== id;
+        }
+        const actions = scope.querySelector("[data-settings-actions]");
+        if (actions) actions.hidden = !editableSettingsTab(id);
+        const description = scope.querySelector("[data-settings-description]");
+        if (description) description.textContent = current.description;
+      };
+      for (const [index, tab] of tabs.entries()) {
+        tab.onclick = (event) => { event.preventDefault(); event.stopPropagation(); select(tab.dataset.settingsTab); };
+        tab.onkeydown = (event) => {
+          let next;
+          if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+          else if (event.key === "ArrowLeft") next = (index + tabs.length - 1) % tabs.length;
+          else if (event.key === "Home") next = 0;
+          else if (event.key === "End") next = tabs.length - 1;
+          else return;
+          event.preventDefault(); event.stopPropagation();
+          select(tabs[next].dataset.settingsTab, true);
+        };
+      }
       const modeSelect = scope.querySelector('select[name="proxyForceMode"]');
       const modeBox = scope.querySelector(".ws-settings-mode");
       if (modeSelect && modeBox) {

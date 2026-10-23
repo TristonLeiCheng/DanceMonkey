@@ -79,14 +79,14 @@ try {
   await waitFor(async () => (await fetch(`http://127.0.0.1:${serverPort}/`)).ok, { process: server });
 
   // All Electron persistence paths point under this disposable root; no user vault is opened.
-  const electron = start("Electron", path.resolve(cwd, "node_modules/.bin/electron"), ["."], {
+  const electron = start("Electron", path.resolve(cwd, "node_modules/.bin/electron"), ["--no-proxy-server", "."], {
     DM_E2E_ROOT: root,
     DM_E2E_PORT: String(debugPort),
     DM_E2E_SERVER_PORT: String(serverPort),
   });
   const target = await waitFor(async () => {
     const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
-    return targets.find((item) => item.type === "page" && item.url.includes(`127.0.0.1:${serverPort}`));
+    return targets.find((item) => item.type === "page" && !item.url.includes("#workspace") && item.url.includes(`127.0.0.1:${serverPort}`));
   }, { process: electron });
 
   let serial = 0;
@@ -176,8 +176,7 @@ try {
   await evaluate(`(()=>{ const stage=document.querySelector('[name="milestoneId"]'); stage.value="ui-stage"; stage.dispatchEvent(new Event("change",{bubbles:true})); document.querySelector(".ws-note-task-dialog").requestSubmit(); })()`);
   await waitFor(() => evaluate(`document.body.textContent.includes("已创建 2 项任务")`), { process: electron });
   await evaluate(`document.querySelector("[data-note-task-project]").click()`);
-  await waitFor(() => evaluate(`document.body.textContent.includes("完成 UI 验收")`), { process: electron });
-  assert.equal(await evaluate(`document.body.textContent.includes("里程碑 · UI 验收")`), true);
+  await waitFor(() => evaluate(`document.body.textContent.includes("完成 UI 验收") && document.body.textContent.includes("里程碑 · UI 验收")`), { process: electron });
   await evaluate(`document.querySelector('[data-module-action="pm-back"]').click()`);
   await waitFor(() => evaluate(`document.body.textContent.includes("Needs attention")`), { process: electron });
   assert.equal(await evaluate(`document.body.textContent.includes("项目健康度受阻") && document.body.textContent.includes("里程碑已逾期")`), true);
@@ -224,6 +223,75 @@ try {
   await evaluate(`document.querySelector('[data-module-action="close-modal"]').click()`);
   await evaluate(`document.querySelector('[data-action="section"][data-value="settings"]').click()`);
   await waitFor(() => evaluate(`document.body.textContent.includes('GitHub 笔记同步')`), { process: electron });
+  assert.equal(await evaluate(`Boolean(document.querySelector('[data-app-update-slot="settings"]')) && !document.querySelector('[name="updateManifestUrl"], [name="updateGitHubRepo"], [name="updateAssetKeyword"]')`), true);
+  assert.equal(await evaluate(`!document.querySelector('[data-app-update-slot="settings"]').textContent.match(/安装目录|更新目录|GitHub|URL|UNC/)`), true);
+  // Settings tabs retain the same DOM drafts, support keyboard navigation and save hidden fields.
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-settings-tab]'), tab => tab.dataset.settingsTab)`), process.platform === 'darwin' ? ['shortcuts', 'pet', 'sync', 'about'] : ['shortcuts', 'pet', 'sync', 'proxy', 'about']);
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-settings-panel]')).filter(panel => getComputedStyle(panel).display !== 'none').map(panel => panel.dataset.settingsPanel)`), ['shortcuts']);
+  await evaluate(`(() => {
+    window.__settingsDraft = document.querySelector('[name="globalChatHotkey"]');
+    window.__settingsDraft.value = 'Ctrl+Alt+K';
+    document.querySelector('[data-settings-tab="pet"]').click();
+    document.querySelector('[name="petDisplaySize"]').value = '128';
+    document.querySelector('[name="todoReminderEnabled"]').checked = true;
+  })()`);
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('[name="petModeEnabled"]').closest('label')).flexDirection`), 'row');
+  await evaluate(`document.querySelector('[data-settings-tab="pet"]').dispatchEvent(new KeyboardEvent('keydown', {key:'End', bubbles:true}))`);
+  assert.equal(await evaluate(`document.activeElement.dataset.settingsTab === 'about' && document.querySelector('[data-settings-actions]').hidden && getComputedStyle(document.querySelector('[data-settings-panel="about"]')).display !== 'none'`), true);
+  await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key:'Home', bubbles:true})); document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}))`);
+  assert.equal(await evaluate(`document.activeElement.dataset.settingsTab`), 'pet');
+  await evaluate(`document.querySelector('[data-settings-tab="sync"]').click(); window.__githubDraft = document.querySelector('[data-github-field="clientId"]'); window.__githubOriginal = window.__githubDraft.value; window.__githubDraft.value='unsaved-tab-draft'; document.querySelector('[data-settings-tab="shortcuts"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[name="globalChatHotkey"]') === window.__settingsDraft && window.__settingsDraft.value === 'Ctrl+Alt+K' && document.querySelector('[name="petDisplaySize"]').value === '128' && document.querySelector('[data-github-field="clientId"]') === window.__githubDraft && window.__githubDraft.value === 'unsaved-tab-draft'`), true);
+  await evaluate(`document.querySelector('[data-module-action="settings-save"]').click()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-settings-page > .ws-settings-ok')?.textContent.includes('已保存')`), {process:electron});
+  const tabSettings = await evaluate(`window.lumen.settings.get()`);
+  assert.equal(tabSettings.globalChatHotkey, 'Ctrl+Alt+K'); assert.equal(tabSettings.petDisplaySize, 128); assert.equal(tabSettings.todoReminderEnabled, true);
+  assert.equal(await evaluate(`document.querySelector('[data-github-field="clientId"]').value === 'unsaved-tab-draft' && document.querySelector('[data-settings-tab="shortcuts"]').getAttribute('aria-selected') === 'true'`), true);
+  // A validation error must keep the user's drafts, including fields in other tabs.
+  await evaluate(`document.querySelector('[name="globalChatHotkey"]').value='Q'; document.querySelector('[data-module-action="settings-save"]').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('.ws-settings-page > .module-error'))`), {process:electron});
+  assert.equal(await evaluate(`document.querySelector('[name="globalChatHotkey"]').value === 'Q' && document.querySelector('[name="petDisplaySize"]').value === '128'`), true);
+  await evaluate(`document.querySelector('[data-module-action="settings-reload"]').click()`);
+  await waitFor(() => evaluate(`document.querySelector('[name="globalChatHotkey"]').value === 'Ctrl+Alt+K'`), {process:electron});
+  await evaluate(`document.querySelector('[data-github-field="clientId"]').value=window.__githubOriginal`);
+  if (process.env.DM_E2E_SETTINGS_OUTPUT) {
+    fs.mkdirSync(process.env.DM_E2E_SETTINGS_OUTPUT, { recursive: true });
+    for (const tab of ['shortcuts', 'pet', 'sync', 'about']) {
+      await evaluate(`document.querySelector('[data-settings-tab="${tab}"]').click()`);
+      const capture = await send('Page.captureScreenshot', {format: 'png'});
+      fs.writeFileSync(path.join(process.env.DM_E2E_SETTINGS_OUTPUT, `${tab}.png`), Buffer.from(capture.result.data, 'base64'));
+    }
+    await send('Emulation.setDeviceMetricsOverride', {width:820,height:600,deviceScaleFactor:1,mobile:false});
+    await evaluate(`document.querySelector('[data-settings-tab="pet"]').click()`);
+    assert.equal(await evaluate(`Array.from(document.querySelectorAll('[data-settings-tab]')).every(tab => { const r=tab.getBoundingClientRect(); return r.x >= 0 && r.right <= innerWidth; })`), true);
+    const capture = await send('Page.captureScreenshot', {format: 'png'});
+    fs.writeFileSync(path.join(process.env.DM_E2E_SETTINGS_OUTPUT, 'pet-compact.png'), Buffer.from(capture.result.data, 'base64'));
+    await send('Emulation.clearDeviceMetricsOverride');
+    await evaluate(`document.querySelector('[data-settings-tab="shortcuts"]').click()`);
+  }
+  // Simulate a background notification in the real slots and retain unrelated form inputs.
+  await evaluate(`(() => {
+    window.__updateDraft = document.querySelector('[name="globalChatHotkey"]');
+    window.__updateDraft.value = 'Ctrl+Alt+K';
+    window.__updateUI = window.DMAppUpdateUI.create({appUpdate: {
+      onState: cb => { window.__updateNotify = cb; },
+      apply: async () => ({success:false,error:'请等待当前任务完成后再更新。'})
+    }}, {esc: value => String(value).replaceAll('<','&lt;')});
+    window.__updateNotify({supported:true,phase:'ready',latestVersion:'3.6.0',currentVersion:'3.5.0',message:'更新已准备好'});
+  })()`);
+  assert.equal(await evaluate(`document.querySelector('.ws-update-restart')?.textContent === '更新并重启' && document.querySelector('[name="globalChatHotkey"]') === window.__updateDraft && window.__updateDraft.value === 'Ctrl+Alt+K'`), true);
+  await send("Emulation.setDeviceMetricsOverride", {width:820,height:600,deviceScaleFactor:1,mobile:false});
+  assert.equal(await evaluate(`(() => {const b=document.querySelector('.ws-update-restart').getBoundingClientRect(); const c=document.querySelector('[data-action="close-window"]').getBoundingClientRect();return b.x>=0 && b.right<=c.x && c.right<=innerWidth})()`), true);
+  if (process.env.DM_E2E_UPDATE_SCREENSHOT) {
+    const capture = await send("Page.captureScreenshot", {format:"png"});
+    fs.writeFileSync(process.env.DM_E2E_UPDATE_SCREENSHOT, Buffer.from(capture.result.data,"base64"));
+  }
+  await send("Emulation.clearDeviceMetricsOverride");
+  await evaluate(`window.__updateUI.handleAction('app-update-apply')`);
+  assert.equal(await evaluate(`document.querySelector('.ws-update-notice')?.textContent.includes('请等待')`), true);
+  await evaluate(`document.querySelector('[data-action="section"][data-value="settings"]').click()`);
+  await waitFor(() => evaluate(`!document.querySelector('.ws-update-restart')`), {process:electron});
+  await evaluate(`document.querySelector('[data-settings-tab="sync"]').click()`);
   assert.equal(await evaluate(`document.body.textContent.includes('Client ID')`), true);
   assert.equal(await evaluate(`document.querySelector('[data-github-advanced]').open`), false);
   assert.equal(await evaluate(`document.querySelectorAll('.github-step').length`), 3);
@@ -317,7 +385,28 @@ try {
     const capture = await send("Page.captureScreenshot", { format: "png" });
     fs.writeFileSync(process.env.DM_E2E_PKB_SCREENSHOT, Buffer.from(capture.result.data, "base64"));
   }
-  console.log(`UI E2E passed on isolated ports ${serverPort}/${debugPort}: root creation, notes/projects, per-vault state, GitHub settings, PKB preview/templates/full-text search (no remote access)`);
+  // A single click must terminate the whole Electron application after saving dirty notes.
+  const quitRoot = await evaluate(`window.lumen.workspace.list().then(result => result.root)`);
+  const quitPath = await evaluate(`document.querySelector('.ws-current-path').textContent`);
+  assert.equal(await evaluate(`document.querySelector('[data-action="quit-app"]')?.textContent`), "退出");
+  await evaluate(`(() => { const editor=document.querySelector('.ws-editor'); editor.value+='\\n退出前立即保存 e2e-quit-save'; editor.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('[data-action="quit-app"]').click(); return true; })()`);
+  await waitFor(() => electron.exited, {timeout:15000});
+  assert.equal(electron.code, 0, electron.output);
+  assert.equal(fs.readFileSync(path.join(quitRoot, quitPath), "utf8").includes('e2e-quit-save'), true);
+  // Relaunch and verify the compact panel's power button also exits with one click.
+  const panelRun = start("Electron panel quit", path.resolve(cwd, "node_modules/.bin/electron"), ["--no-proxy-server", "."], {
+    DM_E2E_ROOT:root, DM_E2E_PORT:String(debugPort), DM_E2E_SERVER_PORT:String(serverPort),
+  });
+  const panelTarget = await waitFor(async () => {
+    const targets=await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
+    return targets.find(item=>item.type==='page' && !item.url.includes('#workspace') && item.url.includes(`127.0.0.1:${serverPort}`));
+  }, {process:panelRun});
+  socket.close(); await connect(panelTarget.webSocketDebuggerUrl);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('[data-act="quit"]'))`), {process:panelRun});
+  await evaluate(`document.querySelector('[data-act="quit"]').click(); true`);
+  await waitFor(() => panelRun.exited, {timeout:15000});
+  assert.equal(panelRun.code, 0, panelRun.output);
+  console.log(`UI E2E passed on isolated ports ${serverPort}/${debugPort}: settings tabs and drafts, root creation, notes/projects, per-vault state, GitHub settings, PKB preview/templates/full-text search, complete app exit with dirty-note save, single-click panel exit (no remote access)`);
 } finally {
   try { socket?.close(); } catch {}
   for (const record of children.reverse()) await stop(record);

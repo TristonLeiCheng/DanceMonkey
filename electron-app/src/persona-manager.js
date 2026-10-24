@@ -2,6 +2,7 @@
   const CARD_FIELDS = [["summary", "人物概览"], ["knowledge", "知识与经验"], ["thinking", "思考方式"], ["style", "表达风格"], ["boundaries", "回答边界"]];
   const KINDS = [["article", "文章"], ["note", "笔记"], ["chat", "聊天记录"]];
   const profileTools = window.DMPersonaProfile;
+  const demoTools = window.DMPersonaDemos;
 
   function create(api, { esc, attr, rerender, openSettings }) {
     const service = api.personas;
@@ -14,6 +15,7 @@
     let outlook = null, outlookError = "", outlookConfigOpen = null;
     const outlookConfig = { clientId: "", tenantId: "" };
     let scope = null;
+    let demosOpen = true, selectedDemo = "";
 
     function draft(id = selectedId) {
       if (!drafts.has(id)) drafts.set(id, { tab: "sources", name: "", description: "", title: "", kind: "article", speaker: "", text: "", question: "", correction: "", preview: null, notice: "", profileOpen: false, outlookEmail: "", outlookRange: "year", outlookSince: "" });
@@ -26,6 +28,7 @@
       person = next;
       const first = !drafts.has(next.id);
       const d = draft();
+      if (first && next.demoId) d.tab = "chat";
       if (first || profile) { d.name = next.name || ""; d.description = next.description || ""; }
       if (first || !d.profile || details) { d.profile = profileTools.normalize(next.profile); d.profileRevision = next.sourceRevision; }
       else if (previous?.id === next.id && d.profileRevision === previous.sourceRevision &&
@@ -164,13 +167,30 @@
       if (!Array.isArray(items) || !items.length) return "";
       return `<details class="persona-citations"><summary>参考资料 · ${items.length}</summary>${items.map((item) => `<div><strong>${typeof item === "object" && item.id ? `[${esc(item.id)}] ` : ""}${esc(typeof item === "string" ? item : item.title || item.sourceTitle || item.sourceId || "资料")}</strong>${typeof item === "object" && (item.excerpt || item.snippet) ? `<p>${esc(item.excerpt || item.snippet)}</p>` : ""}</div>`).join("")}</details>`;
     }
+    function renderDemos() {
+      if (!demoTools) return "";
+      const preview = demoTools.get(selectedDemo);
+      const added = id => people.some(item => item.demoId === id);
+      return `<details class="persona-demos" ${demosOpen ? "open" : ""}><summary>名人示范 <span>六种视角，从一个问题开始</span></summary>
+        <p class="persona-hint">${esc(demoTools.disclosure)}风格为编辑设定，回答与创作不是真实引语。预览和添加均不调用 AI。</p>
+        <div class="persona-demo-grid">${demoTools.demos.map(item => `<article class="persona-demo-card" data-demo-id="${attr(item.id)}">
+          <div class="persona-demo-heading"><span class="persona-demo-symbol" aria-hidden="true">${esc(item.symbol)}</span><div><h3>${esc(item.name)}</h3><small>${esc(item.english)}</small></div><span class="persona-demo-badge">AI 模拟</span></div>
+          <p class="persona-demo-theme">${esc(item.theme)}</p><p class="persona-demo-bio">${esc(item.bio)}</p><p class="persona-demo-style">${esc(item.style)}</p>
+          ${button("preview-demo", added(item.id) ? "查看示范 · 已添加" : "查看示范", { id: item.id })}</article>`).join("")}</div>
+        ${preview ? `<section class="persona-demo-preview" tabindex="-1" aria-label="${attr(preview.name)}示范预览"><h3>${esc(preview.name)} · 示范预览</h3><p>${esc(demoTools.disclosure)}</p><p>${esc(preview.thinking)}</p><p class="persona-hint">可以这样开始：</p><ul>${preview.starters.map(question => `<li>${esc(question)}</li>`).join("")}</ul><p class="persona-hint">${added(preview.id) ? "将打开已有分身，保留你的编辑和对话。" : "添加后会保存一张可编辑的人物卡，再进入对话。"}问题仅填入输入框，点击发送才会使用当前 AI 服务。</p><div class="persona-actions">${button("use-demo", added(preview.id) ? "打开已有分身" : "添加并开始对话", { id: preview.id, primary: true })}${button("close-demo", "取消")}</div></section>` : ""}</details>`;
+    }
+    function renderStarters() {
+      const demo = demoTools?.get(person.demoId);
+      if (!demo || !person.card) return "";
+      return `<div class="persona-starters"><p class="persona-hint">试着问问 · 点击填入，可编辑后发送</p>${demo.starters.map((question, index) => button("starter", esc(question), { id: String(index) })).join("")}</div>`;
+    }
     function renderChat() {
       const d = draft();
       const conversation = currentConversation();
       const messages = conversation?.messages || [];
       return `<section class="persona-panel persona-chat"><div class="persona-panel-heading"><label class="persona-field"><span>对话历史</span><select data-persona-field="conversation" ${busy ? "disabled" : ""}><option value="" ${!conversation ? "selected" : ""}>选择对话</option>${(person.conversations || []).map((item) => `<option value="${attr(item.id)}" ${item.id === person.activeConversationId ? "selected" : ""}>${esc(item.title || "新对话")}</option>`).join("")}</select></label><div class="persona-actions">${button("new-conversation", "新会话")}${conversation ? button("delete-conversation", d.deletingConversation ? "确认删除当前会话" : "删除当前会话", { danger: true }) : ""}${d.deletingConversation ? button("keep-conversation", "取消") : ""}</div></div>
-        ${!person.card ? '<p class="persona-hint">先保存人物卡，即可开始和分身对话。</p>' : ""}<div class="persona-messages" aria-label="人物分身对话">${messages.length ? messages.map((message) => `<article class="persona-message ${message.role === "user" ? "user" : "assistant"}"><strong>${message.role === "user" ? "你" : esc(person.name)}</strong><div>${markdown(message.content)}</div>${citations(message.citations)}</article>`).join("") : '<div class="persona-empty">从一个具体问题开始。回答会参考此人物的资料与已保存的人物卡。</div>'}${pendingMessage ? `<article class="persona-message user"><strong>你</strong><div class="persona-plain">${esc(pendingMessage)}</div></article><article class="persona-message assistant"><strong>${esc(person.name)}</strong><div class="persona-plain" data-persona-stream aria-live="polite">${esc(stream || "正在组织回答…")}</div></article>` : ""}</div>
-        ${input("question", "发送消息", d.question, { rows: 3, placeholder: "输入问题，Ctrl / ⌘ + Enter 发送", disabled: busy || !person.card })}<div class="persona-actions">${activeRequest?.kind === "chat" ? button("cancel", "停止回答", { disabled: false }) : button("send", "发送", { primary: true, disabled: busy || !person.card })}</div></section>`;
+        ${!person.card ? '<p class="persona-hint">先保存人物卡，即可开始和分身对话。</p>' : ""}<div class="persona-messages" aria-label="人物分身对话">${messages.length ? messages.map((message) => `<article class="persona-message ${message.role === "user" ? "user" : "assistant"}"><strong>${message.role === "user" ? "你" : esc(person.name) + (person.demoId ? " · AI 模拟" : "")}</strong><div>${markdown(message.content)}</div>${citations(message.citations)}</article>`).join("") : '<div class="persona-empty">从一个具体问题开始。回答会参考此人物的资料与已保存的人物卡。</div>'}${pendingMessage ? `<article class="persona-message user"><strong>你</strong><div class="persona-plain">${esc(pendingMessage)}</div></article><article class="persona-message assistant"><strong>${esc(person.name)}${person.demoId ? " · AI 模拟" : ""}</strong><div class="persona-plain" data-persona-stream aria-live="polite">${esc(stream || "正在组织回答…")}</div></article>` : ""}</div>
+        ${renderStarters()}${input("question", "发送消息", d.question, { rows: 3, placeholder: "输入问题，Ctrl / ⌘ + Enter 发送", disabled: busy || !person.card })}<div class="persona-actions">${activeRequest?.kind === "chat" ? button("cancel", "停止回答", { disabled: false }) : button("send", "发送", { primary: true, disabled: busy || !person.card })}</div></section>`;
     }
     function renderVersions() {
       return `<section class="persona-panel"><h3>人物卡版本</h3><p class="persona-hint">恢复会将选中的内容保存为新版本，保留现有历史。</p>${(person.versions || []).length ? [...person.versions].reverse().map((version) => `<article class="persona-source"><div><strong>v${esc(version.version ?? version.cardVersion ?? "")}</strong><small>${esc(displayDate(version.createdAt))}</small><p>${esc(version.card?.summary || version.summary || "人物卡版本")}</p></div>${button("restore", "恢复此版本", { id: String(version.version ?? version.cardVersion ?? ""), disabled: busy || Boolean(draft().preview) })}</article>`).join("") : '<div class="persona-empty">保存第一张人物卡后会记录版本。</div>'}</section>`;
@@ -201,8 +221,8 @@
       const d = draft();
       return `<section class="module-page persona-page"><header class="persona-heading"><div><h2>人物分身</h2><p>用文章、笔记、聊天记录和邮件，整理一个人的知识和表达方式。</p></div>${button("settings", "AI 设置")}</header><p class="persona-privacy">人物资料独立保存在本机。生成与对话会把你加入此人物的相关资料提交至当前 AI 服务；回答是基于资料的模拟。</p>
         ${error ? `<div class="module-error" role="alert">${esc(error)} ${button("dismiss-error", "关闭提示", { disabled: false })}</div>` : ""}${busy ? `<div class="persona-progress" role="status"><span data-persona-progress>${esc(progress)}</span>${activeRequest ? button("cancel", "停止", { disabled: false }) : ""}</div>` : ""}
-        <div class="persona-layout"><aside class="persona-sidebar"><div class="persona-panel-heading"><h3>我的人物</h3>${button("new-person", "＋ 新建")}</div>${newPerson.open ? `<div class="persona-create">${input("new:name", "人物名称", newPerson.name)}${input("new:description", "简介（可选）", newPerson.description, { rows: 2 })}<div class="persona-actions">${button("create", "创建", { primary: true })}${button("close-new", "取消")}</div></div>` : ""}<div class="persona-people">${people.length ? people.map((item) => `<button type="button" data-persona-action="select" data-id="${attr(item.id)}" class="persona-person ${item.id === selectedId ? "selected" : ""}" ${busy ? "disabled" : ""}><strong>${esc(item.name || "未命名人物")}</strong><small>${esc(item.description || "点击查看资料与对话")}</small></button>`).join("") : '<p class="persona-hint">创建第一个人物，加入他的资料。</p>'}</div></aside>
-        <div class="persona-content">${person ? `<details class="persona-profile" ${d.profileOpen ? "open" : ""}><summary>${esc(person.name)} <span>编辑名称与简介</span></summary>${input("name", "人物名称", d.name)}${input("description", "简介", d.description, { rows: 2 })}<div class="persona-actions">${button("save-profile", "保存信息")}${button("delete", deleting ? "确认删除人物及本地资料" : "删除人物", { danger: true })}${deleting ? button("keep-person", "保留人物") : ""}</div></details>${person.card && Number.isInteger(person.cardSourceRevision) && person.cardSourceRevision !== person.sourceRevision ? '<p class="persona-notice">资料已更新，建议根据当前资料重新生成人物卡预览。</p>' : ""}<nav class="persona-tabs">${[["profile", "人物档案"], ["sources", "资料"], ["card", "人物卡"], ["chat", "对话"], ["versions", "版本"]].map(([key, title]) => `<button type="button" data-persona-action="tab" data-id="${key}" class="${d.tab === key ? "active" : ""}" ${busy ? "disabled" : ""}>${title}${key === "card" && d.preview ? ' <span class="persona-dot">待保存</span>' : ""}</button>`).join("")}</nav>${d.notice ? `<p class="persona-notice" role="status">${esc(d.notice)}</p>` : ""}${d.tab === "profile" ? renderProfile() : d.tab === "card" ? renderCard() : d.tab === "chat" ? renderChat() : d.tab === "versions" ? renderVersions() : renderSources()}` : '<div class="persona-empty">新建人物后，依次加入资料、确认人物卡，即可开始对话。</div>'}</div></div></section>`;
+        ${renderDemos()}<div class="persona-layout"><aside class="persona-sidebar"><div class="persona-panel-heading"><h3>我的人物</h3>${button("new-person", "＋ 新建")}</div>${newPerson.open ? `<div class="persona-create">${input("new:name", "人物名称", newPerson.name)}${input("new:description", "简介（可选）", newPerson.description, { rows: 2 })}<div class="persona-actions">${button("create", "创建", { primary: true })}${button("close-new", "取消")}</div></div>` : ""}<div class="persona-people">${people.length ? people.map((item) => `<button type="button" data-persona-action="select" data-id="${attr(item.id)}" class="persona-person ${item.id === selectedId ? "selected" : ""}" ${busy ? "disabled" : ""}><strong>${esc(item.name || "未命名人物")}${item.demoId ? ' <span class="persona-demo-badge">AI 模拟</span>' : ""}</strong><small>${esc(item.description || "点击查看资料与对话")}</small></button>`).join("") : '<p class="persona-hint">创建第一个人物，加入他的资料。</p>'}</div></aside>
+        <div class="persona-content">${person ? `${person.demoId ? `<p class="persona-demo-disclosure">${esc(demoTools.disclosure)}生成内容不是真实引语。</p>` : ""}<details class="persona-profile" ${d.profileOpen ? "open" : ""}><summary>${esc(person.name)} <span>编辑名称与简介</span></summary>${input("name", "人物名称", d.name)}${input("description", "简介", d.description, { rows: 2 })}<div class="persona-actions">${button("save-profile", "保存信息")}${button("delete", deleting ? "确认删除人物及本地资料" : "删除人物", { danger: true })}${deleting ? button("keep-person", "保留人物") : ""}</div></details>${person.card && Number.isInteger(person.cardSourceRevision) && person.cardSourceRevision !== person.sourceRevision ? '<p class="persona-notice">资料已更新，建议根据当前资料重新生成人物卡预览。</p>' : ""}<nav class="persona-tabs">${[["profile", "人物档案"], ["sources", "资料"], ["card", "人物卡"], ["chat", "对话"], ["versions", "版本"]].map(([key, title]) => `<button type="button" data-persona-action="tab" data-id="${key}" class="${d.tab === key ? "active" : ""}" ${busy ? "disabled" : ""}>${title}${key === "card" && d.preview ? ' <span class="persona-dot">待保存</span>' : ""}</button>`).join("")}</nav>${d.notice ? `<p class="persona-notice" role="status">${esc(d.notice)}</p>` : ""}${d.tab === "profile" ? renderProfile() : d.tab === "card" ? renderCard() : d.tab === "chat" ? renderChat() : d.tab === "versions" ? renderVersions() : renderSources()}` : '<div class="persona-empty">新建人物后，依次加入资料、确认人物卡，即可开始对话。</div>'}</div></div></section>`;
     }
 
     async function handleAction(action, id = "") {
@@ -221,8 +241,32 @@
         if (!newPerson.name.trim()) { error = "请填写人物名称。"; rerender(); return; }
         await run("正在创建人物…", async () => { accept(await service.create({ name: newPerson.name.trim(), description: newPerson.description.trim() })); newPerson = { open: false, name: "", description: "" }; picker = null; }); return;
       }
+      if (action === "preview-demo") {
+        if (!demoTools?.get(id)) return;
+        selectedDemo = id; demosOpen = true; rerender();
+        scope?.querySelector(".persona-demo-preview")?.focus(); return;
+      }
+      if (action === "close-demo") {
+        const previous = selectedDemo; selectedDemo = ""; rerender();
+        scope?.querySelector(`[data-persona-action="preview-demo"][data-id="${previous}"]`)?.focus(); return;
+      }
+      if (action === "use-demo") {
+        if (!demoTools?.get(id) || selectedDemo !== id) return;
+        await run("正在打开名人示范…", async () => {
+          accept(await service.create({ demoId: id })); picker = null;
+          selectedDemo = ""; demosOpen = false; draft().tab = "chat";
+          draft().notice = "示范已就绪。选择一个问题或自行输入，编辑后点击发送。";
+        });
+        if (!error) scope?.querySelector('[data-persona-field="question"]')?.focus(); return;
+      }
       if (action === "select") { await run("正在打开人物…", async () => { accept(await service.get(id)); picker = null; }); return; }
       if (!person) return;
+      if (action === "starter") {
+        const demo = demoTools?.get(person.demoId);
+        const question = /^(0|[1-9][0-9]*)$/.test(id) ? demo?.starters[Number(id)] : null;
+        if (!question || !person.card) return;
+        d.question = question; rerender(); scope?.querySelector('[data-persona-field="question"]')?.focus(); return;
+      }
       if (action === "reload-details") { await run("正在读取人物档案…", async () => { accept(await service.get(selectedId), { details: true }); }); return; }
       if (action === "assess-mbti") {
         try { d.profile.mbti = profileTools.assess(d.profile.answers).type; d.profile.mbtiMode = "assessment"; d.notice = "已计算观察倾向；保存档案后生效。"; error = ""; }
@@ -347,6 +391,8 @@
       scope = nextScope;
       const page = scope.querySelector(".persona-page");
       if (!page) return;
+      const demos = page.querySelector(".persona-demos");
+      if (demos) demos.ontoggle = () => { demosOpen = demos.open; };
       const profile = page.querySelector(".persona-profile");
       if (profile) profile.ontoggle = () => { draft().profileOpen = profile.open; };
       page.querySelectorAll("[data-persona-action]").forEach((element) => { element.onclick = (event) => { event.preventDefault(); event.stopPropagation(); void handleAction(element.dataset.personaAction, element.dataset.id); }; });

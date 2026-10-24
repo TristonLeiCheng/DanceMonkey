@@ -1,4 +1,5 @@
 const profileTools = require("../src/persona-profile");
+const demoTools = require("../src/persona-demos");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -71,6 +72,7 @@ function validStoredPerson(person, id) {
   if (!person.sources.every((source) => string(source.title, 200) && string(source.text, 80000) && source.text.trim() &&
       ["article", "note", "chat", "email"].includes(source.kind) && validDate(source.createdAt) &&
       (source.speaker === undefined || string(source.speaker, 80)))) return false;
+  if (person.demoId !== undefined && !demoTools.get(person.demoId)) return false;
   if (person.profile !== undefined) { try { profileTools.normalize(person.profile); } catch { return false; } }
   const ordinary = person.sources.filter((source) => source.kind !== "email");
   const emails = person.sources.filter((source) => source.kind === "email");
@@ -121,6 +123,7 @@ function createPersonaService({ userDataPath, aiService }) {
   const directory = path.join(path.resolve(userDataPath), "personas");
   const locks = new Map();
   const requests = new Map();
+  let demoCreation = Promise.resolve();
 
   function ensureDirectory() {
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -256,19 +259,44 @@ function createPersonaService({ userDataPath, aiService }) {
     return fs.readdirSync(directory).filter((name) => name.endsWith(".json") && ID_PATTERN.test(name.slice(0, -5)))
       .map((name) => read(name.slice(0, -5)))
       .map((person) => ({ id: person.id, name: person.name, description: person.description,
+        ...(person.demoId ? { demoId: person.demoId } : {}),
         summary: person.card?.summary || "", sourceCount: person.sources.length, hasCard: Boolean(person.card),
         cardVersion: person.cardVersion, sourceRevision: person.sourceRevision,
         createdAt: person.createdAt, updatedAt: person.updatedAt }))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  async function create({ name, description = "" } = {}) {
+  async function create({ name, description = "", demoId } = {}) {
+    if (demoId !== undefined) {
+      const demo = demoTools.get(demoId);
+      if (!demo) throw fail("名人示范不存在，请重新选择。", "INVALID_INPUT");
+      // Serialize catalogue imports across renderer windows. A single atomic write
+      // creates the source, initial card and conversation; never a half-ready profile.
+      const result = demoCreation.catch(() => {}).then(async () => {
+        const existing = (await list()).find(item => item.demoId === demoId);
+        if (existing) return get(existing.id);
+        return createRecord(demo.name, demo.bio, demo);
+      });
+      demoCreation = result;
+      return result;
+    }
+    return createRecord(name, description);
+  }
+
+  function createRecord(name, description, demo) {
     const date = timestamp(), conversationId = makeId();
     const person = { id: makeId(), name: textValue(name, "人物名称", 100),
       description: textValue(description, "人物简介", 2000, false), sources: [], card: null,
       cardVersion: 0, sourceRevision: 0, versions: [], corrections: [],
       conversations: [{ id: conversationId, title: "新对话", messages: [], createdAt: date }],
       activeConversationId: conversationId, createdAt: date, updatedAt: date };
+    if (demo) {
+      person.demoId = demo.id;
+      person.sources = [{ id: makeId(), kind: "note", title: demo.name + " · 示范编辑说明（非本人原文）",
+        text: [demo.bio, demoTools.disclosure, demoTools.rules, ...Object.values(demo.card)].join("\n"), createdAt: date }];
+      person.sourceRevision = 1;
+      appendCard(person, validateCard(demo.card));
+    }
     return locked(person.id, () => write(person));
   }
 
@@ -407,7 +435,7 @@ function createPersonaService({ userDataPath, aiService }) {
           corrections.unshift(entry); correctionChars += entry.text.length;
         }
         const previousCard = person.card && Object.fromEntries(CARD_KEYS.map((key) => [key, person.card[key].slice(0, 700)]));
-        const output = await model(state, CARD_PROMPT, [{ role: "user", content: JSON.stringify({
+        const output = await model(state, CARD_PROMPT + (person.demoId ? "\n" + demoTools.disclosure + demoTools.rules : ""), [{ role: "user", content: JSON.stringify({
           person: { name: person.name, description: person.description }, reports,
           previousCard, corrections, newCorrection: correction,
         }) }], { maxChars: 24000, maxTokens: 6500 });
@@ -474,7 +502,7 @@ function createPersonaService({ userDataPath, aiService }) {
         const currentQuestion = JSON.stringify({ userQuestion: message, person: { name: person.name, description: person.description },
           card: person.card, cardMayBeOutdated: person.cardSourceRevision !== person.sourceRevision,
           retrievedEvidence: selected });
-        const rawText = await model(state, CHAT_PROMPT, history.concat({ role: "user", content: currentQuestion }), { onChunk });
+        const rawText = await model(state, CHAT_PROMPT + (person.demoId ? "\n" + demoTools.disclosure + demoTools.rules : ""), history.concat({ role: "user", content: currentQuestion }), { onChunk });
         const text = rawText.replace(/\[S(\d+)\]/g, (_match, index) => citations[Number(index) - 1]
           ? "[S" + Number(index) + "]" : "（来源未核实）");
         const used = citations.filter((citation) => text.includes("[" + citation.id + "]"));

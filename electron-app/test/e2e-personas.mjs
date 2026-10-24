@@ -7,6 +7,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import demoTools from "../src/persona-demos.js";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "dm-personas-e2e-"));
 const cwd = path.resolve(import.meta.dirname, "..");
@@ -43,7 +44,8 @@ const model = http.createServer(async (req, res) => {
   const body = JSON.parse(Buffer.concat(bytes).toString()); requests.push(body);
   const system = body.messages[0].content;
   const evidence = body.messages.slice(1).map((item) => item.content).join("\n");
-  const name = evidence.includes("陈老师") ? "陈老师" : "林老师";
+  const demo = demoTools.demos.find(item => evidence.includes(item.name));
+  const name = demo ? demo.name + " · AI 模拟" : evidence.includes("陈老师") ? "陈老师" : "林老师";
   let text;
   if (system.includes("只返回一个 JSON 对象")) {
     text = JSON.stringify({ summary: `${name}的资料分身`, knowledge: "先收集证据再做判断。",
@@ -110,6 +112,62 @@ try {
   const env = { DM_E2E_ROOT: root, DM_E2E_PORT: String(debugPort), DM_E2E_SERVER_PORT: String(serverPort) };
   electron = start(path.join(cwd, "node_modules/.bin/electron"), ["."], env);
   await openPersonas(debugPort, serverPort);
+  assert.equal(await evaluate(`document.querySelectorAll('.persona-demo-card').length`), 6);
+  assert.equal((await evaluate("window.lumen.personas.list()")).length, 0, "gallery must not seed profiles");
+  const screenshot = async name => {
+    if (!process.env.DM_E2E_DEMO_SCREENSHOT_DIR) return;
+    fs.mkdirSync(process.env.DM_E2E_DEMO_SCREENSHOT_DIR, { recursive: true });
+    const shot = await send("Page.captureScreenshot", { format: "png" });
+    fs.writeFileSync(path.join(process.env.DM_E2E_DEMO_SCREENSHOT_DIR, name + ".png"), Buffer.from(shot.result.data, "base64"));
+  };
+  await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false });
+  await screenshot("01-gallery");
+  await send("Emulation.setDeviceMetricsOverride", { width: 520, height: 1000, deviceScaleFactor: 1, mobile: false });
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('.persona-demo-grid')).gridTemplateColumns.split(' ').length`), 1);
+  assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true, "narrow viewport must not overflow");
+  await screenshot("02-narrow-gallery");
+  await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false });
+  const demoIds = new Map();
+  for (const demo of demoTools.demos) {
+    await evaluate(`document.querySelector('.persona-demos').open=true`);
+    await click("preview-demo", demo.id);
+    assert.match(await evaluate(`document.activeElement.getAttribute('aria-label')`), new RegExp(demo.name));
+    await click("close-demo");
+    assert.equal((await evaluate("window.lumen.personas.list()")).length, demoIds.size);
+    await click("preview-demo", demo.id);
+    if (demo.id === "confucius") await screenshot("03-preview");
+    await evaluate(`(()=>{const button=document.querySelector('[data-persona-action="use-demo"]');button.click();button.click();})()`);
+    await idle();
+    const people = await evaluate("window.lumen.personas.list()");
+    assert.equal(people.filter(p => p.demoId === demo.id).length, 1);
+    const id = people.find(p => p.demoId === demo.id).id; demoIds.set(demo.id, id);
+    let person = await evaluate(`window.lumen.personas.get(${JSON.stringify(id)})`);
+    assert.deepEqual(person.card, demo.card); assert.equal(person.cardVersion, 1);
+    assert.equal(person.conversations[0].messages.length, 0);
+    for (let i = 0; i < demo.starters.length; i++) {
+      await click("starter", String(i));
+      assert.equal(await evaluate(`document.querySelector('[data-persona-field="question"]').value`), demo.starters[i]);
+    }
+    assert.equal(requests.length, demoIds.size - 1, "preview, create and starters must not invoke model");
+    await fill("question", demo.starters[0] + " 请给一个小练习。");
+    await click("send"); await idle();
+    person = await evaluate(`window.lumen.personas.get(${JSON.stringify(id)})`);
+    assert.equal(person.conversations[0].messages.length, 2);
+    assert.match(await evaluate(`document.querySelector('.persona-demo-disclosure').textContent`), /并非本人、官方账号或背书/);
+    const sent = requests.at(-1);
+    assert.match(sent.messages[0].content, /不得编造或冒充真实引语/);
+    const context = JSON.parse(sent.messages.at(-1).content);
+    assert.equal(context.person.name, demo.name);
+    assert.ok(context.retrievedEvidence.every(item => item.title.includes(demo.name)));
+    if (demo.id === "musk") await screenshot("04-demo-chat");
+    const before = JSON.stringify(person);
+    await evaluate(`document.querySelector('.persona-demos').open=true`);
+    await click("preview-demo", demo.id); await click("use-demo", demo.id); await idle();
+    assert.equal(JSON.stringify(await evaluate(`window.lumen.personas.get(${JSON.stringify(id)})`)), before);
+  }
+  assert.equal(requests.length, 6);
+  // Customization must survive catalogue re-entry and the full app restart below.
+  await evaluate(`window.lumen.personas.updateProfile({id:${JSON.stringify(demoIds.get("musk"))},name:"我的工程助手",description:"保留自定义资料"})`);
   await click("new-person"); await fill("new:name", "林老师"); await fill("new:description", "测试人物，仅使用虚构资料"); await click("create"); await idle();
   await click("tab", "profile");
   await fill("profile:birthDate", "1990-05"); await fill("profile:zodiac", "金牛座");
@@ -175,7 +233,16 @@ try {
   socket.close(); await stop(electron);
   electron = start(path.join(cwd, "node_modules/.bin/electron"), ["."], env);
   await openPersonas(debugPort, serverPort);
-  assert.equal((await evaluate("window.lumen.personas.list()")).length, 2);
+  assert.equal((await evaluate("window.lumen.personas.list()")).length, 8);
+  for (const [demoId, id] of demoIds) {
+    await evaluate(`document.querySelector('.persona-demos').open=true`);
+    await click("preview-demo", demoId); await click("use-demo", demoId); await idle();
+    const restored = await evaluate(`window.lumen.personas.get(${JSON.stringify(id)})`);
+    assert.equal(restored.demoId, demoId); assert.equal(restored.conversations[0].messages.length, 2);
+    assert.equal(restored.cardVersion, 1);
+    if (demoId === "musk") { assert.equal(restored.name, "我的工程助手"); assert.equal(restored.description, "保留自定义资料"); }
+  }
+  assert.equal((await evaluate("window.lumen.personas.list()")).length, 8);
   await click("select", firstId); await idle();
   await click("tab", "chat");
   assert.match(await evaluate("document.querySelector('.persona-messages').textContent"), /你会如何/);
@@ -186,7 +253,7 @@ try {
   assert.ok(requests.some(r => JSON.stringify(r).includes("sourceBatch") && JSON.stringify(r).includes("2015 年起从事教学")));
   assert.equal(fs.readdirSync(noteRoot).some((name) => name.includes("persona")), false);
   assert.deepEqual(runtimeErrors, []);
-  console.log("Persona E2E passed: manual profile + MBTI, article + note + chat import, preview/save, streaming, cancel, correction, rollback, conversation/person isolation, API failure and full app restart.");
+  console.log("Persona E2E passed: six demo cards + preview/cancel/repeated creation + all 12 starters + isolated chat + customized restart/deduplication + responsive gallery, manual profile + MBTI, article + note + chat import, preview/save, streaming, cancel, correction, rollback, conversation/person isolation, API failure and full app restart.");
 } catch (error) {
   console.error(error);
   for (const item of children) console.error(item.output);

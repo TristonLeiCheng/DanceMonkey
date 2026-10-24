@@ -2,10 +2,11 @@
 
 > 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。
 
-## 最新版本 · v3.6.0
+## 最新版本 · v3.7.0
 
-[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.6.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.6.0.md)
+[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.7.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.7.0.md)
 
+- **名人示范**：孔子、老子、李白、爱因斯坦、乔布斯和马斯克六种 AI 模拟视角；可预览、按需添加并用开场问题开始对话，重复添加保留已有编辑与聊天。
 - **桌面宠物**：恢复 13 种原版像素角色，新增「工程师」狐狸动画，支持情绪互动、拖动定位、任务气泡提醒与防休眠。
 - **设置选项卡**：快捷键、桌面宠物、笔记同步、网络代理（Windows）与关于更新分类配置，切换保留输入草稿。
 - **更新与退出**：支持 Windows / macOS 后台准备更新与重启安装；退出前保存笔记、停止后台任务，提供托盘和 Dock 入口。

@@ -2,6 +2,8 @@ const path = require("node:path");
 
 const packagerConfig = {
   asar: true,
+  // Development tests and their fixtures are not part of the distributed app.
+  ignore: [/^\/test(?:\/|$)/],
   executableName: "DanceMonkey",
   appBundleId: "com.dancemonkey.desktop",
   // Packager resolves the matching .ico/.icns for the target platform,

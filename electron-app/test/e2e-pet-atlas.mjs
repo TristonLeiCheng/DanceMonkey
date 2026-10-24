@@ -6,11 +6,16 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+const atlas = createRequire(import.meta.url)('../src/pet-atlas');
+const animal=process.env.DM_PET_QA_ANIMAL || 'engineer-fox';
+const manifest=atlas.getManifest(animal);
+assert.ok(manifest);
 const cwd = path.resolve(import.meta.dirname, '..');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-foss-renderer-'));
 const output = process.env.DM_PET_QA_OUTPUT || path.join(os.tmpdir(), 'dm-foss-renderer-evidence');
 fs.mkdirSync(output, { recursive: true });
-const asset = path.join(cwd, 'assets/pets/foss/spritesheet-extended.png');
+const asset = path.join(cwd, manifest.source);
 assert.ok(fs.existsSync(asset), 'Install the original 工程师 atlas before running real-asset QA');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const port = await new Promise((resolve, reject) => {
@@ -21,7 +26,7 @@ fs.writeFileSync(path.join(root, 'main.cjs'), `
 const {app, BrowserWindow, ipcMain} = require('electron');
 app.setPath('userData', ${JSON.stringify(path.join(root, 'user-data'))});
 app.commandLine.appendSwitch('remote-debugging-port', ${JSON.stringify(String(port))});
-let win, state = {animal:'engineer-fox',size:128,mood:'normal',serial:0,animation:'',bubble:''};
+let win, state = {animal:${JSON.stringify(animal)},size:128,mood:'normal',serial:0,animation:'',bubble:''};
 app.whenReady().then(() => {
   win = new BrowserWindow({width:240,height:264,transparent:true,frame:false,resizable:false,
     webPreferences:{preload:${JSON.stringify(path.join(root, 'preload.cjs'))},sandbox:true,contextIsolation:true,nodeIntegration:false}});
@@ -88,18 +93,19 @@ try {
   await evaluate(`(() => { const ctx=document.querySelector('canvas').getContext('2d'), original=ctx.drawImage.bind(ctx); window.qaDraws=[];
     ctx.drawImage=(...args)=>{qaDraws.push({x:args[1],y:args[2],w:args[3],h:args[4],time:performance.now()}); return original(...args);}; })()`);
   let serial = 0;
-  for (const [mood, action, row, frames] of [['normal','idle',0,6],['working','working',7,6],['reading','review',8,6],['failed','failed',5,8],['bored','waiting',6,6]]) {
+  for (const mood of ['normal','working','reading','failed','bored']) {
+    const action=atlas.baseAction(mood), {row,frames}=manifest.actions[action];
     await setState({ mood, serial: ++serial, animation: '', bubble: '' }); await drawAction(action);
     await evaluate('qaDraws.length=0');
     await pause(1500);
     const draws = await evaluate('qaDraws');
     assert.ok(draws.length >= frames, action + ' actually draws at its configured FPS');
-    assert.ok(draws.every(d => d.y === row*208 && d.w === 192 && d.h === 208 && d.x >= 0 && d.x < frames*192));
+    assert.ok(draws.every(d => manifest.frames ? manifest.frames[row].some(([x,y,w,h])=>d.x===x&&d.y===y&&d.w===w&&d.h===h) : d.y === row*manifest.cellHeight && d.w === manifest.cellWidth && d.h === manifest.cellHeight && d.x >= 0 && d.x < frames*manifest.cellWidth));
     assert.equal(new Set(draws.map(d => d.x)).size, frames, action + ' visits every real source frame');
     await screenshot('action-' + action);
   }
   for (const [animation, action] of [['pop','wave'], ['jump','jump']]) {
-    const patch = { mood:'normal', serial:++serial, animation, bubble:'工程师' };
+    const patch = { mood:'normal', serial:++serial, animation, bubble:manifest.name };
     await setState(patch); await drawAction(action); await pause(140);
     await screenshot('action-' + action);
     // Repeat the same broadcast while the gesture runs; it must still finish on time.
@@ -117,9 +123,9 @@ try {
       const metrics = await evaluate(`(() => {const p=document.querySelector('#pet'),c=p.querySelector('canvas'),r=p.getBoundingClientRect(), data=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
         return {width:r.width,height:r.height,center:r.x+r.width/2,bottom:r.bottom,cw:c.width,ch:c.height,css:getComputedStyle(c).imageRendering,
           visible:data.some((v,i)=>i%4===3&&v>0),transparent:data.some((v,i)=>i%4===3&&v===0)};})()`);
-      assert.ok(Math.abs(metrics.width-size*192/208)<.1); assert.equal(metrics.height,size);
+      assert.ok(Math.abs(metrics.width-size*manifest.cellWidth/manifest.cellHeight)<.1); assert.equal(metrics.height,size);
       assert.ok(Math.abs(metrics.center-120)<.1); assert.equal(metrics.bottom,256);
-      assert.equal(metrics.cw,Math.round(size*192/208*dpr)); assert.equal(metrics.ch,size*dpr);
+      assert.equal(metrics.cw,Math.round(size*manifest.cellWidth/manifest.cellHeight*dpr)); assert.equal(metrics.ch,size*dpr);
       assert.equal(metrics.css,'auto'); assert.ok(metrics.visible && metrics.transparent);
       scales.push({size,dpr,...metrics}); await screenshot(`size-${size}-dpr-${dpr}`);
     }
@@ -138,8 +144,15 @@ try {
   assert.equal(await evaluate('atlasTest.subscriptions()'),0);
   const closedCount=await evaluate('qaDraws.length'); await pause(350);
   assert.equal(await evaluate('qaDraws.length'),closedCount,'unload stops drawing and unsubscribes');
+  if(animal==='operator-rabbit') {
+    await send('Emulation.setDeviceMetricsOverride',{width:1200,height:920,deviceScaleFactor:1,mobile:false});
+    await send('Page.navigate',{url:'file://'+path.join(cwd,'docs/operator-rabbit-preview.html')});
+    await waitFor(()=>evaluate('window.previewReady===true'));
+    assert.equal(await evaluate("document.querySelectorAll('#frames canvas').length"),36);
+    await screenshot('operator-rabbit-preview');
+  }
   fs.writeFileSync(path.join(output,'metrics.json'),JSON.stringify({scales,actions:['idle','working','review','failed','waiting','wave','jump'],hiddenPause:true,reducedMotion:true,unloadCleanup:true},null,2)+'\n');
-  console.log('Real 工程师 renderer E2E passed: all active action frames, one-shot transitions, repeated broadcasts, sizes 48/68/96/128 at DPR 1/2, transparency, centering, native hide/show, reduced motion and unload. Evidence: '+output);
+  console.log('Real '+animal+' renderer E2E passed: all active action frames, one-shot transitions, repeated broadcasts, sizes 48/68/96/128 at DPR 1/2, transparency, centering, native hide/show, reduced motion and unload. Evidence: '+output);
 } finally {
   socket?.close();
   if (!exited) { child.kill('SIGTERM'); await Promise.race([new Promise(resolve=>child.once('exit',resolve)),pause(2000).then(()=>{if(!exited)child.kill('SIGKILL');})]); }

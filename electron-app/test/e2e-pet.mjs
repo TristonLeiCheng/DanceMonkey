@@ -125,7 +125,7 @@ try {
   await evaluate(`document.querySelector('[data-action="section"][data-value="settings"]').click()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector('[name="petModeEnabled"]'))`), { process: electron });
   await evaluate(`document.querySelector('[data-settings-tab="pet"]').click()`);
-  assert.equal(await evaluate(`document.querySelectorAll('[name="petAnimal"] option').length`), 14);
+  assert.equal(await evaluate(`document.querySelectorAll('[name="petAnimal"] option').length`), 15);
   await evaluate(`(() => {
     document.querySelector('[name="petModeEnabled"]').checked = true;
     document.querySelector('[name="petAnimal"]').value = 'cat';
@@ -196,6 +196,16 @@ try {
   const fossPreview = path.join(os.tmpdir(), assetPresent ? 'dm-foss-atlas-preview.png' : 'dm-foss-fallback-preview.png');
   const fossShot = await send('Page.captureScreenshot', {format:'png', omitBackground:true});
   fs.writeFileSync(fossPreview, Buffer.from(fossShot.result.data, 'base64'));
+  socket.close(); await connect(workspace.webSocketDebuggerUrl);
+  await evaluate(`document.querySelector('[name="petAnimal"]').value='operator-rabbit'; document.querySelector('[data-module-action="settings-save"]').click()`);
+  socket.close(); await connect(petTarget.webSocketDebuggerUrl);
+  await waitFor(()=>evaluate(`window.desktopPet.get().then(s=>s.animal==='operator-rabbit' && document.querySelector('#pet').dataset.assetStatus==='ready')`));
+  assert.equal(await evaluate(`document.querySelector('#pet').dataset.renderer`),'atlas');
+  assert.equal(await evaluate(`document.querySelector('#pet').getBoundingClientRect().width`),128);
+  const operatorShot=await send('Page.captureScreenshot',{format:'png',omitBackground:true});
+  fs.writeFileSync(path.join(os.tmpdir(),'dm-operator-rabbit-settings-preview.png'),Buffer.from(operatorShot.result.data,'base64'));
+  socket.close(); await connect(workspace.webSocketDebuggerUrl);
+  await evaluate(`document.querySelector('[name="petAnimal"]').value='engineer-fox'; document.querySelector('[data-module-action="settings-save"]').click()`);
   socket.close(); await connect(workspace.webSocketDebuggerUrl);
   await evaluate(`document.querySelector('[name="petModeEnabled"]').checked=false; document.querySelector('[data-module-action="settings-save"]').click()`);
   await waitFor(async () => !(await targets()).some(item => item.url.endsWith('/pet.html')));

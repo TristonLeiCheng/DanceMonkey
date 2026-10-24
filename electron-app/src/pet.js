@@ -4,9 +4,10 @@
   const canvas = pet.querySelector('canvas'), ctx = canvas.getContext('2d'), defaultTitle = pet.title;
   const player = atlas.createPlayer(), motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let state = null, serial = -1, dragging = false, interactive = null;
-  let image = null, requested = false, disposed = false, timer = null;
+  let images = new Map(), statuses = new Map(), disposed = false, timer = null;
   let elapsed = 0, lastTime = performance.now();
-  const isAtlas = () => state?.animal === atlas.manifest.animal && image;
+  const currentManifest = () => atlas.getManifest(state?.animal);
+  const isAtlas = () => currentManifest() && images.has(state?.animal);
   function clock() {
     const time = performance.now();
     if (!document.hidden) elapsed += time - lastTime;
@@ -18,24 +19,40 @@
   }
   function draw() {
     if (!state || disposed || document.hidden) return;
-    pet.title = state.animal === atlas.manifest.animal && pet.dataset.assetStatus === 'failed'
-      ? '工程师 图集未能加载，暂用像素狐狸。单击互动 · 双击打开主界面 · 拖动移动 · 右键菜单' : defaultTitle;
+    const manifest = currentManifest(), image = images.get(state.animal);
+    pet.dataset.assetStatus = statuses.get(state.animal) || '';
+    pet.title = manifest && pet.dataset.assetStatus === 'failed'
+      ? `${manifest.name}图集未能加载` : defaultTitle;
+    if (image) { bubble.textContent = state.bubble; bubble.hidden = !state.bubble; }
     const time = clock(), smooth = Boolean(isAtlas());
     pet.dataset.renderer = smooth ? 'atlas' : 'pixel';
     pet.classList.toggle('atlas', smooth);
     if (smooth) {
-      const { cellWidth, cellHeight } = atlas.manifest;
+      const { cellWidth, cellHeight } = manifest;
+      document.documentElement.style.setProperty('--pet-aspect', cellWidth / cellHeight);
       const ratio = Math.min(4, Math.max(1, window.devicePixelRatio || 1));
       resize(Math.round(state.size * cellWidth / cellHeight * ratio), Math.round(state.size * ratio));
       const sample = player.sample(time);
       pet.dataset.action = sample.action;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(image, (motion.matches ? 0 : sample.frame) * cellWidth, sample.row * cellHeight,
+      const frame = motion.matches ? 0 : sample.frame;
+      const crop = manifest.frames?.[sample.row][frame];
+      if (crop) {
+        const [x,y,w,h,dx,dy] = crop;
+        ctx.drawImage(image,x,y,w,h,dx/cellWidth*canvas.width,dy/cellHeight*canvas.height,
+          w/cellWidth*canvas.width,h/cellHeight*canvas.height);
+      } else ctx.drawImage(image, frame * cellWidth, sample.row * cellHeight,
         cellWidth, cellHeight, 0, 0, canvas.width, canvas.height);
     } else {
       resize(32, 32); pet.dataset.action = 'pixel';
-      const animal = state.animal === atlas.manifest.animal ? 'fox' : state.animal;
+      if (manifest && !manifest.fallback) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        pet.dataset.renderer = 'unavailable';
+        bubble.textContent = statuses.get(state.animal) === 'failed' ? `${manifest.name}图集未能加载` : '正在加载话务员兔子…';
+        bubble.hidden = false; return;
+      }
+      const animal = manifest?.fallback || state.animal;
       ctx.putImageData(new ImageData(window.DMPetSprites.render(animal, state.mood, motion.matches ? 0 : Math.floor(time / 420) % 4), 32, 32), 0, 0);
     }
   }
@@ -55,19 +72,19 @@
       serial = state.serial;
       pet.classList.remove('pop', 'jump', 'shake');
       // The atlas contains its own motion; never add a second CSS jump.
-      if (state.animal !== atlas.manifest.animal && state.animation) {
+      if (!currentManifest() && state.animation) {
         void pet.offsetWidth; pet.classList.add(state.animation);
       }
     }
-    if (state.animal === atlas.manifest.animal && !requested) {
-      requested = true; pet.dataset.assetStatus = 'loading';
-      void atlas.loadImage().then((loaded) => {
+    const animal = state.animal;
+    if (currentManifest() && !statuses.has(animal)) {
+      statuses.set(animal, 'loading');
+      void atlas.loadImage(undefined, animal).then((loaded) => {
         if (disposed) return;
-        image = loaded; pet.dataset.assetStatus = 'ready'; refresh();
+        images.set(animal, loaded); statuses.set(animal, 'ready'); refresh();
       }).catch((error) => {
         if (disposed) return;
-        pet.dataset.assetStatus = 'failed';
-        console.warn(error.message); refresh();
+        statuses.set(animal, 'failed'); console.warn(error.message); refresh();
       });
     }
     refresh();

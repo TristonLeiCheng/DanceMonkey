@@ -24,7 +24,7 @@ test('legacy pet configuration migrates, bad values normalize and partial settin
 });
 
 test('all original species render with expressions and life accessories at all four frames', () => {
-  assert.deepEqual(new Set(sprites.animals), new Set(Object.keys(ANIMALS).filter(id => id !== 'engineer-fox')));
+  assert.deepEqual(new Set(sprites.animals), new Set(Object.keys(ANIMALS).filter(id => !require('../src/pet-atlas').getManifest(id))));
   const appearances = new Set();
   for (const animal of sprites.animals) {
     appearances.add(Buffer.from(sprites.render(animal)).toString('base64'));
@@ -152,12 +152,12 @@ test('task reminder timers honor enable and interval changes instead of resettin
 
 
 test('工程师 is additive, normalizes and is selectable in the existing menu at every legacy size', () => {
-  assert.equal(Object.keys(ANIMALS).length, 14);
+  assert.equal(Object.keys(ANIMALS).length, 15);
   assert.equal(normalizeSettings({ petAnimal: 'engineer-fox' }).petAnimal, 'engineer-fox');
   const h = harness({ petModeEnabled: true }); h.pet.sync();
   h.emit('pet:menu');
   const skins = h.menu.find(item => item.label === '宠物外形').submenu;
-  assert.equal(skins.length, 14);
+  assert.equal(skins.length, 15);
   skins.find(item => item.label === '工程师').click();
   assert.equal(h.config.petAnimal, 'engineer-fox');
   for (const size of [48, 68, 96, 128]) {
@@ -173,4 +173,14 @@ test('工程师 is additive, normalizes and is selectable in the existing menu a
   h.emit('pet:interactive', undefined, true); assert.equal(h.pet.window.ignoring, false);
   h.emit('pet:interactive', undefined, false); assert.equal(h.pet.window.ignoring, true);
   h.pet.dispose(); assert.equal(h.intervals.size, 0);
+});
+
+test('operator rabbit menu selection is explicit and keeps legacy rabbit and personas untouched', () => {
+  const h=harness({petModeEnabled:true,petAnimal:'rabbit'}); h.pet.sync();
+  assert.equal(h.config.petAnimal,'rabbit'); h.emit('pet:menu');
+  const skins=h.menu.find(item=>item.label==='宠物外形').submenu;
+  skins.find(item=>item.label==='话务员兔子').click();
+  assert.equal(h.config.petAnimal,'operator-rabbit');
+  h.emit('pet:press'); h.emit('pet:release'); assert.match(h.pet.window.state.bubble,/服务|听|记下|小事/);
+  h.pet.dispose();
 });

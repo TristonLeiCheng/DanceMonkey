@@ -40,7 +40,7 @@ test('periodic broadcasts do not restart loops or replay completed gestures; ser
   assert.equal(player.sample(2100).action, 'review');
 });
 function freshAtlas() {
-  const context = { module: { exports: {} } };
+  const context = { module: { exports: {} }, require: name => require('../src/' + name) };
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/pet-atlas'), 'utf8'), context);
   return context.module.exports;
 }
@@ -65,9 +65,9 @@ test('atlas load success, failure and incorrect dimensions are cached without re
 });
 
 // Deterministic renderer tests use an Image test double, never a replacement visual asset.
-function renderer({ fail = false, reduced = false } = {}) {
+function renderer({ fail = false, reduced = false, deferred = false } = {}) {
   let time = 0, received, unsubscribed = 0, nextId = 0, requests = 0;
-  const pending = new Map(), calls = [], listeners = new Map();
+  const pending = new Map(), calls = [], listeners = new Map(), loads = new Map();
   const events = (target) => ({
     addEventListener(name, fn) { listeners.set(`${target}:${name}`, fn); },
     removeEventListener(name) { listeners.delete(`${target}:${name}`); },
@@ -92,11 +92,15 @@ function renderer({ fail = false, reduced = false } = {}) {
     matchMedia: () => motion,
     desktopPet: { onState: fn => { received = fn; return () => unsubscribed++; }, get: async () => null },
   };
-  class Image { set src(_value) { requests++; queueMicrotask(() => { if (fail) this.onerror(); else { this.naturalWidth = 1536; this.naturalHeight = 2288; this.onload(); } }); } }
-  api.loadImage = api.loadImage.bind(null, Image);
+  class Image { set src(value) {
+    requests++; const m = Object.values(api.manifests).find(m => m.source === value);
+    const finish=()=>{if(fail)this.onerror();else{this.naturalWidth=m.width;this.naturalHeight=m.height;this.onload();}};
+    if(deferred)loads.set(m.animal,finish);else queueMicrotask(finish);
+  } }
+  const loadImage = api.loadImage; api.loadImage = (_type, animal) => loadImage(Image, animal);
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/pet'), 'utf8'), context);
   return { context, pet, bubble, canvas, pending, calls, classes, pixelCalls,
-    update: received, time: value => time = value,
+    update: received, complete: animal => loads.get(animal)(), time: value => time = value,
     event: (target, event) => listeners.get(`${target}:${event}`)?.(),
     get requests() { return requests; }, get unsubscribed() { return unsubscribed; },
     tick: () => { const [id, task] = pending.entries().next().value; pending.delete(id); time += task.ms; task.fn(); },
@@ -151,4 +155,62 @@ test('hidden time does not advance atlas animation and reduced motion schedules 
   const still = renderer({ reduced: true }); still.update(state({ animation: 'jump', serial: 2 })); await settle();
   assert.equal(still.pending.size, 0); assert.equal(still.calls.filter(call => call[0] === 'atlas').at(-1)[2], 0);
   still.event('window', 'unload');
+});
+
+test('operator rabbit is additive, immutable and addresses 36 original RGBA poses', () => {
+  const m = atlas.getManifest('operator-rabbit');
+  const png = fs.readFileSync(require('node:path').join(__dirname, '..', m.source));
+  assert.equal(require('node:crypto').createHash('sha256').update(png).digest('hex'), m.sha256);
+  assert.equal(png.readUInt32BE(16), m.width); assert.equal(png.readUInt32BE(20), m.height);
+  assert.equal(png[25], 6); assert.equal(m.frames.length, 9);
+  assert.ok(Object.isFrozen(m)); assert.equal(atlas.getManifest('__proto__'), null);
+  for (const row of m.frames) {
+    assert.equal(row.length, 4);
+    for (const [x,y,w,h,dx,dy] of row) {
+      assert.ok(x >= 0 && y >= 0 && x+w <= m.width && y+h <= m.height);
+      assert.ok(dx > 0 && dy > 0 && dx+w < 256 && dy+h < 256, 'long ears and props fit logical canvas');
+    }
+  }
+  assert.equal(require('../electron/pet-model').normalizeSettings({petAnimal:m.animal}).petAnimal,m.animal);
+  assert.equal(require('../electron/pet-model').DEFAULTS.petAnimal,'human');
+  const p = atlas.createPlayer();
+  p.update(state({animal:m.animal,mood:'working',animation:'pop',serial:1}),0);
+  assert.equal(p.sample(0).action,'wave'); assert.equal(p.sample(700).action,'working');
+  p.update(state({animal:m.animal,mood:'reading',serial:2}),750);
+  assert.equal(p.sample(1000).frame,1); assert.equal(p.sample(1000).action,'review');
+});
+test('operator renderer draws the new image at all sizes and fails visibly without a substitute animal', async () => {
+  const r = renderer(); r.update(state({animal:'operator-rabbit'})); await settle();
+  for (const size of [48,68,96,128]) {
+    r.update(state({animal:'operator-rabbit',size,mood:'working'}));
+    assert.equal(r.pet.dataset.renderer,'atlas'); assert.equal(r.canvas.width,size*2);
+    const draw = r.calls.filter(c=>c[0]==='atlas').at(-1);
+    assert.deepEqual(draw.slice(2,6),Array.from(atlas.getManifest('operator-rabbit').frames[7][0].slice(0,4)));
+  }
+  r.event('window','unload');
+  const f = renderer({fail:true}); f.update(state({animal:'operator-rabbit'})); await settle();
+  assert.equal(f.pet.dataset.renderer,'unavailable'); assert.equal(f.pixelCalls.length,0);
+  assert.equal(f.bubble.hidden,false); assert.match(f.bubble.textContent,/图集未能加载/);
+  f.update(state({animal:'operator-rabbit'})); assert.equal(f.requests,1); f.event('window','unload');
+});
+test('atlas loads are cached independently for each animal', async () => {
+  const api=freshAtlas(), loads=new Map();
+  class Image {set src(value){const m=Object.values(api.manifests).find(m=>m.source===value);
+    loads.set(m.animal,()=>{this.naturalWidth=m.width;this.naturalHeight=m.height;this.onload();});}}
+  const fox=api.loadImage(Image,'engineer-fox'), rabbit=api.loadImage(Image,'operator-rabbit');
+  assert.notEqual(fox,rabbit); assert.equal(api.loadImage(Image,'operator-rabbit'),rabbit);
+  loads.get('operator-rabbit')(); assert.equal((await rabbit).naturalWidth,836);
+  loads.get('engineer-fox')(); assert.equal((await fox).naturalWidth,1536);
+});
+
+test('switching skins during deferred loads never paints a different animal', async () => {
+  const r=renderer({deferred:true});
+  r.update(state()); r.update(state({animal:'operator-rabbit',bubble:'hello'}));
+  r.complete('engineer-fox'); await settle();
+  assert.equal(r.pet.dataset.renderer,'unavailable'); assert.equal(r.pet.dataset.assetStatus,'loading');
+  r.complete('operator-rabbit'); await settle();
+  assert.equal(r.pet.dataset.renderer,'atlas'); assert.equal(r.pet.dataset.assetStatus,'ready');
+  assert.equal(r.bubble.textContent,'hello');
+  const draw=r.calls.filter(c=>c[0]==='atlas').at(-1);
+  assert.equal(draw[1].naturalWidth,836); assert.equal(r.requests,2); r.event('window','unload');
 });

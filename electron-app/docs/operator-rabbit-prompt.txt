@@ -1,0 +1,15 @@
+Use case: stylized-concept.
+Asset type: production transparent PNG animation sprite sheet for a desktop companion.
+Primary request: create an independent original friendly anthropomorphic rabbit who works as a customer service telephone operator. Cream-colored fluffy fur, long expressive ears with peach inner fur, warm brown eyes, teal over-ear headset with a short microphone boom near the cheek. Simple everyday office outfit: pale mint cardigan over ivory top, warm taupe trousers, small brown shoes. Cute upright bipedal proportions, soft polished 3D toy animation aesthetic. Same identity, headset, clothing, proportions, camera, lighting and scale throughout.
+Layout: one usable transparent PNG sprite atlas, desired 1024x2304 pixels, four columns and nine rows, exactly 36 complete full-body poses. Invisible uniform grid, each 256x256 cell contains one rabbit, centered, ear-tip-to-foot height about 190 pixels. At least 22px transparent padding on every side of every cell. All long ears, feet, tail, headset, microphone and held objects fully inside each cell. Genuine alpha background, clean edges, no floor or shadow, no grid lines, titles, labels, text or watermark.
+Nine action rows from top to bottom, each four sequential frames left to right:
+1 idle: stands relaxed front view, gentle breathing, eyes open / half blink / closed blink / open; subtle ear sway.
+2 walk right: four distinct right-facing bipedal walk phases, alternating foot contact and arm swing.
+3 walk left: four matching left-facing walk phases.
+4 greeting: raises paw / waves outward / waves inward / lowers paw, friendly smile.
+5 happy hop: bends knees / rises / cheerful little airborne hop / lands. Ears stay inside cell; constant scale.
+6 disappointed: ears gently droop / looks down / small sigh / looks up with renewed warmth.
+7 waiting: attentive listening stance / ears tilt left / ears tilt right / returns center.
+8 working: lightly touches headset ear cup / talks into boom microphone / listens with a gentle nod / talks again. Headset stays on head. No handheld device.
+9 review: holds a small teal notepad and pencil throughout; reads / writes / looks up thoughtfully / reads again.
+No existing fictional character reference. No uniforms, insignia or badges. Output only the clean usable sprite sheet.

@@ -63,7 +63,7 @@
       { id: "about", label: "关于与更新", description: "查看当前版本，检查并安装应用更新。" },
     ];
     const editableSettingsTab = (id) => ["shortcuts", "pet", "proxy"].includes(id);
-    const petAnimals = { human: "小人", cat: "猫咪", dog: "狗狗", rabbit: "兔子", fox: "狐狸", goose: "大鹅", cockroach: "蟑螂", mosquito: "蚊子", capybara: "水豚", frog: "青蛙", penguin: "企鹅", turtle: "乌龟", hedgehog: "刺猬", "engineer-fox": "工程师" };
+    const petAnimals = { human: "小人", cat: "猫咪", dog: "狗狗", rabbit: "兔子", fox: "狐狸", goose: "大鹅", cockroach: "蟑螂", mosquito: "蚊子", capybara: "水豚", frog: "青蛙", penguin: "企鹅", turtle: "乌龟", hedgehog: "刺猬", "engineer-fox": "工程师", "operator-rabbit": "话务员兔子" };
     api.settings?.onPetChanged?.((settings) => {
       const keys = ["petModeEnabled", "petAnimal", "petDisplaySize", "petMoodDecayEnabled", "petPreventSleepEnabled", "todoReminderEnabled", "todoReminderMinutes"];
       for (const key of keys) {

@@ -6,6 +6,7 @@ const { promisify } = require("node:util");
 const { createAppUpdateService: createReleaseClient, compareVersions, copySourceToFile, validateSha256 } = require("./app-update");
 const execute = promisify(execFile);
 const BUNDLE_ID = "com.dancemonkey.desktop";
+const { assertPetUpdateCompatible } = require('./pet-package');
 
 function bundleFromExecutable(executable) {
   const match = /^(.*\.app)\/Contents\/MacOS\/[^/]+$/.exec(path.resolve(executable));
@@ -166,7 +167,7 @@ exit 0
 
 function createMacAppUpdateService({ getCurrentVersion, getExecutablePath = () => process.execPath,
   getUserDataDirectory = () => path.join(os.homedir(), "Library", "Application Support", "DM"),
-  arch = process.arch, runFile = execute, spawnUpdater = spawn,
+  arch = process.arch, runFile = execute, spawnUpdater = spawn, getPetSettings = () => null,
   releaseClient = createReleaseClient({ getCurrentVersion, getInstallDirectory: () => "" }),
 }) {
   if (!["arm64", "x64"].includes(arch)) throw new Error("不支持当前 Mac 架构。");
@@ -196,6 +197,7 @@ function createMacAppUpdateService({ getCurrentVersion, getExecutablePath = () =
       await runFile("/usr/bin/tar", ["-xf", packagePath, "-C", extractRoot, "--no-same-owner", "--no-same-permissions"]);
       const sourceApp = findAppBundle(extractRoot);
       const payload = await validateMacPayload(sourceApp, { version: check.latestVersionText, arch, installedApp, runFile });
+      assertPetUpdateCompatible(sourceApp, (getPetSettings() || options).petAnimal);
       const scriptPath = path.join(stagingRoot, "apply-update.sh");
       fs.writeFileSync(scriptPath, buildMacUpdaterScript(), { mode: 0o700 });
       prepared = { sourceApp, installedApp, stagingRoot, scriptPath, executable: payload.executable, version: check.latestVersionText };
@@ -215,6 +217,7 @@ function createMacAppUpdateService({ getCurrentVersion, getExecutablePath = () =
       const next = path.join(work, "next.app");
       await runFile("/usr/bin/ditto", [prepared.sourceApp, next]);
       await validateMacPayload(next, { version: prepared.version, arch, installedApp: prepared.installedApp, runFile });
+      assertPetUpdateCompatible(next, getPetSettings()?.petAnimal);
       fs.mkdirSync(getUserDataDirectory(), { recursive: true });
       fs.writeFileSync(pendingFile(), JSON.stringify({ installedApp: prepared.installedApp, version: prepared.version, work }), { mode: 0o600 });
       await new Promise((resolve, reject) => {

@@ -10,6 +10,8 @@ const { createPkb } = createRequire(import.meta.url)("../electron/pkb");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "dm-pet-e2e-"));
 const cwd = path.resolve(import.meta.dirname, "..");
 const children = [];
+const appExecutable = process.env.DM_PET_E2E_EXECUTABLE || path.resolve(cwd, "node_modules/.bin/electron");
+const appArgs = process.env.DM_PET_E2E_EXECUTABLE ? ["--no-proxy-server", "--use-mock-keychain"] : ["--no-proxy-server", "."];
 const secondVault = path.join(root, "个人笔记库");
 fs.mkdirSync(path.join(secondVault, "工作资料/会议记录"), { recursive: true });
 fs.mkdirSync(path.join(secondVault, "仅B目录"));
@@ -79,14 +81,14 @@ try {
   await waitFor(async () => (await fetch(`http://127.0.0.1:${serverPort}/`)).ok, { process: server });
 
   // All Electron persistence paths point under this disposable root; no user vault is opened.
-  const electron = start("Electron", path.resolve(cwd, "node_modules/.bin/electron"), ["--no-proxy-server", "."], {
+  const electron = start("Electron", appExecutable, appArgs, {
     DM_E2E_ROOT: root,
     DM_E2E_PORT: String(debugPort),
     DM_E2E_SERVER_PORT: String(serverPort),
   });
   const target = await waitFor(async () => {
     const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
-    return targets.find((item) => item.type === "page" && !item.url.includes("#workspace") && item.url.includes(`127.0.0.1:${serverPort}`));
+    return targets.find((item) => item.type === "page" && !item.url.includes("#workspace") && (item.url.includes(`127.0.0.1:${serverPort}`) || item.url.startsWith("file:") && item.url.includes("/index.html")));
   }, { process: electron });
 
   let serial = 0;
@@ -116,7 +118,7 @@ try {
   await evaluate(`window.lumen.openWorkspace("notes")`);
   const workspace = await waitFor(async () => {
     const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
-    return targets.find((item) => item.type === "page" && item.id !== target.id && item.url.includes(`127.0.0.1:${serverPort}`) && item.url.includes("#workspace"));
+    return targets.find((item) => item.type === "page" && item.id !== target.id && (item.url.includes(`127.0.0.1:${serverPort}`) || item.url.startsWith("file:") && item.url.includes("/index.html")) && item.url.includes("#workspace"));
   }, { process: electron });
   socket.close();
   await connect(workspace.webSocketDebuggerUrl);
@@ -125,7 +127,46 @@ try {
   await evaluate(`document.querySelector('[data-action="section"][data-value="settings"]').click()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector('[name="petModeEnabled"]'))`), { process: electron });
   await evaluate(`document.querySelector('[data-settings-tab="pet"]').click()`);
-  assert.equal(await evaluate(`document.querySelectorAll('[name="petAnimal"] option').length`), 15);
+  assert.equal(await evaluate(`document.querySelectorAll('[name="petAnimal"] option').length`), 19);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-pet-choice]').length`),19);
+  // Preview draft choices without enabling or changing the desktop pet.
+  await evaluate(`document.querySelector('[data-pet-group="animated"]').click(); document.querySelector('[data-pet-choice="otter"]').click()`);
+  await waitFor(()=>evaluate(`['fluffy-rabbit','otter','red-panda'].every(id=>document.querySelector('[data-pet-choice="'+id+'"] canvas').dataset.status==='ready')`));
+  assert.equal(await evaluate(`document.querySelector('[name="petAnimal"]').value`),'otter');
+  assert.equal(await evaluate(`document.querySelector('[data-pet-choice="otter"]').getAttribute('aria-checked')`),'true');
+  assert.equal(await evaluate(`document.querySelectorAll('[data-pet-choice]:not([hidden])').length`),9);
+  assert.equal(await evaluate(`window.lumen.settings.get().then(s=>s.petModeEnabled)`),false);
+  await evaluate(`document.querySelector('[data-pet-preview-animal="otter"][data-pet-preview-action="working"]').click()`);
+  await evaluate(`document.querySelector('[data-pet-preview-animal="fluffy-rabbit"][data-pet-preview-action="wave"]').click(); document.querySelector('[data-pet-preview-animal="red-panda"][data-pet-preview-action="review"]').click()`);
+  await waitFor(()=>evaluate(`document.querySelector('[data-pet-choice="otter"] canvas').dataset.action==='working' && document.querySelector('[data-pet-choice="fluffy-rabbit"] canvas').dataset.action==='wave' && document.querySelector('[data-pet-choice="red-panda"] canvas').dataset.action==='review'`));
+  assert.equal(await evaluate(`document.querySelector('[name="petAnimal"]').value`),'otter','per-card action buttons do not select another pet');
+  assert.equal(await evaluate(`document.querySelectorAll('button button').length`),0,'selection buttons never contain interactive action buttons');
+  assert.equal(await evaluate(`document.querySelector('[data-pet-preview-animal="fluffy-rabbit"][data-pet-preview-action="working"]').textContent`),'洗脸');
+  assert.ok(await evaluate(`Array.from(document.querySelectorAll('.pet-picker-card:not([hidden])')).every(c=>c.getBoundingClientRect().width<=261)`),'cards stay compact');
+  const previewFrames=new Set();
+  for(let i=0;i<8;i++){previewFrames.add(await evaluate(`document.querySelector('[data-pet-choice="otter"] canvas').dataset.frame`));await sleep(160);}
+  assert.ok(previewFrames.size>=3,'visible previews animate through multiple frames');
+  await evaluate(`document.querySelector('[data-pet-preview-pause]').click()`);
+  const frozen=await evaluate(`document.querySelector('[data-pet-choice="otter"] canvas').dataset.frame`);
+  await sleep(350);assert.equal(await evaluate(`document.querySelector('[data-pet-choice="otter"] canvas').dataset.frame`),frozen);
+  await evaluate(`document.querySelector('[data-pet-preview-background]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-pet-picker]').classList.contains('pet-picker-dark')`),true);
+  await evaluate(`document.querySelector('[data-settings-tab="shortcuts"]').click(); document.querySelector('[data-settings-tab="pet"]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[name="petAnimal"]').value`),'otter','tab switching preserves the draft choice');
+  await evaluate(`document.querySelector('[data-pet-group="pixel"]').click(); document.querySelector('[data-pet-choice="human"]').click()`);
+  await waitFor(()=>evaluate(`document.querySelector('[data-pet-choice="human"] canvas').classList.contains('pet-picker-pixel')`));
+  assert.equal(await evaluate(`document.querySelectorAll('[data-pet-choice]:not([hidden])').length`),10);
+  await evaluate(`document.querySelector('[data-pet-choice="human"]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))`);
+  assert.equal(await evaluate(`document.querySelector('[name="petAnimal"]').value`),'rabbit','arrow keys select the next visible card');
+  // Leaving settings while paused must disconnect the observer and event listeners too.
+  await evaluate(`window.__previewObserverDisconnected=0; const original=IntersectionObserver.prototype.disconnect; IntersectionObserver.prototype.disconnect=function(){window.__previewObserverDisconnected++;return original.call(this)}; document.querySelector('[data-action="section"][data-value="notes"]').click()`);
+  await waitFor(()=>evaluate(`location.hash === '#workspace'`));
+  assert.ok(await evaluate(`window.__previewObserverDisconnected>=1`));
+  await evaluate(`document.querySelector('[data-action="section"][data-value="settings"]').click()`);
+  await waitFor(()=>evaluate(`Boolean(document.querySelector('[data-pet-group="animated"]'))`));
+  await evaluate(`document.querySelector('[data-settings-tab="pet"]').click()`);
+  await evaluate(`document.querySelector('[data-pet-group="animated"]').click(); document.querySelector('[data-pet-choice="cat"]').click()`);
+
   await evaluate(`(() => {
     document.querySelector('[name="petModeEnabled"]').checked = true;
     document.querySelector('[name="petAnimal"]').value = 'cat';
@@ -139,8 +180,9 @@ try {
   socket.close(); await connect(petTarget.webSocketDebuggerUrl);
   await waitFor(() => evaluate(`window.desktopPet?.get().then(state => state?.animal === 'cat' && state?.size === 96)`), { process: electron });
   assert.equal(await evaluate(`typeof window.lumen === 'undefined' && typeof require === 'undefined'`), true, 'pet uses its own restricted sandbox preload');
-  await waitFor(() => evaluate(`document.querySelector('canvas').getContext('2d').getImageData(0,0,32,32).data.some((value,index) => index % 4 === 3 && value > 0)`));
-  assert.equal(await evaluate(`getComputedStyle(document.querySelector('canvas')).imageRendering`), 'pixelated');
+  await waitFor(() => evaluate(`(() => { const c=document.querySelector('canvas'); return c.getContext('2d').getImageData(0,0,c.width,c.height).data.some((value,index) => index % 4 === 3 && value > 0); })()`));
+  await waitFor(() => evaluate(`document.querySelector('#pet').dataset.assetStatus === 'ready'`));
+  assert.equal(await evaluate(`getComputedStyle(document.querySelector('canvas')).imageRendering`), 'auto');
   assert.equal(await evaluate(`getComputedStyle(document.body).backgroundColor`), 'rgba(0, 0, 0, 0)');
   const rect = await evaluate(`(()=>{const r=document.querySelector('#pet').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2,width:r.width}})()`);
   assert.equal(rect.width, 96);
@@ -204,25 +246,44 @@ try {
   assert.equal(await evaluate(`document.querySelector('#pet').getBoundingClientRect().width`),128);
   const operatorShot=await send('Page.captureScreenshot',{format:'png',omitBackground:true});
   fs.writeFileSync(path.join(os.tmpdir(),'dm-operator-rabbit-settings-preview.png'),Buffer.from(operatorShot.result.data,'base64'));
+  for (const animal of ['fluffy-rabbit','otter','red-panda','baby-dragon']) {
+    socket.close(); await connect(workspace.webSocketDebuggerUrl);
+    await evaluate(`document.querySelector('[name="petAnimal"]').value=${JSON.stringify(animal)}; document.querySelector('[data-module-action="settings-save"]').click()`);
+    socket.close(); await connect(petTarget.webSocketDebuggerUrl);
+    await waitFor(()=>evaluate(`window.desktopPet.get().then(s=>s.animal===${JSON.stringify(animal)} && document.querySelector('#pet').dataset.assetStatus==='ready')`));
+    assert.equal(await evaluate(`document.querySelector('#pet').dataset.renderer`),'atlas');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(configDirectory,'config.json'))).petAnimal,animal);
+  }
   socket.close(); await connect(workspace.webSocketDebuggerUrl);
-  await evaluate(`document.querySelector('[name="petAnimal"]').value='engineer-fox'; document.querySelector('[data-module-action="settings-save"]').click()`);
+  await evaluate(`window.lumen.settings.save({petAnimal:'future-pet',petModeEnabled:true,petDisplaySize:128})`);
+  await waitFor(()=>evaluate(`document.querySelector('[name="petAnimal"]').value==='future-pet'`));
+  await evaluate(`document.querySelector('[data-module-action="settings-reload"]').click()`);
+  await waitFor(()=>evaluate(`document.querySelector('[name="petAnimal"]').value==='future-pet'`));
+  assert.match(await evaluate(`document.querySelector('.pet-picker-selection').textContent`),/已保留/);
+  await evaluate(`document.querySelector('[data-module-action="settings-save"]').click()`);
+  await waitFor(()=>evaluate(`document.querySelector('.ws-settings-ok')?.textContent.includes('已保存')`));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(configDirectory,'config.json'))).petAnimal,'future-pet','saving unrelated settings cannot replace an unsupported pet');
+  socket.close(); await connect(petTarget.webSocketDebuggerUrl);
+  await waitFor(()=>evaluate(`document.querySelector('#pet').dataset.assetStatus==='unsupported'`));
+  socket.close(); await connect(workspace.webSocketDebuggerUrl);
+  await evaluate(`document.querySelector('[name="petAnimal"]').value='otter'; document.querySelector('[data-module-action="settings-save"]').click()`);
   socket.close(); await connect(workspace.webSocketDebuggerUrl);
   await evaluate(`document.querySelector('[name="petModeEnabled"]').checked=false; document.querySelector('[data-module-action="settings-save"]').click()`);
   await waitFor(async () => !(await targets()).some(item => item.url.endsWith('/pet.html')));
   await evaluate(`document.querySelector('[name="petModeEnabled"]').checked=true; document.querySelector('[data-module-action="settings-save"]').click()`);
   await waitFor(async () => (await targets()).some(item => item.url.endsWith('/pet.html')));
   const configFile = path.join(configDirectory, 'config.json');
-  assert.equal(JSON.parse(fs.readFileSync(configFile)).petAnimal, 'engineer-fox');
+  assert.equal(JSON.parse(fs.readFileSync(configFile)).petAnimal, 'otter');
   // Exit while the pet is enabled; it must not join the editor flush handshake or keep Electron alive.
   await evaluate(`window.lumen.quitApp(); true`);
   await waitFor(() => electron.exited, { timeout: 15000 });
   assert.equal(electron.code, 0, electron.output);
-  const restart = start('Electron pet restart', path.resolve(cwd, 'node_modules/.bin/electron'), ['--no-proxy-server', '.'], {
+  const restart = start('Electron pet restart', appExecutable, appArgs, {
     DM_E2E_ROOT: root, DM_E2E_PORT: String(debugPort), DM_E2E_SERVER_PORT: String(serverPort),
   });
   const restored = await waitFor(async () => (await targets()).find(item => item.url.endsWith('/pet.html')), { process: restart });
   socket.close(); await connect(restored.webSocketDebuggerUrl);
-  await waitFor(() => evaluate(`window.desktopPet?.get().then(state => state.animal === 'engineer-fox' && state.size === 128)`), { process: restart });
+  await waitFor(() => evaluate(`window.desktopPet?.get().then(state => state.animal === 'otter' && state.size === 128)`), { process: restart });
   console.log(`Pet E2E passed: settings, sandbox, transparent window, canvas sprites, affection, double-click, task navigation, 工程师 ${assetPresent ? "atlas" : "missing-asset fallback"}, disable/re-enable, exit and restart. Previews: ${preview}, ${fossPreview}`);
 } finally {
   try { socket?.close(); } catch {}

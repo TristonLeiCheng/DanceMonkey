@@ -2,8 +2,12 @@ const path = require("node:path");
 
 const packagerConfig = {
   asar: true,
-  // Development tests and their fixtures are not part of the distributed app.
-  ignore: [/^\/test(?:\/|$)/],
+  // Keep development fixtures and design previews out of distributed applications.
+  ignore: [/^\/(test|docs)(?:\/|$)/],
+  afterCopy: [(buildPath, electronVersion, platform, arch, done) => {
+    try { require('./electron/pet-package').writePetCatalog(buildPath); done(); }
+    catch (error) { done(error); }
+  }],
   executableName: "DanceMonkey",
   appBundleId: "com.dancemonkey.desktop",
   // Packager resolves the matching .ico/.icns for the target platform,

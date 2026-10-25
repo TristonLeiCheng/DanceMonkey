@@ -4,10 +4,10 @@
   const canvas = pet.querySelector('canvas'), ctx = canvas.getContext('2d'), defaultTitle = pet.title;
   const player = atlas.createPlayer(), motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let state = null, serial = -1, dragging = false, interactive = null;
-  let images = new Map(), statuses = new Map(), disposed = false, timer = null;
+  const images = new Map(), assetStatus = new Map();
+  let disposed = false, timer = null;
   let elapsed = 0, lastTime = performance.now();
-  const currentManifest = () => atlas.getManifest(state?.animal);
-  const isAtlas = () => currentManifest() && images.has(state?.animal);
+  const isAtlas = () => Boolean(state && images.has(state.animal));
   function clock() {
     const time = performance.now();
     if (!document.hidden) elapsed += time - lastTime;
@@ -19,17 +19,21 @@
   }
   function draw() {
     if (!state || disposed || document.hidden) return;
-    const manifest = currentManifest(), image = images.get(state.animal);
-    pet.dataset.assetStatus = statuses.get(state.animal) || '';
-    pet.title = manifest && pet.dataset.assetStatus === 'failed'
-      ? `${manifest.name}图集未能加载` : defaultTitle;
-    if (image) { bubble.textContent = state.bubble; bubble.hidden = !state.bubble; }
+    const spec = atlas.getManifest(state.animal);
+    if (!spec && !window.DMPetSprites.animals.includes(state.animal)) {
+      resize(32, 32); ctx.clearRect(0, 0, 32, 32);
+      pet.dataset.renderer = 'unavailable'; pet.dataset.assetStatus = 'unsupported';
+      bubble.textContent = `当前版本暂不支持宠物“${state.animal}”，原选择已保留。请更新软件。`;
+      bubble.hidden = false; return;
+    }
+    if (isAtlas()) { bubble.textContent = state.bubble; bubble.hidden = !state.bubble; }
+    pet.title = spec && pet.dataset.assetStatus === 'failed'
+      ? `${spec.name}图集未能加载${spec.fallback ? '，暂用原像素外形。单击互动 · 双击打开主界面 · 拖动移动 · 右键菜单' : ''}` : defaultTitle;
     const time = clock(), smooth = Boolean(isAtlas());
     pet.dataset.renderer = smooth ? 'atlas' : 'pixel';
     pet.classList.toggle('atlas', smooth);
     if (smooth) {
-      const { cellWidth, cellHeight } = manifest;
-      document.documentElement.style.setProperty('--pet-aspect', cellWidth / cellHeight);
+      const { cellWidth, cellHeight } = spec;
       const ratio = Math.min(4, Math.max(1, window.devicePixelRatio || 1));
       resize(Math.round(state.size * cellWidth / cellHeight * ratio), Math.round(state.size * ratio));
       const sample = player.sample(time);
@@ -37,22 +41,25 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
       const frame = motion.matches ? 0 : sample.frame;
-      const crop = manifest.frames?.[sample.row][frame];
+      // Generated sheets retain their original pixels. Explicit source rectangles avoid
+      // clipping poses when the generator's row spacing differs from a uniform grid.
+      const crop = spec.frames?.[sample.row]?.[frame];
       if (crop) {
-        const [x,y,w,h,dx,dy] = crop;
-        ctx.drawImage(image,x,y,w,h,dx/cellWidth*canvas.width,dy/cellHeight*canvas.height,
-          w/cellWidth*canvas.width,h/cellHeight*canvas.height);
-      } else ctx.drawImage(image, frame * cellWidth, sample.row * cellHeight,
-        cellWidth, cellHeight, 0, 0, canvas.width, canvas.height);
+        const [x, y, width, height, left, top] = crop;
+        const sx = canvas.width / cellWidth, sy = canvas.height / cellHeight;
+        ctx.drawImage(images.get(state.animal), x, y, width, height, left * sx, top * sy, width * sx, height * sy);
+      } else {
+        ctx.drawImage(images.get(state.animal), frame * cellWidth, sample.row * cellHeight,
+          cellWidth, cellHeight, 0, 0, canvas.width, canvas.height);
+      }
     } else {
       resize(32, 32); pet.dataset.action = 'pixel';
-      if (manifest && !manifest.fallback) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        pet.dataset.renderer = 'unavailable';
-        bubble.textContent = statuses.get(state.animal) === 'failed' ? `${manifest.name}图集未能加载` : '正在加载话务员兔子…';
-        bubble.hidden = false; return;
+      if (spec && !spec.fallback) {
+        ctx.clearRect(0,0,canvas.width,canvas.height); pet.dataset.renderer='unavailable';
+        bubble.textContent=assetStatus.get(state.animal)==='failed' ? `${spec.name}图集未能加载` : `正在加载${spec.name}…`;
+        bubble.hidden=false; return;
       }
-      const animal = manifest?.fallback || state.animal;
+      const animal = spec?.fallback || state.animal;
       ctx.putImageData(new ImageData(window.DMPetSprites.render(animal, state.mood, motion.matches ? 0 : Math.floor(time / 420) % 4), 32, 32), 0, 0);
     }
   }
@@ -66,25 +73,31 @@
     if (!next || disposed) return;
     const changedAnimal = state?.animal !== next.animal;
     player.update(next, clock()); state = next;
+    const spec = atlas.getManifest(state.animal);
     document.documentElement.style.setProperty('--pet-size', `${state.size}px`);
+    document.documentElement.style.setProperty('--pet-aspect', spec ? String(spec.cellWidth / spec.cellHeight) : '1');
+    pet.dataset.assetStatus = spec ? assetStatus.get(state.animal) || 'loading' : 'none';
     bubble.textContent = state.bubble; bubble.hidden = !state.bubble;
     if (serial !== state.serial || changedAnimal) {
       serial = state.serial;
       pet.classList.remove('pop', 'jump', 'shake');
       // The atlas contains its own motion; never add a second CSS jump.
-      if (!currentManifest() && state.animation) {
+      if (!spec && state.animation) {
         void pet.offsetWidth; pet.classList.add(state.animation);
       }
     }
-    const animal = state.animal;
-    if (currentManifest() && !statuses.has(animal)) {
-      statuses.set(animal, 'loading');
-      void atlas.loadImage(undefined, animal).then((loaded) => {
+    if (spec && !assetStatus.has(state.animal)) {
+      const animal = state.animal;
+      assetStatus.set(animal, 'loading');
+      void atlas.loadImage(animal).then((loaded) => {
         if (disposed) return;
-        images.set(animal, loaded); statuses.set(animal, 'ready'); refresh();
+        images.set(animal, loaded); assetStatus.set(animal, 'ready');
+        if (state.animal === animal) { pet.dataset.assetStatus = 'ready'; refresh(); }
       }).catch((error) => {
         if (disposed) return;
-        statuses.set(animal, 'failed'); console.warn(error.message); refresh();
+        assetStatus.set(animal, 'failed');
+        console.warn(error.message);
+        if (state.animal === animal) { pet.dataset.assetStatus = 'failed'; refresh(); }
       });
     }
     refresh();

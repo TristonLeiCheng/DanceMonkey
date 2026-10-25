@@ -23,8 +23,35 @@ test('legacy pet configuration migrates, bad values normalize and partial settin
   assert.equal(normalizeSettings({ todoReminderMinutes: 999 }).todoReminderMinutes, 240);
 });
 
+test('unknown saved skin survives unrelated settings saves and a fresh service after restart', async () => {
+  const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'dm-pet-persistence-'));
+  try {
+    const {createLegacyConfig}=require('../electron/legacy-config');
+    const store=createLegacyConfig(root);
+    store.write({PetAnimal:'future-fluffy-pet',PetModeEnabled:true,PetDisplaySize:128});
+    const settings=createAppSettings(store);
+    assert.equal(settings.get().petAnimal,'future-fluffy-pet');
+    await settings.save({globalChatHotkey:'Ctrl+Alt+Q'});
+    const restarted=createAppSettings(createLegacyConfig(root));
+    assert.equal(restarted.get().petAnimal,'future-fluffy-pet');
+    assert.equal(restarted.get().petModeEnabled,true);assert.equal(restarted.get().petDisplaySize,128);
+    await restarted.save({todoReminderEnabled:true});
+    assert.equal(store.read().petAnimal,'future-fluffy-pet');
+    await restarted.save({petAnimal:'otter'});
+    assert.equal(createAppSettings(createLegacyConfig(root)).get().petAnimal,'otter');
+  } finally {fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('pet menu saves only explicit edits, preserving a newer disk choice', () => {
+  const h=harness({petModeEnabled:true,petAnimal:'fluffy-rabbit'});h.pet.sync();
+  h.config.petAnimal='otter'; // Another settings window saved since this menu snapshot.
+  h.emit('pet:menu');h.menu.find(item=>item.label==='宠物大小').submenu.find(item=>item.label==='96 px').click();
+  assert.equal(h.config.petAnimal,'otter');assert.equal(h.pet.window.state.animal,'otter');h.pet.dispose();
+});
+
 test('all original species render with expressions and life accessories at all four frames', () => {
-  assert.deepEqual(new Set(sprites.animals), new Set(Object.keys(ANIMALS).filter(id => !require('../src/pet-atlas').getManifest(id))));
+  assert.deepEqual(new Set(sprites.animals), new Set(Object.keys(ANIMALS).filter(id => !['engineer-fox', 'operator-rabbit', 'otter', 'red-panda', 'baby-dragon', 'fluffy-rabbit'].includes(id))));
   const appearances = new Set();
   for (const animal of sprites.animals) {
     appearances.add(Buffer.from(sprites.render(animal)).toString('base64'));
@@ -152,12 +179,12 @@ test('task reminder timers honor enable and interval changes instead of resettin
 
 
 test('工程师 is additive, normalizes and is selectable in the existing menu at every legacy size', () => {
-  assert.equal(Object.keys(ANIMALS).length, 15);
+  assert.equal(Object.keys(ANIMALS).length, 19);
   assert.equal(normalizeSettings({ petAnimal: 'engineer-fox' }).petAnimal, 'engineer-fox');
   const h = harness({ petModeEnabled: true }); h.pet.sync();
   h.emit('pet:menu');
   const skins = h.menu.find(item => item.label === '宠物外形').submenu;
-  assert.equal(skins.length, 15);
+  assert.equal(skins.length, 19);
   skins.find(item => item.label === '工程师').click();
   assert.equal(h.config.petAnimal, 'engineer-fox');
   for (const size of [48, 68, 96, 128]) {
@@ -173,6 +200,18 @@ test('工程师 is additive, normalizes and is selectable in the existing menu a
   h.emit('pet:interactive', undefined, true); assert.equal(h.pet.window.ignoring, false);
   h.emit('pet:interactive', undefined, false); assert.equal(h.pet.window.ignoring, true);
   h.pet.dispose(); assert.equal(h.intervals.size, 0);
+});
+
+test('new companion species persist through settings and expose their own menu and dialogue', () => {
+  for (const animal of ['otter', 'red-panda', 'baby-dragon', 'fluffy-rabbit']) {
+    assert.equal(normalizeSettings({petAnimal:animal}).petAnimal,animal);
+    const h=harness({petModeEnabled:true,petAnimal:'cat'}); h.pet.sync(); h.emit('pet:menu');
+    h.menu.find(item=>item.label==='宠物外形').submenu.find(item=>item.label===ANIMALS[animal]).click();
+    assert.equal(h.config.petAnimal,animal); assert.equal(h.pet.window.state.animal,animal);
+    h.emit('pet:press'); h.emit('pet:release');
+    assert.ok(require('../src/pet-dialogue').taps[animal].includes(h.pet.window.state.bubble));
+    h.pet.dispose();
+  }
 });
 
 test('operator rabbit menu selection is explicit and keeps legacy rabbit and personas untouched', () => {

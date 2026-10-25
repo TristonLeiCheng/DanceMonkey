@@ -122,8 +122,8 @@ function createDesktopPet({ BrowserWindow, screen, Menu, powerSaveBlocker, confi
     place(); updateBlocker(); send();
   }
   function save(patch) {
-    const next = normalizeSettings({ ...settings, ...patch });
-    try { configStore.write(next); sync(next); onSettingsChanged(next); }
+    // Persist only the explicit change, never a runtime/default snapshot of all settings.
+    try { const saved = configStore.write(patch); sync(saved); onSettingsChanged(normalizeSettings(saved)); }
     catch (error) { onError(error); }
   }
   function beginDrag() {

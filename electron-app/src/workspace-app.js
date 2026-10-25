@@ -572,6 +572,7 @@
                 : section === "settings"
                 ? "软件设置"
                 : activePath || vaultRoot || "本地知识库";
+    modulesInstance?.disposePreviews?.();
     root.innerHTML = `<main class="workspace-frame">
       <header class="ws-titlebar">
         <div class="ws-brand">DM <span>DanceMonkey${appVersion ? ` v${esc(appVersion)}` : ""}</span></div>

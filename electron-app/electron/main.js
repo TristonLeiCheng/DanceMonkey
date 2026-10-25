@@ -397,6 +397,7 @@ app.whenReady().then(() => {
   appUpdateService = platform.createAppUpdateService({
     getExecutablePath: () => process.execPath,
     getUserDataDirectory: () => app.getPath("userData"),
+    getPetSettings: () => appSettings.get(),
     getInstallDirectory: () =>
       app.isPackaged ? path.dirname(process.execPath) : path.resolve(app.getAppPath()),
     getCurrentVersion: () => {

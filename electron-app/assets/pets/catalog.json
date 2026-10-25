@@ -1,0 +1,80 @@
+{
+  "format": 1,
+  "animals": {
+    "human": {
+      "name": "小人"
+    },
+    "cat": {
+      "name": "猫咪",
+      "source": "assets/pets/cat/spritesheet-engineer.png",
+      "sha256": "8d0674b42f62343604bcd8004c49682f05bf332b21d3494d85d63e090c0ac0b5"
+    },
+    "dog": {
+      "name": "狗狗",
+      "source": "assets/pets/dog/spritesheet-engineer.png",
+      "sha256": "a3fe877ca4db17235263cc673a488eee7badff4f9093e572d897ef0d6dce1c83"
+    },
+    "rabbit": {
+      "name": "兔子"
+    },
+    "fox": {
+      "name": "狐狸"
+    },
+    "goose": {
+      "name": "大鹅"
+    },
+    "cockroach": {
+      "name": "蟑螂"
+    },
+    "mosquito": {
+      "name": "蚊子"
+    },
+    "capybara": {
+      "name": "卡皮巴拉（水豚）",
+      "source": "assets/pets/capybara/spritesheet-natural.png",
+      "sha256": "47eebc79c18337c8d6b07829f619c74b612c308b6e1f70fe3be0b02aec7361ff"
+    },
+    "frog": {
+      "name": "青蛙"
+    },
+    "penguin": {
+      "name": "企鹅"
+    },
+    "turtle": {
+      "name": "乌龟"
+    },
+    "hedgehog": {
+      "name": "刺猬"
+    },
+    "engineer-fox": {
+      "name": "工程师",
+      "source": "assets/pets/foss/spritesheet-extended.png",
+      "sha256": "cee9b1b5db31261831f06a1446b5ad2513ed7abd461919b1c1371936308b0b89"
+    },
+    "operator-rabbit": {
+      "name": "话务员兔子",
+      "source": "assets/pets/operator-rabbit/spritesheet.png",
+      "sha256": "fc866eda6c4633bf45682b0dd663930268090658f416ff4f6c966b3c13f4577e"
+    },
+    "otter": {
+      "name": "抱贝壳的小海獭",
+      "source": "assets/pets/otter/spritesheet-natural.png",
+      "sha256": "63bb08ec59b842308ba2693a2653ee8a5018d199c6d094ed5b6981d84aa4249b"
+    },
+    "red-panda": {
+      "name": "小熊猫咖啡师",
+      "source": "assets/pets/red-panda/spritesheet-barista.png",
+      "sha256": "67d5ae0297fd8b0e42962a723c991fdb6cbe21180081960b851b28bde087fe3c"
+    },
+    "baby-dragon": {
+      "name": "团子小龙",
+      "source": "assets/pets/baby-dragon/spritesheet-dragon.png",
+      "sha256": "ef48c81c240808e1daf4bf7d393f105e6694f690d47bcc25df663e174bbabde9"
+    },
+    "fluffy-rabbit": {
+      "name": "绒绒兔",
+      "source": "assets/pets/fluffy-rabbit/spritesheet-fluffy.png",
+      "sha256": "b680ba412715f5282e6e68f7cb12c581a1c3cf7383d222a407f1b128b8b056c1"
+    }
+  }
+}

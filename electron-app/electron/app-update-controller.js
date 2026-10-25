@@ -11,7 +11,7 @@ function createAppUpdateController({ service, getSettings, supported = true, aut
   let interval = null;
   const getState = () => ({ ...state });
   const publicError = (error, fallback) => error?.code === "DM_MAC_UPDATE_INSTALL_LOCATION"
-    ? "请将应用移到可写的应用程序文件夹后重试。" : fallback;
+    ? "请将应用移到可写的应用程序文件夹后重试。" : error?.code === 'DM_PET_UPDATE_UNAVAILABLE' ? error.message : fallback;
   function publish(patch) {
     state = { ...state, ...patch };
     broadcast(getState());

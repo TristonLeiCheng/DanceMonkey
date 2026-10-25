@@ -8,12 +8,12 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 const atlas = createRequire(import.meta.url)('../src/pet-atlas');
-const animal=process.env.DM_PET_QA_ANIMAL || 'engineer-fox';
-const manifest=atlas.getManifest(animal);
-assert.ok(manifest);
+const animal = process.env.DM_PET_QA_ANIMAL || 'engineer-fox';
+const manifest = atlas.getManifest(animal);
+assert.ok(manifest, 'Unknown atlas skin: ' + animal);
 const cwd = path.resolve(import.meta.dirname, '..');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-foss-renderer-'));
-const output = process.env.DM_PET_QA_OUTPUT || path.join(os.tmpdir(), 'dm-foss-renderer-evidence');
+const output = process.env.DM_PET_QA_OUTPUT || path.join(os.tmpdir(), 'dm-' + animal + '-renderer-evidence');
 fs.mkdirSync(output, { recursive: true });
 const asset = path.join(cwd, manifest.source);
 assert.ok(fs.existsSync(asset), 'Install the original 工程师 atlas before running real-asset QA');
@@ -93,14 +93,18 @@ try {
   await evaluate(`(() => { const ctx=document.querySelector('canvas').getContext('2d'), original=ctx.drawImage.bind(ctx); window.qaDraws=[];
     ctx.drawImage=(...args)=>{qaDraws.push({x:args[1],y:args[2],w:args[3],h:args[4],time:performance.now()}); return original(...args);}; })()`);
   let serial = 0;
-  for (const mood of ['normal','working','reading','failed','bored']) {
-    const action=atlas.baseAction(mood), {row,frames}=manifest.actions[action];
+  const moods = animal === 'capybara' ? ['normal','eating','reading','failed','sleepy'] : ['normal','working','reading','failed','bored'];
+  for (const mood of moods) {
+    const action = atlas.baseAction(mood, animal);
+    const {row,frames} = manifest.actions[action];
     await setState({ mood, serial: ++serial, animation: '', bubble: '' }); await drawAction(action);
     await evaluate('qaDraws.length=0');
     await pause(1500);
     const draws = await evaluate('qaDraws');
     assert.ok(draws.length >= frames, action + ' actually draws at its configured FPS');
-    assert.ok(draws.every(d => manifest.frames ? manifest.frames[row].some(([x,y,w,h])=>d.x===x&&d.y===y&&d.w===w&&d.h===h) : d.y === row*manifest.cellHeight && d.w === manifest.cellWidth && d.h === manifest.cellHeight && d.x >= 0 && d.x < frames*manifest.cellWidth));
+    assert.ok(draws.every(d => manifest.frames
+      ? manifest.frames[row].some(([x,y,w,h]) => d.x===x && d.y===y && d.w===w && d.h===h)
+      : d.y === row*manifest.cellHeight && d.w === manifest.cellWidth && d.h === manifest.cellHeight && d.x >= 0 && d.x < frames*manifest.cellWidth));
     assert.equal(new Set(draws.map(d => d.x)).size, frames, action + ' visits every real source frame');
     await screenshot('action-' + action);
   }
@@ -130,7 +134,7 @@ try {
       scales.push({size,dpr,...metrics}); await screenshot(`size-${size}-dpr-${dpr}`);
     }
   }
-  await setState({mood:'working',serial:++serial}); await drawAction('working');
+  await setState({mood:'working',serial:++serial}); await drawAction(atlas.baseAction('working', animal));
   await evaluate('atlasTest.visible(false)'); await waitFor(() => evaluate('document.hidden'));
   const hiddenCount = await evaluate('qaDraws.length'); await pause(450);
   assert.equal(await evaluate('qaDraws.length'), hiddenCount, 'hidden native window stops drawing');
@@ -152,7 +156,7 @@ try {
     await screenshot('operator-rabbit-preview');
   }
   fs.writeFileSync(path.join(output,'metrics.json'),JSON.stringify({scales,actions:['idle','working','review','failed','waiting','wave','jump'],hiddenPause:true,reducedMotion:true,unloadCleanup:true},null,2)+'\n');
-  console.log('Real '+animal+' renderer E2E passed: all active action frames, one-shot transitions, repeated broadcasts, sizes 48/68/96/128 at DPR 1/2, transparency, centering, native hide/show, reduced motion and unload. Evidence: '+output);
+  console.log('Real ' + animal + ' renderer E2E passed: all active action frames, one-shot transitions, repeated broadcasts, sizes 48/68/96/128 at DPR 1/2, transparency, centering, native hide/show, reduced motion and unload. Evidence: '+output);
 } finally {
   socket?.close();
   if (!exited) { child.kill('SIGTERM'); await Promise.race([new Promise(resolve=>child.once('exit',resolve)),pause(2000).then(()=>{if(!exited)child.kill('SIGKILL');})]); }

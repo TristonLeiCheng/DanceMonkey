@@ -1,9 +1,10 @@
-// Engineer is a local 2D atlas skin. Life states are the existing simulated pet states.
+// Local atlas skins share the existing simulated pet states.
 (function (root, factory) {
-  const api = factory(typeof module === 'object' && module.exports ? require('./pet-operator-atlas') : root.DMPetOperatorAtlas);
+  const api = factory(typeof module === 'object' && module.exports
+    ? {...require('./pet-companion-atlases'), ...require('./pet-operator-atlas')} : {...root.DMPetCompanionAtlases, ...root.DMPetOperatorAtlas});
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.DMPetAtlas = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, (operators) => {
+})(typeof globalThis !== 'undefined' ? globalThis : this, (companions) => {
   const manifest = Object.freeze({
     animal: 'engineer-fox', name: '工程师', fallback: 'fox', source: 'assets/pets/foss/spritesheet-extended.png',
     width: 1536, height: 2288, cellWidth: 192, cellHeight: 208, columns: 8, rows: 11,
@@ -15,19 +16,30 @@
     // Two static rows, starting up and progressing clockwise in 22.5-degree steps.
     gazes: Object.freeze({ firstRow: 9, frames: 16 }),
   });
-  const operator = Object.freeze({
-    animal: 'operator-rabbit', name: '话务员兔子', ...operators['operator-rabbit'],
-    cellWidth: 256, cellHeight: 256, columns: 4, rows: 9,
-    actions: Object.freeze(Object.fromEntries(
-      ['idle', 'right', 'left', 'wave', 'jump', 'failed', 'waiting', 'working', 'review']
-        .map((name, row) => [name, Object.freeze({ row, frames: 4,
-          fps: ['right', 'left', 'wave', 'jump'].includes(name) ? 6 : 4,
-          once: name === 'wave' || name === 'jump' })]))),
-  });
-  const manifests = Object.freeze({ 'engineer-fox': manifest, 'operator-rabbit': operator });
+  function companion(animal, name, moods = {}) {
+    return Object.freeze({ animal, name, fallback: ['cat', 'dog', 'capybara'].includes(animal) ? animal : null,
+      source: `assets/pets/${animal}/spritesheet-engineer.png`,
+      ...companions[animal], cellWidth: 256, cellHeight: 256, columns: 4, rows: 9,
+      moods: Object.freeze(moods),
+      actions: Object.freeze(Object.fromEntries(
+        ['idle', 'right', 'left', 'wave', 'jump', 'failed', 'waiting', 'working', 'review']
+          .map((action, row) => [action, Object.freeze({ row, frames: 4,
+            fps: ['right', 'left', 'wave', 'jump'].includes(action) ? 6 : 4,
+            once: action === 'wave' || action === 'jump' })]))),
+    });
+  }
+  const manifests = Object.freeze({ 'engineer-fox': manifest,
+    'operator-rabbit': companion('operator-rabbit', '话务员兔子'),
+    'fluffy-rabbit': companion('fluffy-rabbit', '绒绒兔', { relaxing: 'waiting', focused: 'review' }),
+    otter: companion('otter', '抱贝壳的小海獭', { eating: 'working', relaxing: 'waiting' }),
+    'red-panda': companion('red-panda', '小熊猫咖啡师', { eating: 'review', relaxing: 'review' }),
+    'baby-dragon': companion('baby-dragon', '团子小龙', { relaxing: 'waiting', exercising: 'working' }),
+    cat: companion('cat', '猫咪'), dog: companion('dog', '狗狗'),
+    capybara: companion('capybara', '卡皮巴拉', { eating: 'working', working: 'review',
+      focused: 'review', relaxing: 'waiting', bored: 'idle', taskReminder: 'review' }) });
   const getManifest = animal => Object.hasOwn(manifests, animal) ? manifests[animal] : null;
-  function baseAction(mood) {
-    return ({ working: 'working', focused: 'working', reading: 'review', review: 'review',
+  function baseAction(mood, animal = 'engineer-fox') {
+    return getManifest(animal)?.moods?.[mood] || ({ working: 'working', focused: 'working', reading: 'review', review: 'review',
       failed: 'failed', bored: 'waiting', taskReminder: 'waiting', sleepy: 'waiting',
       sleeping: 'waiting', eating: 'idle', relaxing: 'idle' })[mood] || 'idle';
   }
@@ -40,7 +52,7 @@
       const changedMood = next.mood !== state?.mood;
       const trigger = event && next.animation === 'pop' ? 'wave'
         : (event && next.animation === 'jump') || (changedMood && next.mood === 'happy') ? 'jump' : null;
-      const base = baseAction(next.mood);
+      const base = baseAction(next.mood, next.animal);
       if (changedAnimal || trigger || changedMood || (!current.actions[action].once && action !== base)) {
         action = trigger || base; started = time;
       }
@@ -51,7 +63,7 @@
       let frame = Math.floor(Math.max(0, time - started) * spec.fps / 1000);
       if (spec.once && frame >= spec.frames) {
         started += spec.frames * 1000 / spec.fps;
-        action = baseAction(state?.mood); spec = current.actions[action];
+        action = baseAction(state?.mood, state?.animal); spec = current.actions[action];
         frame = Math.floor(Math.max(0, time - started) * spec.fps / 1000);
       }
       return { action, row: spec.row, frame: frame % spec.frames, fps: spec.fps };
@@ -60,7 +72,7 @@
   }
   // A rejected load remains cached, so periodic state broadcasts never retry a missing file.
   const cachedImages = new Map();
-  function loadImage(ImageType = globalThis.Image, animal = 'engineer-fox') {
+  function loadImage(animal = 'engineer-fox', ImageType = globalThis.Image) {
     const spec = getManifest(animal);
     if (!spec) return Promise.reject(new Error('未知宠物图集'));
     if (!cachedImages.has(animal)) cachedImages.set(animal, new Promise((resolve, reject) => {

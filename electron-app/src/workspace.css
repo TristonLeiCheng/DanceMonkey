@@ -377,6 +377,53 @@
   cursor: default;
 }
 
+.ws-vault-options {
+  position: relative;
+  flex: none;
+  margin: 4px 8px 8px;
+}
+
+.ws-vault-options > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--ws-muted);
+  font-size: 11px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.ws-vault-options > summary::-webkit-details-marker { display: none; }
+.ws-vault-options > summary > span:first-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ws-vault-options-more { flex: none; font-size: 18px; letter-spacing: 1px; }
+.ws-vault-options > summary:hover,
+.ws-vault-options[open] > summary { color: var(--ws-text); background: var(--ws-hover); }
+.ws-vault-options > summary:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 2px; }
+
+.ws-vault-options-panel {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: min(400px, 60vh);
+  overflow-y: auto;
+  background: rgb(var(--ws-surface));
+  border: 1px solid var(--ws-line);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px #0003;
+}
+
+.ws-vault-options-panel .ws-vault-bar { gap: 6px; padding: 12px 8px; }
+.ws-vault-options-panel .ws-vault-icon { display: none; }
+.ws-vault-tools { display: grid; gap: 2px; padding: 6px; }
+.ws-vault-tools .ws-mode { width: 100%; padding: 9px 10px; text-align: left; font-size: 12px; border-radius: 5px; }
+.ws-vault-tools .ws-mode:hover { color: var(--ws-text); background: var(--ws-hover); }
+
 .ws-tree {
   flex: 1;
   min-height: 0;

@@ -385,6 +385,7 @@ app.whenReady().then(() => {
   }
   desktopPet = createDesktopPet({
     BrowserWindow, screen, Menu, powerSaveBlocker, configStore: legacyConfig,
+    desktopIcons: require('./desktop-icons').createDesktopIconReader(),
     getTasks: () => githubNotes?.busy ? null : zenTaskStore.load().tasks,
     openWorkspace,
     captureQuick: () => { void screenshotController.captureQuick(); },
@@ -589,6 +590,13 @@ app.whenReady().then(() => {
   ipcMain.handle("workspace:createFile", (_e, parent, name, generation) => {
     githubNotes.assertWritable(generation);
     const result = workspaceStore.createFile(parent, name);
+    refreshQuickNotes();
+    return result;
+  });
+  ipcMain.handle("workspace:createNote", (_e, input, generation) => {
+    githubNotes.assertWritable(generation);
+    if (input?.root !== workspaceStore.root) throw new Error("笔记库已变化，请返回主页重试。");
+    const result = workspaceStore.createNote(input);
     refreshQuickNotes();
     return result;
   });

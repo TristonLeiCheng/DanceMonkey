@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld("lumen", {
     read: (path) => ipcRenderer.invoke("workspace:read", path),
     write: (path, content) => writeNotes("workspace:write", path, content),
     createFile: (parent, name) => writeNotes("workspace:createFile", parent, name),
+    createNote: (input) => writeNotes("workspace:createNote", input),
     createFolder: (parent, name) => writeNotes("workspace:createFolder", parent, name),
     rename: (path, name) => writeNotes("workspace:rename", path, name),
     remove: (path) => writeNotes("workspace:remove", path),
@@ -137,6 +138,8 @@ contextBridge.exposeInMainWorld("lumen", {
     disconnect: () => ipcRenderer.invoke("githubSync:disconnect"),
     bind: (input) => ipcRenderer.invoke("githubSync:bind", input),
     preview: () => ipcRenderer.invoke("githubSync:preview"),
+    inspectConflict: (input) => ipcRenderer.invoke("githubSync:inspectConflict", input),
+    resolveConflicts: (input) => ipcRenderer.invoke("githubSync:resolveConflicts", input),
     sync: (input) => ipcRenderer.invoke("githubSync:sync", input),
     openBackup: () => ipcRenderer.invoke("githubSync:openBackup"),
     onEditor: (cb) => {

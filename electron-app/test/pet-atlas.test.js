@@ -79,7 +79,8 @@ function renderer({ fail = false, reduced = false, deferred = false } = {}) {
     classList: { toggle: (name, value) => value ? classes.add(name) : classes.delete(name), add: name => classes.add(name), remove: (...names) => names.forEach(name => classes.delete(name)) },
   };
   const bubble = { ...events('bubble'), hidden: true };
-  const document = { ...events('document'), hidden: false, documentElement: { style: { setProperty() {} } }, getElementById: id => id === 'pet' ? pet : bubble };
+  const cargo = { hidden: true, style: { setProperty() {} } }, cargoImage = { ...events('cargoImage'), dataset: {}, src: '' };
+  const document = { ...events('document'), hidden: false, documentElement: { style: { setProperty() {} } }, getElementById: id => ({ pet, bubble, 'pet-cargo': cargo, 'pet-cargo-image': cargoImage })[id] };
   const motion = { ...events('motion'), matches: reduced };
   const api = freshAtlas();
   const pixelCalls = [];
@@ -100,7 +101,7 @@ function renderer({ fail = false, reduced = false, deferred = false } = {}) {
   } }
   const loadImage = api.loadImage; api.loadImage = animal => loadImage(animal, Image);
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/pet'), 'utf8'), context);
-  return { context, pet, bubble, canvas, pending, calls, classes, pixelCalls,
+  return { context, pet, bubble, cargo, cargoImage, canvas, pending, calls, classes, pixelCalls,
     update: received, time: value => time = value, complete: animal => loads.get(animal)(),
     event: (target, event) => listeners.get(`${target}:${event}`)?.(),
     get requests() { return requests; }, get unsubscribed() { return unsubscribed; },
@@ -332,4 +333,28 @@ test('unsupported saved skin is reported instead of drawing a default cat', asyn
   assert.equal(r.pet.dataset.renderer,'unavailable');assert.equal(r.pet.dataset.assetStatus,'unsupported');
   assert.equal(r.pixelCalls.length,0);assert.match(r.bubble.textContent,/原选择已保留/);
   r.event('window','unload');
+});
+
+test('control actions override mood without resetting walking frames and hold jump until landing', () => {
+  const p = atlas.createPlayer();
+  const controlled = action => state({ mood: 'happy', control: { active: true, action } });
+  p.update(controlled('left'), 0); p.update(controlled('left'), 350);
+  assert.equal(p.sample(350).action, 'left'); assert.equal(p.sample(350).frame, 3);
+  p.update(controlled('jump'), 400); assert.equal(p.sample(2000).action, 'jump');
+  assert.equal(p.sample(2000).frame, 4);
+  p.update(controlled('idle'), 2010); assert.equal(p.sample(2010).action, 'idle');
+  p.update(state({ mood: 'working' }), 2100); assert.equal(p.sample(2100).action, 'working');
+});
+
+test('carry visual follows the pet with the item name and image; exiting mode removes it', async () => {
+  const r=renderer();
+  const carry={id:'file',name:'计划.md',phase:'carrying',progress:1,image:'data:image/png;base64,aGVsbG8=',source:{x:100,y:100,width:60,height:60}};
+  r.update(state({control:{active:true,action:'left',facing:'left',left:20,top:100,carry}}));await settle();
+  assert.equal(r.cargo.hidden,false);assert.equal(r.cargoImage.src,carry.image);
+  assert.equal(r.pet.dataset.carryPhase,'carrying');assert.match(r.bubble.textContent,/抱着「计划.md」.*E 放下/);
+  const left=r.cargo.style.transform;
+  r.update(state({control:{active:true,action:'right',facing:'right',left:20,top:100,carry}}));
+  assert.notEqual(r.cargo.style.transform,left,'cargo switches hands when turning');
+  r.update(state({control:{active:false}}));assert.equal(r.cargo.hidden,true);assert.equal(r.pet.dataset.carryPhase,'');
+  assert.equal(r.cargoImage.src,'assets/pets/carry-file.svg');r.event('window','unload');
 });

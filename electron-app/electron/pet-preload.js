@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('desktopPet', {
   cancel: () => ipcRenderer.send('pet:cancel'),
   menu: () => ipcRenderer.send('pet:menu'),
   tasks: () => ipcRenderer.send('pet:tasks'),
+  key: (code, down) => ipcRenderer.send('pet:key', { code, down }),
+  exitControl: () => ipcRenderer.send('pet:control-exit'),
   onState: (callback) => {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on('pet:state', listener);

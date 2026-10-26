@@ -1,7 +1,31 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { getPkbPaths } = require("./pkb");
+const { getPkbPaths, createPkb } = require("./pkb");
+const notesHome = require("../src/notes-home");
+
+function noteMetadata(target, stat) {
+  const fallback = { createdAt: stat.birthtimeMs > 0 ? stat.birthtimeMs : null, createdAtSource: "filesystem" };
+  const buffer = Buffer.alloc(8192);
+  let fd;
+  let head;
+  try { fd = fs.openSync(target, "r"); head = buffer.subarray(0, fs.readSync(fd, buffer, 0, buffer.length, 0)).toString("utf8"); }
+  catch { return fallback; }
+  finally { if (fd !== undefined) fs.closeSync(fd); }
+  const header = head.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1];
+  if (!header) return fallback;
+  const scalar = (key) => {
+    const value = header.match(new RegExp(`^${key}:[ \\t]*([^\\r\\n]*)$`, "m"))?.[1]?.trim();
+    if (!value) return "";
+    if (value.startsWith('"')) { try { return JSON.parse(value); } catch { return ""; } }
+    return value.replace(/^'(.*)'$/, "$1");
+  };
+  const created = scalar("created") || scalar("createdAt");
+  const date = typeof created === "string" && /^\d{4}-\d{2}-\d{2}(?:T|$)/.test(created) ? Date.parse(created) : NaN;
+  const title = scalar("title");
+  return { ...fallback, ...(Number.isFinite(date) ? { createdAt: date, createdAtSource: "metadata" } : {}),
+    ...(typeof title === "string" && title ? { title } : {}) };
+}
 
 const QUICK_NOTE_MARKER = /^<!-- lumen-quick-note:([^\s>]+) -->\r?\n?/i;
 const QUICK_NOTE_MARKERS = /^(?:<!-- lumen-quick-note:[^\s>]+ -->\r?\n?)+/i;
@@ -111,6 +135,7 @@ function createWorkspace(notesRootPath) {
           path: relative,
           updatedAt: stat.mtimeMs,
           size: stat.size,
+          ...noteMetadata(absolute, stat),
         };
       });
   }
@@ -244,6 +269,21 @@ function createWorkspace(notesRootPath) {
       writeAtomic(target, `# ${path.parse(target).name}\n\n`);
       return toRelative(target);
     },
+    createNote({ type, title } = {}) {
+      const kind = notesHome.kind(type);
+      getPkbPaths(root); // Refuse a corrupt manifest instead of silently changing routing.
+      const pkb = createPkb(root);
+      const initialized = pkb.status().initialized;
+      const resolvedTitle = String(title || "").replace(/[\r\n\x00-\x1f]+/g, " ").trim().slice(0, 120) ||
+        (type === "daily" ? notesHome.localDay() : `未命名${kind.label}`);
+      if (initialized && type !== "blank") return pkb.createNote({ type, title: resolvedTitle });
+      const parent = initialized ? "" : kind.folder;
+      const folder = resolveSafe(parent);
+      fs.mkdirSync(folder, { recursive: true });
+      const target = uniquePath(parent, resolvedTitle, "file");
+      fs.writeFileSync(target, notesHome.compose(type, resolvedTitle, crypto.randomUUID()), { encoding: "utf8", flag: "wx", mode: 0o600 });
+      return { path: toRelative(target) };
+    },
     createFolder(parentRelative, name) {
       const target = uniquePath(parentRelative, name, "folder");
       fs.mkdirSync(target, { recursive: false });
@@ -270,4 +310,4 @@ function createWorkspace(notesRootPath) {
   };
 }
 
-module.exports = { createWorkspace, writeAtomic };
+module.exports = { createWorkspace, writeAtomic, noteMetadata };

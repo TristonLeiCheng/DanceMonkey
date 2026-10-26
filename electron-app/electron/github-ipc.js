@@ -153,9 +153,18 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
     preview = await sync.preview();
     return preview;
   }));
+  handle("inspectConflict", (_event, input) => exclusive(() => {
+    if (!preview || input?.previewId !== preview.id) throw new Error("请先重新预览同步差异。");
+    return sync.inspectConflict(input);
+  }));
+  handle("resolveConflicts", (_event, input) => withEditors(async () => {
+    if (!preview || input?.previewId !== preview.id) throw new Error("请先重新预览同步差异。");
+    preview = await sync.resolveConflicts(input);
+    return preview;
+  }));
   handle("sync", (event, input) => withEditors(async () => {
     if (!preview || input?.previewId !== preview.id) throw new Error("请先重新预览同步差异。");
-    if (preview.conflicts?.length) throw new Error("存在冲突，请先处理冲突并重新预览。");
+    if (preview.conflicts?.length) throw new Error("存在冲突，请先在界面选择处理方式。");
     const binding = sync.status().binding;
     const info = await auth.repository(binding);
     if (!info.private) throw new Error("仅允许同步到私有仓库，请重新检查仓库设置。");
@@ -163,7 +172,7 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
       type: "warning",
       title: "确认 GitHub 笔记同步",
       message: `同步到 ${binding.owner}/${binding.repo} · ${binding.branch}？`,
-      detail: `本地目录：${root}\n上传 ${preview.uploads?.length || 0} 项，下载 ${preview.downloads?.length || 0} 项，删除 ${preview.deletions?.length || 0} 项。\n笔记、图片、任务和项目数据会上传至 GitHub，删除的内容仍可能保留在 Git 历史中。仅同步 Journal/task-module.json 和 Journal/zentask-projects.json 两个业务 JSON；应用配置、API Key 和其他 JSON 不会上传。\n任务和项目按整个文件处理冲突，不自动合并记录。操作前会保留本地备份；这不是端到端加密。`,
+      detail: `本地目录：${root}\n上传 ${preview.uploads?.length || 0} 项，下载 ${preview.downloads?.length || 0} 项，删除 ${preview.deletions?.length || 0} 项。\n${preview.resolutions?.length ? `按已选方式处理 ${preview.resolutions.length} 个冲突，双方原始副本已备份。\n` : ""}笔记、图片、任务和项目数据会上传至 GitHub，删除的内容仍可能保留在 Git 历史中。仅同步 Journal/task-module.json 和 Journal/zentask-projects.json 两个业务 JSON；应用配置、API Key 和其他 JSON 不会上传。\n任务和项目按整个文件处理冲突，不自动合并记录。操作前会保留本地备份；这不是端到端加密。`,
       buttons: ["取消", "确认同步"], defaultId: 0, cancelId: 0, noLink: true,
     });
     if (result.response !== 1) return { cancelled: true };

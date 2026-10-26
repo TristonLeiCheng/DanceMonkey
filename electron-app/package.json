@@ -1,7 +1,7 @@
 {
   "name": "dance-monkey",
   "productName": "DanceMonkey",
-  "version": "3.9.1",
+  "version": "3.10.0",
   "private": true,
   "description": "DM (DanceMonkey) 桌面磨砂玻璃笔记与待办",
   "main": "electron/main.js",
@@ -13,6 +13,8 @@
     "test:e2e:outlook": "node test/e2e-outlook.mjs",
     "test:e2e:screenshot": "node test/e2e-screenshot.mjs",
     "test:e2e:pet": "node test/e2e-pet.mjs",
+    "test:e2e:pet-control": "node test/e2e-pet-control.mjs",
+    "probe:desktop-icons": "electron tools/macos-desktop-icons.cjs",
     "dev": "node server.mjs",
     "start": "node server.mjs",
     "desktop": "node desktop.mjs",

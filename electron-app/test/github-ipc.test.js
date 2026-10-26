@@ -33,6 +33,8 @@ function setup(t) {
     status: () => ({ binding: current.binding }),
     configure: (binding) => { current.binding = binding; effects.push("bind"); },
     preview: async () => { effects.push("preview"); return preview; },
+    inspectConflict: async (input) => { effects.push("inspect"); return { path: input.path }; },
+    resolveConflicts: async (input) => { effects.push("resolve"); return { ...preview, id: "resolved-id", conflicts: [], resolutions: input.resolutions }; },
     sync: async () => { effects.push("sync"); return { changed: true }; },
   };
   const module = { exports: {} };
@@ -201,4 +203,28 @@ test("shutdown aborts a stuck network operation, releases editor locks and block
   assert.equal((await h.call("repositories")).success, false);
   h.current.hangFetch = false; h.service.resume();
   assert.equal((await h.call("repositories")).success, true);
+});
+
+test("conflict IPC stages choices with editor locks and only applies the new preview after confirmation", async (t) => {
+  const { call, preview, current, effects, confirmations } = setup(t);
+  await call("bind", { owner: "test", repo: "notes" });
+  preview.conflicts = ["test.md"]; await call("preview");
+  assert.equal((await call("inspectConflict", { previewId: "old", path: "test.md" })).success, false);
+  assert.equal((await call("inspectConflict", { previewId: preview.id, path: "test.md" })).path, "test.md");
+  const input = { previewId: preview.id, resolutions: [{ path: "test.md", strategy: "both" }] };
+  current.failPrepare = true;
+  assert.equal((await call("resolveConflicts", input)).success, false);
+  assert.equal(effects.includes("resolve"), false);
+  current.failPrepare = false;
+  const result = await call("resolveConflicts", input);
+  assert.equal(result.id, "resolved-id");
+  assert.equal(effects.includes("sync"), false); assert.equal(confirmations.length, 0);
+  assert.equal((await call("sync", { previewId: preview.id })).success, false);
+  current.response = 0;
+  assert.equal((await call("sync", { previewId: result.id })).cancelled, true);
+  assert.match(confirmations[0].detail, /处理 1 个冲突/);
+  assert.equal(effects.includes("sync"), false);
+  current.response = 1;
+  assert.equal((await call("sync", { previewId: result.id })).success, true);
+  assert.equal(effects.filter((item) => item === "sync").length, 1);
 });

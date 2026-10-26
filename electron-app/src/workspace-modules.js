@@ -850,7 +850,7 @@
     }
 
     async function handleAction(action, id, setSection) {
-      if (await githubUI?.handleAction(action)) return true;
+      if (await githubUI?.handleAction(action, id)) return true;
       if (await projectManager.handleAction(action, id)) return true;
       if (action === "settings-reload") {
         settingsError = "";

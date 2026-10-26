@@ -2,10 +2,13 @@
 
 > 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。
 
-## 最新版本 · v3.9.1
+## 最新版本 · v3.10.0
 
-[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.9.1) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.9.1.md)
+[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.10.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.10.0.md)
 
+- **笔记主页**：快捷新建六类笔记、个人使用统计、近期笔记与快速搜索，笔记库和模板入口收纳到侧栏底部。
+- **点击解决同步冲突**：对比本地与远端，选择保留一方、保留两份或合并 Markdown 内容，预览后同步。
+- **宠物交互**：右键开启后使用方向键行走、空格跳跃；Mac 支持靠近、跳上与抱起桌面图标的动画。
 - **名人示范**：孔子、老子、李白、爱因斯坦、乔布斯和马斯克六种 AI 模拟视角；可预览、按需添加并用开场问题开始对话，重复添加保留已有编辑与聊天。
 - **桌面宠物**：新增海獭、小熊猫咖啡师、团子小龙和绒绒兔，升级猫、狗与卡皮巴拉素材；共19种外形，支持紧凑卡片与每角色独立动作预览。
 - **像素伙伴优化**：重绘10位像素伙伴，增加圆润轮廓、柔和明暗、眼睛高光和自然眨眼；宠物类型统一在设置中选择，右键保留大小调整等快捷功能。

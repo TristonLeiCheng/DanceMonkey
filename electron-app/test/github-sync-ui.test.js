@@ -146,3 +146,52 @@ test("native confirmation cancellation is not shown as sync success", async () =
   assert.match(ui.render(), /已取消，未执行同步/);
   assert.doesNotMatch(ui.render(), /手动同步完成/);
 });
+
+test("click choices require every conflict, compare safely, preview without writes and retain cancelled plan", async () => {
+  const calls = [], files = ["<note>.md", "Journal/task-module.json"];
+  let failResolution = true;
+  const { ui } = setup({ githubSync: {
+    status: async () => ({ success: true, auth: { connected: true }, sync: { binding: { owner: "o", repo: "r", branch: "main" } }, root: "/vault" }),
+    preview: async () => ({ success: true, id: "p", conflicts: files,
+      conflictDetails: [{ path: files[0], options: ["local", "remote", "both", "combine"], remoteDeleted: false },
+        { path: files[1], options: ["local", "remote"], localDeleted: true }] }),
+    inspectConflict: async (input) => { calls.push(["inspect", input]); return { success: true, path: input.path,
+      local: { bytes: 100, text: '<script>alert("local")</script>', truncated: true }, remote: { deleted: true } }; },
+    resolveConflicts: async (input) => { calls.push(["resolve", input]); return failResolution ? { success: false, error: "关联不兼容，请调整选择" } :
+      { success: true, id: "resolved", conflicts: [], uploads: files, resolutions: input.resolutions }; },
+    sync: async (input) => { calls.push(["sync", input]); return { success: true, cancelled: true }; },
+  } });
+  await ui.load(); await ui.handleAction("github-preview");
+  assert.match(ui.render(), /还剩 2 \/ 2/);
+  assert.match(ui.render(), /采用本地删除/);
+  await ui.handleAction("github-conflict-combine", files[0]);
+  assert.match(ui.render(), /还剩 1 \/ 2/); assert.match(ui.render(), /不会自动去重/);
+  await ui.handleAction("github-resolve"); assert.equal(calls.length, 0);
+  await ui.handleAction("github-conflict-both", files[1]);
+  assert.match(ui.render(), /还剩 1 \/ 2/);
+  await ui.handleAction("github-conflict-remote", files[1]);
+  assert.match(ui.render(), /data-module-action="github-resolve" >/);
+  await ui.handleAction("github-compare", files[0]);
+  assert.match(ui.render(), /&lt;script>/); assert.doesNotMatch(ui.render(), /<script>/);
+  assert.match(ui.render(), /仅显示前 16 KB/);
+  await ui.handleAction("github-resolve");
+  assert.match(ui.render(), /关联不兼容/); assert.match(ui.render(), /还剩 0 \/ 2/);
+  failResolution = false; await ui.handleAction("github-resolve");
+  const request = calls.filter(([name]) => name === "resolve").at(-1)[1];
+  assert.equal(JSON.stringify(request), JSON.stringify({ previewId: "p", resolutions: [
+    { path: files[0], strategy: "combine" }, { path: files[1], strategy: "remote" },
+  ] }));
+  assert.equal(calls.some(([name]) => name === "sync"), false);
+  assert.match(ui.render(), /冲突解决方案 · 尚未写入/);
+  assert.match(ui.render(), /data-module-action="github-sync" >/);
+  await ui.handleAction("github-sync");
+  assert.equal(calls.at(-1)[1].previewId, "resolved");
+  assert.match(ui.render(), /已取消/); assert.match(ui.render(), /冲突解决方案 · 尚未写入/);
+  await ui.handleAction("github-preview");
+  assert.match(ui.render(), /还剩 2 \/ 2/);
+  assert.doesNotMatch(ui.render(), /<pre>/);
+  await ui.handleAction("github-conflicts-local");
+  assert.match(ui.render(), /还剩 0 \/ 2/); assert.match(ui.render(), /两端都会删除此文件/);
+  await ui.handleAction("github-conflicts-remote");
+  assert.match(ui.render(), /还剩 0 \/ 2/);
+});

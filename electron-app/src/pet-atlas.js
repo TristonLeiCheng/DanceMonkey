@@ -48,6 +48,12 @@
     function update(next, time) {
       const changedAnimal = next.animal !== state?.animal;
       current = getManifest(next.animal) || manifest;
+      if (next.control?.active) {
+        const controlled = ['idle', 'left', 'right', 'jump'].includes(next.control.action) ? next.control.action : 'idle';
+        if (!state?.control?.active || changedAnimal || action !== controlled) { action = controlled; started = time; }
+        state = next; return;
+      }
+      if (state?.control?.active) { action = baseAction(next.mood, next.animal); started = time; state = next; return; }
       const event = changedAnimal || next.serial !== state?.serial;
       const changedMood = next.mood !== state?.mood;
       const trigger = event && next.animation === 'pop' ? 'wave'
@@ -61,6 +67,8 @@
     function sample(time) {
       let spec = current.actions[action];
       let frame = Math.floor(Math.max(0, time - started) * spec.fps / 1000);
+      if (state?.control?.active) return { action, row: spec.row,
+        frame: spec.once ? Math.min(frame, spec.frames - 1) : frame % spec.frames, fps: spec.fps };
       if (spec.once && frame >= spec.frames) {
         started += spec.frames * 1000 / spec.fps;
         action = baseAction(state?.mood, state?.animal); spec = current.actions[action];

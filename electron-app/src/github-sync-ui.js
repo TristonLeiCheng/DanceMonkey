@@ -6,6 +6,10 @@
     let repositoriesLoaded = false;
     let selectedRepo = "";
     let preview = null;
+    let choices = new Map();
+    let comparison = null;
+    const strategyLabels = { local: "保留本地", remote: "采用远端", both: "两份都保留", combine: "拼接成一篇" };
+    function setPreview(value) { preview = value; choices = new Map(); comparison = null; }
     let device = null;
     let busy = false;
     let message = "";
@@ -29,7 +33,10 @@
     function update() {
       const card = document.querySelector(".ws-github-sync");
       if (!card) return;
+      const scrollTop = card.querySelector(".github-preview")?.scrollTop || 0;
       card.outerHTML = render();
+      const list = document.querySelector(".github-preview");
+      if (list) list.scrollTop = scrollTop;
       const dialog = document.querySelector(".github-setup-dialog");
       if (dialog && !dialog.open) {
         dialog.showModal();
@@ -41,7 +48,7 @@
       const result = await api.githubSync.status();
       if (!result.success) { error = result.error || "读取同步设置失败"; return; }
       if (state.root !== result.root) {
-        preview = null;
+        setPreview(null);
         selectedRepo = "";
         draft = {};
         message = "";
@@ -110,6 +117,33 @@
         return `<li>${esc(`${label}${path}${deletion}`)}</li>`;
       }).join("")}</ul></details>` : "";
     }
+    function conflictDetail(file) {
+      return preview?.conflictDetails?.find((item) => item.path === file) || { path: file, options: ["local", "remote"] };
+    }
+    function renderConflicts() {
+      if (!preview?.conflicts?.length) return "";
+      const remaining = preview.conflicts.filter((file) => !choices.has(file)).length;
+      const disabled = busy ? "disabled" : "";
+      const side = (title, item) => `<section><h5>${title}${item.deleted ? " · 已删除" : ` · ${item.bytes} 字节`}</h5>${item.deleted ? '<p>此版本中没有该文件。</p>' : item.text != null ? `<pre>${esc(item.text)}</pre>${item.truncated ? '<p>仅显示前 16 KB；处理时使用完整文件。</p>' : ""}` : /^data:image\/(png|jpeg|gif|webp);base64,/.test(item.image || "") ? `<img src="${attr(item.image)}" alt="${title}图片版本" />` : '<p>图片文件，可选择保留任一版本或两份都保留。</p>'}</section>`;
+      return `<section class="github-conflicts" aria-label="解决同步冲突">
+        <h4>选择冲突处理方式 · 还剩 ${remaining} / ${preview.conflicts.length} 项</h4>
+        <p>选择不会立即修改文件。双方原始副本已自动备份，确认同步后才应用。</p>
+        <div class="ws-settings-actions"><button type="button" data-module-action="github-conflicts-local" ${disabled}>全部保留本地</button><button type="button" data-module-action="github-conflicts-remote" ${disabled}>全部采用远端</button></div>
+        ${preview.conflicts.map((file) => {
+          const detail = conflictDetail(file), choice = choices.get(file);
+          const label = file === "Journal/task-module.json" ? "任务数据 · " : file === "Journal/zentask-projects.json" ? "项目数据 · " : "";
+          return `<article class="github-conflict"><h4 class="github-path">${esc(label + file)}</h4>
+            <p>${detail.localDeleted ? "本地已删除，远端已修改。" : detail.remoteDeleted ? "远端已删除，本地已修改。" : "本地与远端都有不同内容。"}</p>
+            <div class="ws-settings-actions" role="group" aria-label="${attr(file)} 的处理方式">${detail.options.map((strategy) => `<button type="button" data-module-action="github-conflict-${strategy}" data-id="${attr(file)}" aria-pressed="${choice === strategy}" ${disabled}>${strategy === "local" && detail.localDeleted ? "采用本地删除" : strategy === "remote" && detail.remoteDeleted ? "采用远端删除" : strategyLabels[strategy]}</button>`).join("")}</div>
+            ${choice ? `<p class="github-choice">已选择：${esc(strategyLabels[choice])}${choice === "both" ? detail.localDeleted || detail.remoteDeleted ? "；保留仍存在的版本，撤销删除。" : "；本地保留原文件名，远端自动另存副本，两份都会同步。" : choice === "combine" ? "；本地全文在前，远端全文在后，可能包含重复内容，不会自动去重。" : (choice === "local" && detail.localDeleted) || (choice === "remote" && detail.remoteDeleted) ? "；同步后两端都会删除此文件。" : "；此版本将用于两端。"}</p>` : ""}
+            ${detail.options.length === 2 ? '<p>任务/项目按整文件选择；有关联的数据建议选择同一端，不逐条自动合并。</p>' : ""}
+            <div class="ws-settings-actions"><button type="button" data-module-action="github-compare" data-id="${attr(file)}" aria-expanded="${comparison?.path === file}" ${disabled}>${comparison?.path === file ? "收起内容对照" : "查看双方内容"}</button></div>
+            ${comparison?.path === file ? `<div class="github-comparison">${side("本地", comparison.local)}${side("远端", comparison.remote)}</div>` : ""}
+          </article>`;
+        }).join("")}
+        <div class="ws-settings-actions github-resolve-bar"><button class="module-primary" type="button" data-module-action="github-resolve" ${busy || remaining ? "disabled" : ""}>预览解决结果</button><span>${remaining ? `还有 ${remaining} 项待选择` : "已全部选择，下一步确认变更"}</span></div>
+      </section>`;
+    }
     function render() {
       active = true;
       if (!api.githubSync) return '<section class="ws-settings-card ws-github-sync"><h2>GitHub 笔记同步</h2><p class="ws-settings-desc">请使用 Electron 桌面版连接 GitHub；浏览器预览不读写真实笔记。</p></section>';
@@ -140,11 +174,11 @@
           </section>
           <section class="github-step" data-github-sync-step>
             <h3><span class="github-step-number">3</span> 手动同步笔记、任务与项目</h3>
-            <p class="ws-settings-desc" data-github-sync-hint>${!auth.connected ? "请先完成第 1 步：连接 GitHub。" : !sync.binding ? "尚未绑定笔记库：请回到第 2 步，点击「确认选择并进入同步」。" : !preview ? "笔记库已绑定。先点击「预览同步差异」，查看变更后才可确认同步。" : preview.conflicts?.length ? "存在冲突，请先处理冲突，再重新预览。" : "预览已就绪，可以确认手动同步。"}</p>
+            <p class="ws-settings-desc" data-github-sync-hint>${!auth.connected ? "请先完成第 1 步：连接 GitHub。" : !sync.binding ? "尚未绑定笔记库：请回到第 2 步，点击「确认选择并进入同步」。" : !preview ? "笔记库已绑定。先点击「预览同步差异」，查看变更后才可确认同步。" : preview.conflicts?.length ? "在下方为冲突文件选择处理方式，再点击「预览解决结果」。" : "预览已就绪，可以确认手动同步。"}</p>
             <p class="ws-settings-desc">本地笔记库：<span class="github-path">${esc(state.root || "读取中…")}</span></p>
             <div class="ws-settings-actions"><button type="button" data-module-action="github-preview" ${busy || !auth.connected || !sync.binding ? "disabled" : ""}>预览同步差异</button><button class="module-primary" type="button" data-module-action="github-sync" ${busy || !auth.connected || !preview || preview.conflicts?.length ? "disabled" : ""}>确认并手动同步</button><button type="button" data-module-action="github-backup" ${disabled}>备份 / 冲突目录</button></div>
             <p class="ws-settings-desc">最近成功同步：${esc(sync.lastSync ? new Date(sync.lastSync).toLocaleString() : "尚无")}${sync.pending ? " · 检测到未完成同步，请重新预览以恢复" : ""}</p>
-            ${preview ? `<div class="github-preview">${!preview.uploads?.length && !preview.downloads?.length && !preview.deletions?.length && !preview.conflicts?.length ? "本地与远端内容一致。" : ""}${renderList("上传", preview.uploads)}${renderList("下载", preview.downloads)}${renderList("删除", preview.deletions)}${renderList("冲突 · 已停止同步", preview.conflicts)}${preview.conflicts?.length ? '<p>双方副本已保存到冲突目录。先另存需要保留的本地内容，再将冲突文件与远端版本协调一致，重新预览；不会自动覆盖。</p>' : ""}</div>` : ""}
+            ${preview ? `<div class="github-preview">${!preview.uploads?.length && !preview.downloads?.length && !preview.deletions?.length && !preview.conflicts?.length ? "本地与远端内容一致。" : ""}${renderList("上传", preview.uploads)}${renderList("下载", preview.downloads)}${renderList("删除", preview.deletions)}${renderConflicts()}${preview.resolutions?.length ? `<section><h4>冲突解决方案 · 尚未写入</h4><ul>${preview.resolutions.map((item) => `<li>${esc(item.path)}：${esc(strategyLabels[item.strategy])}${item.copyPath ? `；远端另存为 ${esc(item.copyPath)}` : ""}</li>`).join("")}</ul><p>确认上方变更后点击「确认并手动同步」。如需更改选择，点击「预览同步差异」重新选择。</p></section>` : ""}</div>` : ""}
           </section>
         </div>
         ${busy ? '<p role="status">正在处理，请稍候…</p>' : ""}
@@ -161,10 +195,21 @@
         <details><summary>同步范围与隐私说明</summary><p class="ws-settings-desc">同步 .md、.png、.jpg、.jpeg、.gif、.webp，以及任务数据 Journal/task-module.json 和项目数据 Journal/zentask-projects.json。每文件 ≤10 MiB，最多 5000 个文件 / 200 MiB。其他 JSON、应用设置、API Key 和隐藏目录不上传；符号链接会阻止同步。</p><p class="ws-settings-desc">任务和项目按整个数据文件判断冲突；两台设备同时修改同一数据文件时会停止同步、保留双方副本，不逐条自动合并。</p><p class="ws-settings-desc">私有仓库不是端到端加密；删除的内容仍可能留在 Git 历史中。请检查截图隐私。断开连接不删除任何笔记。</p></details>
       </section>`;
     }
-    async function handleAction(action) {
+    async function handleAction(action, id) {
       if (!action.startsWith("github-")) return false;
       if (!api.githubSync || (busy && action !== "github-cancel")) return true;
       capture();
+      if (action.startsWith("github-conflict-") || action.startsWith("github-conflicts-")) {
+        const strategy = action.split("-").at(-1);
+        const files = action.startsWith("github-conflicts-") ? preview?.conflicts || [] : [id];
+        for (const file of files) {
+          if (preview?.conflicts?.includes(file) && conflictDetail(file).options.includes(strategy)) choices.set(file, strategy);
+        }
+        error = ""; message = ""; update();
+        const buttons = document.querySelector(".ws-github-sync")?.querySelectorAll("[data-module-action]") || [];
+        [...buttons].find((button) => button.dataset.moduleAction === action && button.dataset.id === id)?.focus();
+        return true;
+      }
       if (action === "github-setup-close" || action === "github-setup-configure") {
         document.querySelector(".github-setup-dialog")?.close();
         setupRequired = false;
@@ -211,13 +256,24 @@
           preview = null;
           result = await api.githubSync.bind({ owner: repo.owner, repo: repo.repo });
         }
-        if (action === "github-preview") { preview = null; result = await api.githubSync.preview(); if (result.success) preview = result; }
+        if (action === "github-preview") { setPreview(null); result = await api.githubSync.preview(); if (result.success) setPreview(result); }
+        if (action === "github-compare") {
+          if (comparison?.path === id) { comparison = null; result = { success: true }; }
+          else { result = await api.githubSync.inspectConflict({ previewId: preview?.id, path: id }); if (result.success) comparison = result; }
+        }
+        if (action === "github-resolve") {
+          if (!preview?.conflicts?.length || preview.conflicts.some((file) => !choices.has(file))) throw new Error("请为每个冲突文件选择处理方式。");
+          result = await api.githubSync.resolveConflicts({ previewId: preview.id,
+            resolutions: preview.conflicts.map((file) => ({ path: file, strategy: choices.get(file) })) });
+          if (result.success) setPreview(result);
+        }
         if (action === "github-sync") { result = await api.githubSync.sync({ previewId: preview?.id }); if (!result.cancelled) preview = null; }
         if (action === "github-backup") result = await api.githubSync.openBackup();
         if (action === "github-refresh") { await load(); result = { success: true }; }
         if (!result?.success) throw new Error(result?.error || "操作失败");
         await load();
         if (action === "github-sync") message = result.cancelled ? "已取消，未执行同步。" : "手动同步完成。";
+        else if (action === "github-resolve") message = "解决方案已就绪，尚未修改文件。确认变更后点击「确认并手动同步」。";
         else if (["github-bind", "github-use-repository"].includes(action)) message = "笔记库已就绪。请先预览差异，确认后再同步。";
         else if (action === "github-configure") message = "App 配置已保存，现在可以点击连接 GitHub。";
         else if (action === "github-disconnect") message = "本机凭据已移除，笔记仍保留。";

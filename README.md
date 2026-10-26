@@ -2,9 +2,9 @@
 
 > 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。
 
-## 当前 Windows 测试打包版 · v3.9.5
+## 当前桌面测试打包版 · v3.9.6
 
-[使用说明](electron-app/README.md) · [本次打包说明](docs/releases/v3.9.5.md) · [最近正式发布 v3.9.1](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.9.1)
+[使用说明](electron-app/README.md) · [本次打包说明](docs/releases/v3.9.6.md) · [最近正式发布 v3.9.1](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.9.1)
 
 - **名人示范**：孔子、老子、李白、爱因斯坦、乔布斯和马斯克六种 AI 模拟视角；可预览、按需添加并用开场问题开始对话，重复添加保留已有编辑与聊天。
 - **桌面宠物**：新增海獭、小熊猫咖啡师、团子小龙和绒绒兔，升级猫、狗与卡皮巴拉素材；共19种外形，支持紧凑卡片与每角色独立动作预览。
@@ -23,7 +23,7 @@
 - **本地优先**：离线继续编辑。JSON 仅同步 `Journal/task-module.json` 和 `Journal/zentask-projects.json`；其他 JSON、API Key 和软件设置不上传。
 - **桌面工作区**：Markdown 笔记、项目与任务管理、AI 对话、截图及文件夹同步。
 
-本次 v3.9.5 只提供 Windows x64 测试 ZIP，未发布 GitHub Release。Windows ZIP 未做代码签名，使用时请核对同目录的 SHA256SUMS.txt。
+本次 v3.9.6 提供当前 Mac Apple Silicon arm64 的 DMG / ZIP 和 Windows x64 测试 ZIP，未发布 GitHub Release。Mac 为 ad-hoc 签名，未做 Apple 公证；Windows ZIP 未做代码签名，使用时请核对同目录的 SHA256SUMS.txt。
 
 ### 开发运行
 

@@ -305,3 +305,49 @@ test("invalid or credential-bearing PAC URLs are rejected before saving", () => 
     );
   }
 });
+
+test("Mac and Windows legacy profiles default AI to direct without replacing explicit choices or pet settings", async (t) => {
+  for (const platform of ["macOS", "Windows"]) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "dm-network-default-"));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(root, "DanceMonkey"));
+    const file = path.join(root, "DanceMonkey", "config.json");
+    const original = {
+      petAnimal: "engineer-fox",
+      petDisplaySize: 128,
+      apiKey: "fixture",
+      proxyPacUrl: "https://company.invalid/policy.pac",
+      unknown: { keep: true },
+    };
+    fs.writeFileSync(file, JSON.stringify(original));
+    let store = createLegacyConfig(root);
+    assert.equal(
+      createAppSettings(store).get().aiNetworkMode,
+      "direct",
+      platform,
+    );
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(file)),
+      original,
+      "reading does not rewrite legacy data",
+    );
+    await createAppSettings(store).save({ aiNetworkMode: "direct" });
+    store = createLegacyConfig(root);
+    assert.equal(store.read().aiNetworkMode, "direct");
+    assert.equal(store.read().petAnimal, original.petAnimal);
+    assert.equal(store.read().petDisplaySize, original.petDisplaySize);
+    assert.equal(store.read().proxyPacUrl, original.proxyPacUrl);
+    assert.deepEqual(store.read().unknown, original.unknown);
+    await createAppSettings(store).save({ aiNetworkMode: "system" });
+    assert.equal(
+      createAppSettings(createLegacyConfig(root)).get().aiNetworkMode,
+      "system",
+      "explicit system choice survives restart",
+    );
+    assert.equal(
+      pickSettings({ AiNetworkMode: "system" }).aiNetworkMode,
+      "system",
+      "old explicit alias is preserved",
+    );
+  }
+});

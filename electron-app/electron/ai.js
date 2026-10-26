@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const { fetchWithSystemProxy } = require("./system-proxy");
+const { normalizeNetworkMode } = require("./config-migration");
 
 const DEFAULT_SYSTEM_PROMPT =
   "你是一个简洁高效的 AI 助手。请用清晰的语言回答；需要时使用 Markdown（标题、列表、加粗）。";
@@ -60,7 +61,7 @@ function extractText(payload) {
 
 function publicSettings(config) {
   return {
-    aiNetworkMode: config.aiNetworkMode === "direct" ? "direct" : "system",
+    aiNetworkMode: normalizeNetworkMode(config.aiNetworkMode),
     apiEndpoint: config.apiEndpoint || "",
     apiKey: config.apiKey || "",
     model: config.model || "gpt-3.5-turbo",
@@ -84,7 +85,7 @@ function createAiService(configStore) {
       model: String(settings.model || "").trim() || "gpt-3.5-turbo",
       globalChatSystemPrompt: String(settings.globalChatSystemPrompt || ""),
     };
-    if (Object.hasOwn(settings, "aiNetworkMode")) allowed.aiNetworkMode = settings.aiNetworkMode === "direct" ? "direct" : "system";
+    if (Object.hasOwn(settings, "aiNetworkMode")) allowed.aiNetworkMode = normalizeNetworkMode(settings.aiNetworkMode);
     return publicSettings(configStore.write(allowed));
   }
 
@@ -125,7 +126,7 @@ function createAiService(configStore) {
         },
         body: JSON.stringify(body),
         signal: controller.signal,
-      }, configStore.read().aiNetworkMode);
+      }, normalizeNetworkMode(configStore.read().aiNetworkMode));
       if (!response.ok) throw new Error(errorMessage(await response.text(), response.status));
 
       const contentType = response.headers.get("content-type") || "";
@@ -217,7 +218,7 @@ function createAiService(configStore) {
         },
         body: JSON.stringify(body),
         signal: controller.signal,
-      }, configStore.read().aiNetworkMode);
+      }, normalizeNetworkMode(configStore.read().aiNetworkMode));
       const raw = await response.text();
       if (!response.ok) throw new Error(errorMessage(raw, response.status));
       let parsed;

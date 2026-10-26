@@ -61,7 +61,7 @@
       { id: "shortcuts", label: "快捷键", description: "设置唤出面板与截图的全局快捷键。" },
       { id: "pet", label: "桌面宠物", description: "选择宠物外形，调整互动、任务提醒与唤醒行为。" },
       { id: "sync", label: "笔记同步", description: "连接 GitHub，配置笔记、任务与项目的多设备同步。" },
-      { id: "proxy", label: "网络连接", description: "选择 AI 连接方式，测试连接；按需配置 Windows 系统代理。" },
+      { id: "proxy", label: "网络连接", description: "选择 AI 直连或跟随系统，保存并测试连接。" },
       { id: "about", label: "关于与更新", description: "查看当前版本，检查并安装应用更新。" },
     ];
     const editableSettingsTab = (id) => ["shortcuts", "pet", "proxy"].includes(id);
@@ -69,7 +69,7 @@
     api.settings?.onPetChanged?.((settings) => {
       if (settings.aiNetworkMode !== undefined) {
         const chosen=document.querySelector('form[data-form="app-settings"] [name="aiNetworkMode"]:checked');
-        const dirty=chosen && chosen.value!==(appSettings?.aiNetworkMode || 'system');
+        const dirty=chosen && chosen.value!==(appSettings?.aiNetworkMode || 'direct');
         if (!dirty) {
           appSettings={...(appSettings||{}),aiNetworkMode:settings.aiNetworkMode};
           for(const input of document.querySelectorAll('form[data-form="app-settings"] [name="aiNetworkMode"]')) input.checked=input.value===settings.aiNetworkMode;
@@ -640,12 +640,13 @@
           </section>
 
           <section class="ws-settings-card ws-network-settings" ${panel("proxy")}>
-            <div class="ws-network-heading"><div><h2>AI 连接方式</h2><p class="ws-settings-desc">适用于 AI 对话、人物分身和截图分析。保存后对新请求生效。</p></div><span class="ws-network-badge">已保存：${s.aiNetworkMode === 'direct' ? '直连' : '跟随系统'}</span></div>
+            <div class="ws-network-heading"><div><h2>AI 连接方式</h2><p class="ws-settings-desc">适用于 AI 对话、人物分身和截图分析。保存后对新请求生效。</p></div><span class="ws-network-badge">已保存：${s.aiNetworkMode !== 'system' ? '直连' : '跟随系统'}</span></div>
             <fieldset class="ws-network-choices"><legend class="visually-hidden">AI 请求连接方式</legend>
-              <label class="ws-network-choice"><input type="radio" name="aiNetworkMode" value="direct" ${s.aiNetworkMode === 'direct' ? 'checked' : ''}/><span><strong>直连</strong><small>绕过系统代理、PAC 和代理环境变量，直接连接 AI 服务。</small></span></label>
-              <label class="ws-network-choice"><input type="radio" name="aiNetworkMode" value="system" ${s.aiNetworkMode !== 'direct' ? 'checked' : ''}/><span><strong>跟随系统</strong><small>使用 Windows / macOS 的代理和 PAC，按系统规则选择线路。</small></span></label>
+              <label class="ws-network-choice"><input type="radio" name="aiNetworkMode" value="direct" ${s.aiNetworkMode !== 'system' ? 'checked' : ''}/><span><strong>直连</strong><small>绕过系统代理、PAC 和代理环境变量，直接连接 AI 服务。</small></span></label>
+              <label class="ws-network-choice"><input type="radio" name="aiNetworkMode" value="system" ${s.aiNetworkMode === 'system' ? 'checked' : ''}/><span><strong>跟随系统</strong><small>使用 Windows / macOS 的代理和 PAC，按系统规则选择线路。</small></span></label>
             </fieldset>
             <div class="ws-network-tip">遇到代理连接错误，可选择“直连”后保存并测试；如果网络访问 AI 服务需要代理，请使用“跟随系统”。此选项不改动电脑的系统代理。</div>
+            <p class="ws-settings-desc">默认使用直连，已保存的选择会在更新和重启后保留。${api.platform === 'darwin' ? '公司在开机时写入的 PAC 仍会保留；选择直连后，本程序的 AI 请求不受它影响，无需手动关闭系统 PAC。' : '系统代理自动维护是独立的可选功能。'}</p>
             <div class="ws-settings-actions"><button class="module-primary" type="button" data-module-action="settings-save">保存网络设置</button><button type="button" data-module-action="network-test" ${networkTesting ? 'disabled' : ''}>${networkTesting ? '正在测试…' : '保存并测试 AI 连接'}</button><button type="button" data-module-action="ai-settings">API 与密钥设置</button></div>
             ${api.platform === 'darwin' ? '' : `<details class="ws-proxy-advanced" ${s.proxyForceEnabled ? 'open' : ''}>
               <summary><span>Windows 系统代理自动维护</span><small>${s.proxyForceEnabled ? '已启用' : '未启用 · 可选'}</small></summary>
@@ -694,7 +695,7 @@
           <label>API Key<input name="apiKey" type="password" value="${attr(settings.apiKey || "")}" placeholder="sk-..." /></label>
           <label>模型<input name="model" list="ws-ai-models" value="${attr(settings.model || "")}" /></label>
           <datalist id="ws-ai-models">${profiles}</datalist>
-          <label>AI 请求连接方式<select name="aiNetworkMode">${option('direct', settings.aiNetworkMode || 'system', '直连')}${option('system', settings.aiNetworkMode || 'system', '跟随系统代理 / PAC')}</select></label>
+          <label>AI 请求连接方式<select name="aiNetworkMode">${option('direct', settings.aiNetworkMode || 'direct', '直连')}${option('system', settings.aiNetworkMode || 'direct', '跟随系统代理 / PAC')}</select></label>
           <label>系统提示词<textarea name="globalChatSystemPrompt" rows="5" placeholder="留空使用默认提示词">${esc(settings.globalChatSystemPrompt || "")}</textarea></label>
           <p class="ws-ai-settings-hint">${api.platform === "darwin" ? "配置保存在 Application Support/DanceMonkey/config.json；连接方式与“网络连接”设置同步。" : "与旧版共用 %AppData%\\DanceMonkey\\config.json；可选择直连或跟随系统代理。"}</p>
           ${error ? `<div class="module-error">${esc(error)}</div>` : ""}
@@ -801,7 +802,7 @@
         globalChatHotkey: values.globalChatHotkey,
         quickScreenshotHotkey: values.quickScreenshotHotkey,
         regionScreenshotHotkey: values.regionScreenshotHotkey,
-        aiNetworkMode: values.aiNetworkMode || appSettings?.aiNetworkMode || 'system',
+        aiNetworkMode: values.aiNetworkMode || appSettings?.aiNetworkMode || 'direct',
         proxyForceEnabled: isMac ? Boolean(appSettings?.proxyForceEnabled) : Boolean(form.querySelector('[name="proxyForceEnabled"]')?.checked),
         proxyForceMode: (values.proxyForceMode ?? appSettings?.proxyForceMode) === "pac" ? "pac" : "manual",
         proxyPacUrl: values.proxyPacUrl ?? appSettings?.proxyPacUrl ?? "",
@@ -1292,9 +1293,9 @@
             apiKey: values.apiKey,
             model: values.model,
             globalChatSystemPrompt: values.globalChatSystemPrompt,
-            aiNetworkMode: values.aiNetworkMode || "system",
+            aiNetworkMode: values.aiNetworkMode || "direct",
           });
-          appSettings = { ...(appSettings || {}), aiNetworkMode: aiSettings.aiNetworkMode || "system" };
+          appSettings = { ...(appSettings || {}), aiNetworkMode: aiSettings.aiNetworkMode || "direct" };
           modal = null;
           error = "";
           rerender();
@@ -1336,9 +1337,9 @@
           apiKey: values.apiKey,
           model: values.model,
           globalChatSystemPrompt: values.globalChatSystemPrompt,
-          aiNetworkMode: values.aiNetworkMode || "system",
+          aiNetworkMode: values.aiNetworkMode || "direct",
         });
-        appSettings = { ...(appSettings || {}), aiNetworkMode: aiSettings.aiNetworkMode || "system" };
+        appSettings = { ...(appSettings || {}), aiNetworkMode: aiSettings.aiNetworkMode || "direct" };
         const result = await api.ai.chat({
           requestId: `test-${Date.now()}`,
           model: aiSettings.model,

@@ -94,6 +94,11 @@ async function screenshot(client, name) {
 
 try {
   mock = http.createServer(async (request, response) => {
+    if (request.url === "/company-policy.pac") {
+      response.writeHead(200, { "content-type": "application/x-ns-proxy-autoconfig" });
+      response.end('function FindProxyForURL(url, host) { if (host === "127.0.0.1" || host === "localhost") return "DIRECT"; return "PROXY 127.0.0.1:1"; }');
+      return;
+    }
     let raw = "";
     for await (const chunk of request) raw += chunk;
     const payload = JSON.parse(raw);
@@ -145,7 +150,13 @@ try {
     const local = url => ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(String(url)).hostname);
     undici.fetch = (url, options) => { if (!local(url)) throw new Error('E2E blocks external requests'); return originalFetch(url, options); };
     app.whenReady().then(async () => {
-      await session.defaultSession.setProxy({ mode: 'direct' });
+      await session.defaultSession.setProxy({ mode: 'pac_script', pacScript: 'http://127.0.0.1:${mockPort}/company-policy.pac' });
+      require('node:fs').writeFileSync(${JSON.stringify(path.join(root, 'company-pac-configured.log'))}, 'pac_script');
+      const originalResolve = session.defaultSession.resolveProxy.bind(session.defaultSession);
+      session.defaultSession.resolveProxy = async (...args) => {
+        require('node:fs').appendFileSync(${JSON.stringify(path.join(root, "ai-pac-resolutions.log"))}, 'resolved\\n');
+        return originalResolve(...args);
+      };
       session.defaultSession.webRequest.onBeforeRequest((details, done) => done({ cancel: /^https?:/.test(details.url) && !local(details.url) }));
     });
     require(${JSON.stringify(path.join(cwd, "electron/main.js"))});
@@ -228,6 +239,7 @@ try {
   await screenshot(overlay, "overlay");
   await send("Page.bringToFront");
   const originalSettings=await evaluate('window.lumen.settings.get()');
+  assert.equal(originalSettings.aiNetworkMode, "direct", "old profile defaults to direct before manual changes");
   await evaluate(`document.querySelector('[data-action="section"][data-value="settings"]').click()`);
   await waitFor(()=>evaluate(`Boolean(document.querySelector('[data-settings-tab="proxy"]'))`),{process:electron});
   await evaluate(`document.querySelector('[data-settings-tab="proxy"]').click();document.querySelector('[name="aiNetworkMode"][value="direct"]').click();const button=document.querySelector('[data-module-action="network-test"]');button.click();button.click()`);
@@ -240,7 +252,10 @@ try {
   await click('ai-settings');await waitFor(()=>evaluate(`Boolean(document.querySelector('form[data-form="ai-settings"]'))`),{process:electron});
   assert.equal(await evaluate(`document.querySelector('form[data-form="ai-settings"] [name="aiNetworkMode"]').value`),'direct');
   await click('close-modal');
-  console.log(`AI E2E passed: suggestions, IME, real SSE/IPC/persistence, Markdown copy, stop, retry, narrow dark/light layouts shared overlay, direct-mode connection test and preserved pet settings (${requests.length} local API requests).`);
+  assert.equal(fs.readFileSync(path.join(root, "company-pac-configured.log"), "utf8"), "pac_script");
+  assert.equal(fs.existsSync(path.join(root, "ai-pac-resolutions.log")), false, "direct AI must not resolve the configured company PAC");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(configDirectory, "config.json"))).aiNetworkMode, "direct");
+  console.log(`AI E2E passed: suggestions, IME, real SSE/IPC/persistence, Markdown copy, stop, retry, narrow dark/light layouts shared overlay, company PAC bypass, direct-mode connection test and preserved pet settings (${requests.length} local API requests).`);
   for (const file of screenshots) console.log(`Screenshot: ${file}`);
 } finally {
   for (const socket of sockets) { try { socket.close(); } catch {} }

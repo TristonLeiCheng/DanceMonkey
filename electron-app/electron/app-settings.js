@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS = {
   quickScreenshotHotkey: "Ctrl+Shift+S",
   regionScreenshotHotkey: "Ctrl+Shift+R",
   proxyForceEnabled: false,
-  aiNetworkMode: "system",
+  aiNetworkMode: "direct",
   proxyForceMode: "manual",
   proxyPacUrl: "",
   proxyServer: "",

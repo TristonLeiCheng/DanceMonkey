@@ -28,7 +28,7 @@ function migrateConfig(config = {}) {
   return next;
 }
 const normalizeNetworkMode = (value) =>
-  value === "direct" ? "direct" : "system";
+  value === "system" ? "system" : "direct";
 function normalizeManualProxy(server, port) {
   let host = String(server || "").trim(),
     number = Number(port);

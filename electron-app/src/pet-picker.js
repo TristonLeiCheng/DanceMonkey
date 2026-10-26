@@ -2,7 +2,7 @@
 (() => {
   const actions = { idle:'待机', right:'向右行走', left:'向左行走', wave:'招手', jump:'跳跃', failed:'失落', waiting:'休息', working:'忙碌', review:'好奇 / 阅读' };
   const pixelMoods = { idle:'normal', jump:'happy', failed:'bored', waiting:'sleepy', working:'working', review:'reading' };
-  const descriptions = { 'fluffy-rabbit':'奶油白绒毛 · 软乎乎的小尾巴', otter:'抱着贝壳，慢慢陪你', 'red-panda':'圈圈尾巴与一杯暖咖啡', 'baby-dragon':'圆滚滚的小翅膀', 'engineer-fox':'戴上护目镜，一起开工', cat:'灵巧好奇的猫咪工程师', dog:'温暖活泼的狗狗工程师', capybara:'吃草、发呆，悠闲自在', 'operator-rabbit':'戴好耳麦，随时倾听' };
+  const descriptions = { 'fluffy-rabbit':'奶油白绒毛 · 软乎乎的小尾巴', otter:'抱着贝壳，慢慢陪你', 'red-panda':'圈圈尾巴与一杯暖咖啡', 'baby-dragon':'圆滚滚的小翅膀', 'engineer-fox':'戴上护目镜，一起开工', cat:'灵巧好奇的猫咪工程师', dog:'温暖活泼的狗狗工程师', capybara:'吃草、发呆，悠闲自在', 'operator-rabbit':'戴好耳麦，随时倾听', human:'蓬松刘海 · 软蓝色小毛衣', rabbit:'粉粉长耳 · 奶油色小肚皮', fox:'尖尖耳朵 · 蓬松奶油尾尖', goose:'圆圆翅膀 · 摇摆小脚蹼', cockroach:'栗色小甲壳 · 晃晃触角', mosquito:'透亮小翅膀 · 轻盈悬停', frog:'薄荷绿小脸 · 笑眯眯', penguin:'奶油围兜 · 摇摆小鳍', turtle:'拼花小龟壳 · 慢慢探头', hedgehog:'栗色小刺 · 软软的脸颊' };
   const characterActions = {
     'fluffy-rabbit': {idle:'眨眼',right:'右蹦',left:'左蹦',wave:'挥爪',jump:'蹦高',waiting:'打盹',working:'洗脸',review:'嗅嗅'},
     otter: {wave:'挥爪',waiting:'躺平',working:'开贝壳',review:'看贝壳'},
@@ -98,7 +98,7 @@
         if(c.card.hidden||!c.visible)continue;
         load(c);
         const spec=c.spec, action=c.action, motionFrame=motion.matches?0:Math.max(0,elapsed-c.started);
-        const frames=spec?.actions[action], frame=frames?Math.floor(motionFrame*frames.fps/1000)%frames.frames:Math.floor(motionFrame/420)%4;
+        const frames=spec?.actions[action], frame=frames?Math.floor(motionFrame*frames.fps/1000)%frames.frames:sprites.frameAt(motionFrame);
         const key=`${action}/${frame}/${c.status}/${window.devicePixelRatio}`;if(c.frame===key)continue;c.frame=key;
         c.canvas.dataset.action=action;c.canvas.dataset.frame=String(frame);c.canvas.dataset.status=c.status;
         if(c.image){

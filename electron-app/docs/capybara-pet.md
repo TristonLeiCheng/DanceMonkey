@@ -6,7 +6,7 @@
 
 - 原始图集：`assets/pets/capybara/spritesheet-natural.png`，836 × 1881，RGBA，36 帧。生成原图逐字节复制，未修改像素。
 - 动作预览：`docs/capybara-preview.html`。
-- 沿用 `capybara` ID，设置及右键菜单显示为“卡皮巴拉（水豚）”。图集不可用时回退原像素水豚。
+- 沿用 `capybara` ID，设置中显示为“卡皮巴拉（水豚）”。图集不可用时回退原像素水豚。
 - 用 `python3 tools/index-companion-atlases.py`（需要 Pillow）重建逐帧裁切坐标。坐标避免不均匀行距造成的裁切；四足与趴卧动作保持统一落地基线。
 
 | 图集行 | 动作 | 使用方式 |

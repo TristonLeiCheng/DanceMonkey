@@ -1,6 +1,6 @@
 # 话务员兔子
 
-原创奶油色拟人兔，青绿色带麦耳机、薄荷绿开衫、日常办公服。独立 ID `operator-rabbit` / 名称“话务员兔子”；保留所有旧宠物及默认选择。仅用户手动保存设置或点击外形菜单才会切换。
+原创奶油色拟人兔，青绿色带麦耳机、薄荷绿开衫、日常办公服。独立 ID `operator-rabbit` / 名称“话务员兔子”；保留所有旧宠物及默认选择。仅用户手动选择并保存设置才会切换。
 
 内置 image_gen 生成，源 PNG：`assets/pets/operator-rabbit/spritesheet.png`，836×1881 RGBA，SHA-256 `fc866eda6c4633bf45682b0dd663930268090658f416ff4f6c966b3c13f4577e`。PNG 原始像素和 alpha 均未修改；原始提示词在 `docs/operator-rabbit-prompt.txt`。请求为1024×2304，工具实际返回836×1881，故使用逐帧坐标避免按均匀网格裁掉长耳。
 

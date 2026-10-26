@@ -88,7 +88,7 @@ function renderer({ fail = false, reduced = false, deferred = false } = {}) {
     setTimeout: (fn, ms) => { pending.set(++nextId, { fn, ms }); return nextId; }, clearTimeout: id => pending.delete(id),
   };
   context.window = { ...events('window'), devicePixelRatio: 2, DMPetAtlas: api,
-    DMPetSprites: { animals: require('../src/pet-sprites').animals, render: (...args) => { pixelCalls.push(args); return new Uint8ClampedArray(4096); } },
+    DMPetSprites: { animals: require('../src/pet-sprites').animals, frameAt: require('../src/pet-sprites').frameAt, render: (...args) => { pixelCalls.push(args); return new Uint8ClampedArray(4096); } },
     matchMedia: () => motion,
     desktopPet: { onState: fn => { received = fn; return () => unsubscribed++; }, get: async () => null },
   };
@@ -210,6 +210,21 @@ test('load failure falls back to existing fox; timers pause hidden, resume and c
   assert.equal(r.pending.size, 1); assert.equal(r.requests, 1);
   r.event('window', 'unload'); assert.equal(r.pending.size, 0); assert.equal(r.unsubscribed, 1);
   r.update(state()); assert.equal(r.pending.size, 0);
+});
+test('pixel renderer uses shared blink timing and stays still with reduced motion', () => {
+  const r = renderer(); r.update(state({animal:'rabbit'}));
+  assert.equal(r.pixelCalls.at(-1)[2], 0);
+  r.time(2660); r.update(state({animal:'rabbit'}));
+  assert.equal(r.pixelCalls.at(-1)[2], 3);
+  assert.equal([...r.pending.values()][0].ms, 140);
+  r.context.document.hidden = true; r.event('document', 'visibilitychange');
+  r.time(10000); r.context.document.hidden = false; r.event('document', 'visibilitychange');
+  assert.equal(r.pixelCalls.at(-1)[2], 3, 'hidden time does not skip the current pose');
+  r.event('window', 'unload'); assert.equal(r.pending.size, 0);
+  const still=renderer({reduced:true}); still.update(state({animal:'rabbit'}));
+  still.time(2660); still.update(state({animal:'rabbit'}));
+  assert.equal(still.pixelCalls.at(-1)[2], 0); assert.equal(still.pending.size, 0);
+  still.event('window', 'unload');
 });
 test('hidden time does not advance atlas animation and reduced motion schedules no animation timer', async () => {
   const r = renderer(); r.update(state({ mood: 'working' })); await settle();

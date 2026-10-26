@@ -1,7 +1,7 @@
 const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerSaveBlocker, safeStorage, screen, shell, Tray } = require("electron");
 const { createDesktopPet } = require("./desktop-pet");
 const { registerGitHubSync } = require("./github-ipc");
-const { fetchWithSystemProxy } = require("./system-proxy");
+const { fetchWithSystemProxy, refreshSystemProxy } = require("./system-proxy");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createAiService } = require("./ai");
@@ -368,7 +368,9 @@ app.whenReady().then(() => {
     applyShell,
     isDev,
   });
-  proxyEnforcement = platform.createProxyEnforcement();
+  proxyEnforcement = platform.createProxyEnforcement({
+    backupFile: path.join(app.getPath("userData"), "proxy-restore.json"), onChanged: refreshSystemProxy,
+  });
   appSettings = createAppSettings(legacyConfig, {
     proxyEnforcement,
     onHotkeysChanged: () => registerAllHotkeys(),
@@ -503,7 +505,12 @@ app.whenReady().then(() => {
       appUpdateController.start();
       folderSyncScheduler.start();
     },
-    cleanup: async () => { await proxyEnforcement.stop(); desktopPet.dispose(); globalShortcut.unregisterAll(); },
+    cleanup: async () => {
+      try { await proxyEnforcement.stop(); }
+      catch { console.warn('Windows代理恢复未完成，恢复记录已保留，将在下次启动重试。'); }
+      desktopPet.dispose();
+      globalShortcut.unregisterAll();
+    },
     quit: () => app.quit(),
     onError: (message) => dialog.showErrorBox("未能退出软件", message),
   });
@@ -797,6 +804,11 @@ app.whenReady().then(() => {
       return { success: false, error: error?.message || "保存失败" };
     }
   });
+  ipcMain.handle("settings:open-system-proxy", async () => {
+    if (process.platform !== "win32") return { success: false };
+    await shell.openExternal("ms-settings:network-proxy"); return { success: true };
+  });
+  ipcMain.handle("settings:refresh-proxy", async () => { await refreshSystemProxy(); return { success: true }; });
   ipcMain.handle("settings:apply-proxy", async () => {
     try {
       await appSettings.applyProxyNow();

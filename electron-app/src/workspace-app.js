@@ -227,7 +227,8 @@
     }
 
     return {
-      platform: navigator.platform.toLowerCase().includes("mac") ? "darwin" : "win32",
+      // Browser-only preview; native desktops use the immutable sandbox bridge.
+      platform: ["win32", "darwin"].includes(new URLSearchParams(location.search).get("previewPlatform")) ? new URLSearchParams(location.search).get("previewPlatform") : navigator.platform.toLowerCase().includes("mac") ? "darwin" : "win32",
       getState: async () => ({ aiMessages: browserAiMessages }),
       setState: async (partial) => {
         if (Array.isArray(partial?.aiMessages)) {

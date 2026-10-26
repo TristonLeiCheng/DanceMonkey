@@ -60,6 +60,7 @@ function extractText(payload) {
 
 function publicSettings(config) {
   return {
+    aiNetworkMode: config.aiNetworkMode === "direct" ? "direct" : "system",
     apiEndpoint: config.apiEndpoint || "",
     apiKey: config.apiKey || "",
     model: config.model || "gpt-3.5-turbo",
@@ -83,6 +84,7 @@ function createAiService(configStore) {
       model: String(settings.model || "").trim() || "gpt-3.5-turbo",
       globalChatSystemPrompt: String(settings.globalChatSystemPrompt || ""),
     };
+    if (Object.hasOwn(settings, "aiNetworkMode")) allowed.aiNetworkMode = settings.aiNetworkMode === "direct" ? "direct" : "system";
     return publicSettings(configStore.write(allowed));
   }
 
@@ -123,7 +125,7 @@ function createAiService(configStore) {
         },
         body: JSON.stringify(body),
         signal: controller.signal,
-      });
+      }, configStore.read().aiNetworkMode);
       if (!response.ok) throw new Error(errorMessage(await response.text(), response.status));
 
       const contentType = response.headers.get("content-type") || "";
@@ -215,7 +217,7 @@ function createAiService(configStore) {
         },
         body: JSON.stringify(body),
         signal: controller.signal,
-      });
+      }, configStore.read().aiNetworkMode);
       const raw = await response.text();
       if (!response.ok) throw new Error(errorMessage(raw, response.status));
       let parsed;

@@ -77,7 +77,7 @@ Windows 自动沿用旧版 `config.json` 的宠物偏好与悬浮位置，之后
 
 面板中的 **AI** 标签也复用旧版配置里的 API 端点、Key、模型列表和系统提示词。
 支持 OpenAI Chat Completions 兼容接口、多轮上下文、Markdown 回复、流式输出、
-停止生成、新对话及连接测试。AI 请求会自动使用 Windows 当前系统代理（PAC 或手动代理服务器）。
+停止生成、新对话及连接测试。在“软件设置 → 网络连接”中选择 AI 请求“直连／跟随系统”，并可保存后测试连接。Windows 系统代理自动维护为独立的可选高级设置。
 浏览器预览只展示界面，实际问答与真实 NoteVault 需使用桌面模式。
 
 ## 人物分身
@@ -158,7 +158,7 @@ npm run package:mac
 产物位于 `out/`。v3.7.0 沿用既有分发方式：Mac 使用 ad-hoc 签名，未做 Apple Developer ID 公证；Windows ZIP 未做代码签名。下载或首次启动可能遇到系统安全提示，本项目不绕过系统安全检查。
 如需正式签名，应先配置有效的 Apple Developer ID 和公证凭据，再以 `DM_MAC_SIGN=1` 启用已有打包配置。
 macOS 的屏幕截图需要在系统设置中授权「屏幕与系统音频录制」。当前 macOS 版本的
-AI 请求会跟随系统代理，但不写入系统代理。首次从 DMG 安装到可写的应用程序文件夹后，即可使用应用内自动更新。
+AI 请求可选择直连或跟随系统代理，连接方式不写入系统代理。首次从 DMG 安装到可写的应用程序文件夹后，即可使用应用内自动更新。
 
 Windows 可用 `npm run package:win` 生成 Forge ZIP。`npm run publish:win` 依次执行 Forge 打包和
 升级包准备，包含全部生产依赖，并生成兼容旧版升级器的 `win-x64` ZIP 与升级清单；此命令不上传 GitHub。

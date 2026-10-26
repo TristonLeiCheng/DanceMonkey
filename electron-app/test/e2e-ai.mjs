@@ -226,7 +226,21 @@ try {
   await waitFor(() => overlay.evaluate('document.querySelector(".ai-messages")?.textContent.includes("重试成功")'), { process: electron });
   assert.equal(await overlay.evaluate('document.querySelector(".ai-wrap").scrollWidth <= document.querySelector(".ai-wrap").clientWidth + 2'), true);
   await screenshot(overlay, "overlay");
-  console.log(`AI E2E passed: suggestions, IME, real SSE/IPC/persistence, Markdown copy, stop, retry, narrow dark/light layouts and shared overlay (${requests.length} local API requests).`);
+  await send("Page.bringToFront");
+  const originalSettings=await evaluate('window.lumen.settings.get()');
+  await evaluate(`document.querySelector('[data-action="section"][data-value="settings"]').click()`);
+  await waitFor(()=>evaluate(`Boolean(document.querySelector('[data-settings-tab="proxy"]'))`),{process:electron});
+  await evaluate(`document.querySelector('[data-settings-tab="proxy"]').click();document.querySelector('[name="aiNetworkMode"][value="direct"]').click();const button=document.querySelector('[data-module-action="network-test"]');button.click();button.click()`);
+  await waitFor(()=>evaluate(`document.querySelector('.ws-settings-ok')?.textContent.includes('连接测试成功')`),{process:electron});
+  const networkSettings=await evaluate('window.lumen.settings.get()');
+  assert.equal(networkSettings.aiNetworkMode,'direct');
+  for(const key of ['petAnimal','petModeEnabled','petDisplaySize','todoReminderEnabled','globalChatHotkey'])assert.equal(networkSettings[key],originalSettings[key]);
+  assert.equal(requests.length,5,'double clicking connection test sends only one local API request');
+  assert.equal(requests.at(-1).payload.max_tokens,128);
+  await click('ai-settings');await waitFor(()=>evaluate(`Boolean(document.querySelector('form[data-form="ai-settings"]'))`),{process:electron});
+  assert.equal(await evaluate(`document.querySelector('form[data-form="ai-settings"] [name="aiNetworkMode"]').value`),'direct');
+  await click('close-modal');
+  console.log(`AI E2E passed: suggestions, IME, real SSE/IPC/persistence, Markdown copy, stop, retry, narrow dark/light layouts shared overlay, direct-mode connection test and preserved pet settings (${requests.length} local API requests).`);
   for (const file of screenshots) console.log(`Screenshot: ${file}`);
 } finally {
   for (const socket of sockets) { try { socket.close(); } catch {} }

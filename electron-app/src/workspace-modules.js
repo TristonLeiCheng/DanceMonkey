@@ -54,18 +54,28 @@
     let appSettings = null;
     let settingsMessage = "";
     let settingsError = "";
+    let networkTesting = false;
     let settingsTab = "shortcuts";
     let petPicker = null;
     const settingsTabs = [
       { id: "shortcuts", label: "快捷键", description: "设置唤出面板与截图的全局快捷键。" },
       { id: "pet", label: "桌面宠物", description: "选择宠物外形，调整互动、任务提醒与唤醒行为。" },
       { id: "sync", label: "笔记同步", description: "连接 GitHub，配置笔记、任务与项目的多设备同步。" },
-      ...(api.platform === "darwin" ? [] : [{ id: "proxy", label: "网络代理", description: "配置 Windows 系统代理及自动刷新方式。" }]),
+      { id: "proxy", label: "网络连接", description: "选择 AI 连接方式，测试连接；按需配置 Windows 系统代理。" },
       { id: "about", label: "关于与更新", description: "查看当前版本，检查并安装应用更新。" },
     ];
     const editableSettingsTab = (id) => ["shortcuts", "pet", "proxy"].includes(id);
     const petAnimals = { human: "小人", cat: "猫咪", dog: "狗狗", rabbit: "兔子", fox: "狐狸", goose: "大鹅", cockroach: "蟑螂", mosquito: "蚊子", capybara: "卡皮巴拉（水豚）", frog: "青蛙", penguin: "企鹅", turtle: "乌龟", hedgehog: "刺猬", "engineer-fox": "工程师", "operator-rabbit": "话务员兔子", otter: "抱贝壳的小海獭", "red-panda": "小熊猫咖啡师", "baby-dragon": "团子小龙", "fluffy-rabbit": "绒绒兔" };
     api.settings?.onPetChanged?.((settings) => {
+      if (settings.aiNetworkMode !== undefined) {
+        const chosen=document.querySelector('form[data-form="app-settings"] [name="aiNetworkMode"]:checked');
+        const dirty=chosen && chosen.value!==(appSettings?.aiNetworkMode || 'system');
+        if (!dirty) {
+          appSettings={...(appSettings||{}),aiNetworkMode:settings.aiNetworkMode};
+          for(const input of document.querySelectorAll('form[data-form="app-settings"] [name="aiNetworkMode"]')) input.checked=input.value===settings.aiNetworkMode;
+        }
+        if(aiSettings) aiSettings={...aiSettings,aiNetworkMode:settings.aiNetworkMode};
+      }
       const keys = ["petModeEnabled", "petAnimal", "petDisplaySize", "petMoodDecayEnabled", "petPreventSleepEnabled", "todoReminderEnabled", "todoReminderMinutes"];
       for (const key of keys) {
         if (settings[key] === undefined) continue;
@@ -629,51 +639,29 @@
             </div>
           </section>
 
-          <section class="ws-settings-card" ${panel("proxy")}>
-            <h2>强制代理</h2>
-            <p class="ws-settings-desc">定时回写 Windows 系统代理，用于对抗组策略覆盖。AI 请求会跟随系统代理/PAC。</p>
-            <label class="ws-settings-check">
-              <input type="checkbox" name="proxyForceEnabled" ${s.proxyForceEnabled ? "checked" : ""} />
-              <span>启用强制代理</span>
-            </label>
-            <div class="form-columns">
-              <label>模式
-                <select name="proxyForceMode">
-                  ${option("manual", mode, "手动代理（地址 + 端口）")}
-                  ${option("pac", mode, "PAC 脚本地址")}
-                </select>
-              </label>
-              <label>强制刷新间隔（分钟）
-                <input name="proxyRefreshMinutes" type="number" min="1" max="60" value="${attr(s.proxyRefreshMinutes ?? 3)}" />
-              </label>
-            </div>
-            <div class="ws-settings-mode ${mode === "pac" ? "is-pac" : "is-manual"}">
-              <label class="ws-settings-pac">PAC 地址
-                <input name="proxyPacUrl" value="${attr(s.proxyPacUrl || "")}" placeholder="http://proxy.example.com/proxy.pac" />
-              </label>
-              <div class="form-columns ws-settings-manual">
-                <label>代理地址<input name="proxyServer" value="${attr(s.proxyServer || "")}" placeholder="10.0.0.1" /></label>
-                <label>端口<input name="proxyPort" type="number" min="1" max="65535" value="${attr(s.proxyPort ?? 8080)}" /></label>
+          <section class="ws-settings-card ws-network-settings" ${panel("proxy")}>
+            <div class="ws-network-heading"><div><h2>AI 连接方式</h2><p class="ws-settings-desc">适用于 AI 对话、人物分身和截图分析。保存后对新请求生效。</p></div><span class="ws-network-badge">已保存：${s.aiNetworkMode === 'direct' ? '直连' : '跟随系统'}</span></div>
+            <fieldset class="ws-network-choices"><legend class="visually-hidden">AI 请求连接方式</legend>
+              <label class="ws-network-choice"><input type="radio" name="aiNetworkMode" value="direct" ${s.aiNetworkMode === 'direct' ? 'checked' : ''}/><span><strong>直连</strong><small>绕过系统代理、PAC 和代理环境变量，直接连接 AI 服务。</small></span></label>
+              <label class="ws-network-choice"><input type="radio" name="aiNetworkMode" value="system" ${s.aiNetworkMode !== 'direct' ? 'checked' : ''}/><span><strong>跟随系统</strong><small>使用 Windows / macOS 的代理和 PAC，按系统规则选择线路。</small></span></label>
+            </fieldset>
+            <div class="ws-network-tip">遇到代理连接错误，可选择“直连”后保存并测试；如果网络访问 AI 服务需要代理，请使用“跟随系统”。此选项不改动电脑的系统代理。</div>
+            <div class="ws-settings-actions"><button class="module-primary" type="button" data-module-action="settings-save">保存网络设置</button><button type="button" data-module-action="network-test" ${networkTesting ? 'disabled' : ''}>${networkTesting ? '正在测试…' : '保存并测试 AI 连接'}</button><button type="button" data-module-action="ai-settings">API 与密钥设置</button></div>
+            ${api.platform === 'darwin' ? '' : `<details class="ws-proxy-advanced" ${s.proxyForceEnabled ? 'open' : ''}>
+              <summary><span>Windows 系统代理自动维护</span><small>${s.proxyForceEnabled ? '已启用' : '未启用 · 可选'}</small></summary>
+              <p class="ws-settings-desc">需要定期保持电脑的代理配置时再开启。它影响其他软件，与上方 AI 连接方式独立。</p>
+              <label class="ws-settings-check"><input type="checkbox" name="proxyForceEnabled" ${s.proxyForceEnabled ? 'checked' : ''}/><span>启用系统代理自动维护</span></label>
+              <div class="form-columns"><label>配置方式<select name="proxyForceMode">${option('manual', mode, '手动地址与端口')}${option('pac', mode, 'PAC 自动配置脚本')}</select></label><label>维护间隔（分钟）<input name="proxyRefreshMinutes" type="number" min="1" max="60" value="${attr(s.proxyRefreshMinutes ?? 3)}"/></label></div>
+              <div class="ws-settings-mode ${mode === 'pac' ? 'is-pac' : 'is-manual'}">
+                <label class="ws-settings-pac">PAC 脚本地址<input name="proxyPacUrl" type="url" value="${attr(s.proxyPacUrl || '')}" placeholder="https://proxy.example.com/proxy.pac"/></label>
+                <div class="form-columns ws-settings-manual"><label>代理主机<input name="proxyServer" value="${attr(s.proxyServer || '')}" placeholder="127.0.0.1 或 http://127.0.0.1:7890"/></label><label>端口<input name="proxyPort" type="number" min="1" max="65535" value="${attr(s.proxyPort ?? 8080)}"/></label></div>
               </div>
-            </div>
-            <label>例外地址（可选）
-              <input name="proxyBypass" value="${attr(s.proxyBypass || "")}" placeholder="localhost;127.*;&lt;local&gt;" />
-            </label>
-            <div class="form-columns">
-              <label>上海 PAC（托盘快捷备用）
-                <input name="proxyPacUrlShanghai" value="${attr(s.proxyPacUrlShanghai || "")}" />
-              </label>
-              <label>北京 PAC（托盘快捷备用）
-                <input name="proxyPacUrlBeijing" value="${attr(s.proxyPacUrlBeijing || "")}" />
-              </label>
-            </div>
-            <div class="ws-settings-actions">
-              <button type="button" data-module-action="settings-apply-proxy">立即应用代理</button>
-              <button type="button" data-module-action="settings-use-shanghai">切到上海 PAC</button>
-              <button type="button" data-module-action="settings-use-beijing">切到北京 PAC</button>
-            </div>
+              <label>不经过代理的地址<input name="proxyBypass" value="${attr(s.proxyBypass || '')}" placeholder="localhost;127.*;&lt;local&gt;"/></label>
+              <details class="ws-proxy-presets"><summary>备用 PAC（可选）</summary><div class="form-columns"><label>上海 PAC<input name="proxyPacUrlShanghai" type="url" value="${attr(s.proxyPacUrlShanghai || '')}"/></label><label>北京 PAC<input name="proxyPacUrlBeijing" type="url" value="${attr(s.proxyPacUrlBeijing || '')}"/></label></div><div class="ws-settings-actions"><button type="button" data-module-action="settings-use-shanghai">使用上海 PAC 并启用维护</button><button type="button" data-module-action="settings-use-beijing">使用北京 PAC 并启用维护</button></div></details>
+              <p class="ws-settings-desc">停用维护或退出软件时，会尝试恢复开启前的配置；其他软件已改动的设置不会被覆盖。旧版遗留且没有恢复记录的代理，请在 Windows 设置中检查。</p>
+              <div class="ws-settings-actions"><button type="button" data-module-action="network-open-system">打开 Windows 代理设置</button></div>
+            </details>`}
           </section>
-
           <div ${panel("sync")}>${githubUI?.render() || ""}</div>
           <section class="ws-settings-card" ${panel("about")}>
             <h2>关于与更新</h2>
@@ -696,7 +684,7 @@
         draftItem[({ raci: "RaciRole", energy: "EnergyLevel" })[key] || key[0].toUpperCase() + key.slice(1)] = val;
       }
       if (modal.type === "ai-settings") {
-        const settings = aiSettings || {};
+        const settings = { ...(aiSettings || {}), ...(modal.draft || {}) };
         const profiles = (settings.modelProfiles || [])
           .map((profile) => option(profile.model, settings.model, profile.name || profile.model))
           .join("");
@@ -706,8 +694,9 @@
           <label>API Key<input name="apiKey" type="password" value="${attr(settings.apiKey || "")}" placeholder="sk-..." /></label>
           <label>模型<input name="model" list="ws-ai-models" value="${attr(settings.model || "")}" /></label>
           <datalist id="ws-ai-models">${profiles}</datalist>
+          <label>AI 请求连接方式<select name="aiNetworkMode">${option('direct', settings.aiNetworkMode || 'system', '直连')}${option('system', settings.aiNetworkMode || 'system', '跟随系统代理 / PAC')}</select></label>
           <label>系统提示词<textarea name="globalChatSystemPrompt" rows="5" placeholder="留空使用默认提示词">${esc(settings.globalChatSystemPrompt || "")}</textarea></label>
-          <p class="ws-ai-settings-hint">${api.platform === "darwin" ? "配置保存在 Application Support/DanceMonkey/config.json；请求跟随系统代理。" : "与旧版共用 %AppData%\\DanceMonkey\\config.json；请求自动走系统代理。"}</p>
+          <p class="ws-ai-settings-hint">${api.platform === "darwin" ? "配置保存在 Application Support/DanceMonkey/config.json；连接方式与“网络连接”设置同步。" : "与旧版共用 %AppData%\\DanceMonkey\\config.json；可选择直连或跟随系统代理。"}</p>
           ${error ? `<div class="module-error">${esc(error)}</div>` : ""}
           <div class="module-modal-actions">
             <button type="button" data-module-action="close-modal">取消</button>
@@ -812,15 +801,16 @@
         globalChatHotkey: values.globalChatHotkey,
         quickScreenshotHotkey: values.quickScreenshotHotkey,
         regionScreenshotHotkey: values.regionScreenshotHotkey,
-        proxyForceEnabled: isMac ? false : Boolean(form.querySelector('[name="proxyForceEnabled"]')?.checked),
-        proxyForceMode: values.proxyForceMode === "pac" ? "pac" : "manual",
-        proxyPacUrl: values.proxyPacUrl || "",
-        proxyServer: values.proxyServer || "",
-        proxyPort: Number(values.proxyPort) || 8080,
-        proxyBypass: values.proxyBypass || "",
-        proxyRefreshMinutes: Number(values.proxyRefreshMinutes) || 3,
-        proxyPacUrlShanghai: values.proxyPacUrlShanghai || "",
-        proxyPacUrlBeijing: values.proxyPacUrlBeijing || "",
+        aiNetworkMode: values.aiNetworkMode || appSettings?.aiNetworkMode || 'system',
+        proxyForceEnabled: isMac ? Boolean(appSettings?.proxyForceEnabled) : Boolean(form.querySelector('[name="proxyForceEnabled"]')?.checked),
+        proxyForceMode: (values.proxyForceMode ?? appSettings?.proxyForceMode) === "pac" ? "pac" : "manual",
+        proxyPacUrl: values.proxyPacUrl ?? appSettings?.proxyPacUrl ?? "",
+        proxyServer: values.proxyServer ?? appSettings?.proxyServer ?? "",
+        proxyPort: Number(values.proxyPort ?? appSettings?.proxyPort) || 8080,
+        proxyBypass: values.proxyBypass ?? appSettings?.proxyBypass ?? "",
+        proxyRefreshMinutes: Number(values.proxyRefreshMinutes ?? appSettings?.proxyRefreshMinutes) || 3,
+        proxyPacUrlShanghai: values.proxyPacUrlShanghai ?? appSettings?.proxyPacUrlShanghai ?? "",
+        proxyPacUrlBeijing: values.proxyPacUrlBeijing ?? appSettings?.proxyPacUrlBeijing ?? "",
       };
     }
 
@@ -844,7 +834,8 @@
         return false;
       }
       appSettings = result.settings;
-      settingsMessage = "设置已保存并生效";
+      if(aiSettings) aiSettings={...aiSettings,aiNetworkMode:appSettings.aiNetworkMode};
+      settingsMessage = result.settings?.proxyNotice || "设置已保存并生效";
       rerender();
       return true;
     }
@@ -863,15 +854,23 @@
         await saveAppSettings();
         return true;
       }
-      if (action === "settings-apply-proxy") {
-        settingsError = "";
-        settingsMessage = "";
-        const saved = await saveAppSettings();
-        if (!saved) return true;
-        const result = await api.settings.applyProxy();
-        if (!result?.success) settingsError = result?.error || "应用代理失败";
-        else settingsMessage = "已立即写入系统代理";
-        rerender();
+      if (action === 'network-open-system') {
+        try { const result = await api.settings?.openSystemProxy?.(); if (!result?.success) throw Error('请在 Windows 系统设置中打开“网络和 Internet → 代理”。'); }
+        catch(cause) { settingsError = cause.message; rerender(); }
+        return true;
+      }
+      if (action === 'network-test') {
+        if (networkTesting) return true;
+        networkTesting = true;
+        try {
+          if (!await saveAppSettings()) return true;
+          settingsMessage = ''; settingsError = ''; rerender();
+          if (appSettings.aiNetworkMode !== 'direct') await api.settings?.refreshProxy?.();
+          const result = await api.ai.chat({requestId:`network-test-${Date.now()}`,systemPrompt:'连接测试，请简短回答。',messages:[{role:'user',content:'请回复 OK'}],maxTokens:128,timeoutMs:15000});
+          if (!result.success) throw Error(result.error || 'AI 连接测试失败');
+          settingsMessage = 'AI 服务响应正常，连接测试成功。';
+        } catch(cause) { settingsError = cause.message || '连接测试失败，请检查 API 设置与连接方式。'; }
+        finally { networkTesting = false; rerender(); }
         return true;
       }
       if (action === "settings-use-shanghai" || action === "settings-use-beijing") {
@@ -1293,7 +1292,9 @@
             apiKey: values.apiKey,
             model: values.model,
             globalChatSystemPrompt: values.globalChatSystemPrompt,
+            aiNetworkMode: values.aiNetworkMode || "system",
           });
+          appSettings = { ...(appSettings || {}), aiNetworkMode: aiSettings.aiNetworkMode || "system" };
           modal = null;
           error = "";
           rerender();
@@ -1335,7 +1336,9 @@
           apiKey: values.apiKey,
           model: values.model,
           globalChatSystemPrompt: values.globalChatSystemPrompt,
+          aiNetworkMode: values.aiNetworkMode || "system",
         });
+        appSettings = { ...(appSettings || {}), aiNetworkMode: aiSettings.aiNetworkMode || "system" };
         const result = await api.ai.chat({
           requestId: `test-${Date.now()}`,
           model: aiSettings.model,

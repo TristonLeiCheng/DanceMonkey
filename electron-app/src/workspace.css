@@ -1877,3 +1877,18 @@
 .pet-picker-footer > span { flex:1;min-width:180px;color:var(--ws-muted);font-size:12px; }
 @media(max-width:720px){.pet-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.pet-picker-selection{margin-left:0;}}
 @media(max-width:420px){.pet-picker-grid{grid-template-columns:1fr;max-height:440px;}.pet-picker-card{max-width:260px;}}
+
+/* Network settings: primary AI routing first, optional Windows maintenance below. */
+.ws-network-heading {display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.ws-network-badge {font-size:12px;white-space:nowrap;background:var(--ws-accent-bg);color:var(--ws-text);padding:5px 10px;border-radius:18px}
+.ws-network-choices {border:0;padding:0;margin:14px 0;display:grid;grid-template-columns:1fr 1fr;gap:12px;min-width:0}
+.ws-settings-form .ws-network-choice {display:flex;flex-direction:row;align-items:flex-start;gap:10px;padding:16px;border:1px solid var(--ws-line);border-radius:12px;background:var(--ws-panel);cursor:pointer}
+.ws-network-choice:has(input:checked) {border-color:var(--ws-accent);background:var(--ws-accent-bg)}
+.ws-settings-form .ws-network-choice input {width:16px;height:16px;flex:0 0 16px;margin:4px 0 0;accent-color:var(--ws-accent)}
+.ws-network-choice strong,.ws-network-choice small {color:var(--ws-muted);display:block}.ws-network-choice strong {color:var(--ws-text);font-size:15px;margin-bottom:5px}.ws-network-choice small {color:var(--ws-muted);line-height:1.7;opacity:.75;font-size:12px}
+.ws-network-tip {color:var(--ws-text);padding:12px 14px;border-radius:10px;background:var(--ws-accent-bg);font-size:12px;line-height:1.8;margin:12px 0}
+.ws-proxy-advanced {border-top:1px solid var(--ws-line);padding-top:18px;margin-top:22px}
+.ws-proxy-advanced>summary {display:flex;align-items:center;justify-content:space-between;gap:14px;cursor:pointer;font-weight:600;margin-bottom:16px;list-style:revert}
+.ws-proxy-advanced>summary small {font-size:12px;font-weight:400;opacity:.7}.ws-proxy-presets {padding:12px 0}.ws-proxy-presets>summary {cursor:pointer;font-size:13px;margin-bottom:12px}
+@media(max-width:680px){.ws-network-choices{grid-template-columns:1fr}.ws-network-heading{display:block}.ws-network-badge{display:inline-block;margin-bottom:10px}}
+.ws-network-settings .ws-settings-actions .module-primary {background:var(--ws-accent-bg);border-color:var(--ws-accent);color:var(--ws-text);font-weight:600}

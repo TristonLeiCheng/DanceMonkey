@@ -385,6 +385,7 @@ app.whenReady().then(() => {
   }
   desktopPet = createDesktopPet({
     BrowserWindow, screen, Menu, powerSaveBlocker, configStore: legacyConfig,
+    desktopIcons: require('./desktop-icons').createDesktopIconReader(),
     getTasks: () => githubNotes?.busy ? null : zenTaskStore.load().tasks,
     openWorkspace,
     captureQuick: () => { void screenshotController.captureQuick(); },

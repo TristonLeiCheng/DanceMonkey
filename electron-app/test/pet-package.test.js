@@ -19,8 +19,18 @@ test('release preflight indexes every real skin and refuses missing or modified 
   fs.cpSync(path.join(current,'src'),path.join(f.source,'src'),{recursive:true});
   fs.cpSync(path.join(current,'electron'),path.join(f.source,'electron'),{recursive:true});
   fs.cpSync(path.join(current,'assets/pets'),path.join(f.source,'assets/pets'),{recursive:true});
+  fs.copyFileSync(path.join(current,'pet.html'),path.join(f.source,'pet.html'));
   const catalog=writePetCatalog(f.source);
   assert.equal(Object.keys(catalog.animals).length,19);
+  assert.deepEqual(catalog.interactions.desktopIconPlatforms,['darwin']);
+  assert.deepEqual(catalog.interactions.keyboardPlatforms,['darwin','win32']);
+  for (const file of ['electron/pet-motion.js','electron/pet-carry.js','electron/desktop-icons.js','electron/pet-preload.js','pet.html']) {
+    assert.match(catalog.interactions.files[file],/^[a-f0-9]{64}$/);
+    const original=fs.readFileSync(path.join(f.source,file));
+    fs.unlinkSync(path.join(f.source,file));
+    assert.throws(()=>writePetCatalog(f.source),/ENOENT/,'missing interaction module refuses packaging');
+    f.put(file,original);
+  }
   assertPetUpdateCompatible(f.app,'otter');assertPetUpdateCompatible(f.app,'fluffy-rabbit');
   const source=catalog.animals.otter.source;
   fs.appendFileSync(path.join(f.source,source),'tampered');

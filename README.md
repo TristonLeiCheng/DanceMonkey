@@ -2,12 +2,13 @@
 
 > 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。
 
-## 最新版本 · v3.9.1
+## 当前打包版 · v3.9.4
 
-[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.9.1) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.9.1.md)
+[使用说明](electron-app/README.md) · [本次打包说明](docs/releases/v3.9.4.md) · [最近正式发布 v3.9.1](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.9.1)
 
 - **名人示范**：孔子、老子、李白、爱因斯坦、乔布斯和马斯克六种 AI 模拟视角；可预览、按需添加并用开场问题开始对话，重复添加保留已有编辑与聊天。
 - **桌面宠物**：新增海獭、小熊猫咖啡师、团子小龙和绒绒兔，升级猫、狗与卡皮巴拉素材；共19种外形，支持紧凑卡片与每角色独立动作预览。
+- **宠物交互补齐**：合入方向键行走、空格跳跃、桌面图标站立和E键抱起/放下；保留像素优化与统一设置入口。Mac支持桌面图标交互，Windows支持行走和跳跃。
 - **像素伙伴优化**：重绘10位像素伙伴，增加圆润轮廓、柔和明暗、眼睛高光和自然眨眼；宠物类型统一在设置中选择，右键保留大小调整等快捷功能。
 - **宠物设置保留**：修复更新包缺少角色后恢复默认的问题；保留原角色ID，打包与更新前校验素材，避免旧设置快照覆盖选择。
 - **设置选项卡**：快捷键、桌面宠物、笔记同步、网络代理（Windows）与关于更新分类配置，切换保留输入草稿。
@@ -21,7 +22,7 @@
 - **本地优先**：离线继续编辑。JSON 仅同步 `Journal/task-module.json` 和 `Journal/zentask-projects.json`；其他 JSON、API Key 和软件设置不上传。
 - **桌面工作区**：Markdown 笔记、项目与任务管理、AI 对话、截图及文件夹同步。
 
-提供 Windows x64 ZIP、macOS Apple Silicon / Intel 的 DMG 和 ZIP。macOS 产物采用 ad-hoc 签名，未经过 Apple Developer ID 公证；Windows ZIP 未做代码签名。下载时请核对 Release 中的 SHA-256。
+本次提供 Windows x64 ZIP、macOS Apple Silicon 的 DMG 和 ZIP。macOS 产物采用 ad-hoc 签名，未经过 Apple Developer ID 公证；Windows ZIP 未做代码签名。使用安装包时请核对同目录的 SHA256SUMS.txt。
 
 ### 开发运行
 

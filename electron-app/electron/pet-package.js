@@ -2,6 +2,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
+const INTERACTION_FILES = [
+  'electron/main.js', 'electron/desktop-pet.js', 'electron/pet-motion.js', 'electron/pet-carry.js',
+  'electron/desktop-icons.js', 'electron/pet-preload.js', 'src/pet-atlas.js',
+  'src/pet.js', 'src/pet.css', 'pet.html', 'assets/pets/carry-file.svg',
+];
+
 // Called on the copied application, so release checks cover what will actually ship.
 function writePetCatalog(root) {
   const { ANIMALS } = require(path.join(root, 'electron/pet-model.js'));
@@ -19,7 +25,16 @@ function writePetCatalog(root) {
     if (manifest.sha256 && manifest.sha256 !== sha256) throw new Error(`宠物 ${id} 图集校验失败`);
     animals[id] = { name, source: manifest.source, sha256 };
   }
-  const catalog = { format: 1, animals };
+  const files = {};
+  for (const file of INTERACTION_FILES) {
+    const bytes = fs.readFileSync(path.join(root, file));
+    if (!bytes.length) throw new Error(`宠物交互模块为空：${file}`);
+    files[file] = crypto.createHash('sha256').update(bytes).digest('hex');
+  }
+  const catalog = { format: 1, animals, interactions: {
+    format: 1, features: ['keyboard-movement', 'jumping', 'icon-platforms', 'icon-carry'],
+    keyboardPlatforms: ['darwin', 'win32'], desktopIconPlatforms: ['darwin'], files,
+  } };
   fs.writeFileSync(path.join(root, 'assets/pets/catalog.json'), JSON.stringify(catalog, null, 2) + '\n');
   return catalog;
 }

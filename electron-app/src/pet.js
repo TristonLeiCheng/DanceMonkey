@@ -2,12 +2,71 @@
   const api = window.desktopPet, atlas = window.DMPetAtlas;
   const pet = document.getElementById('pet'), bubble = document.getElementById('bubble');
   const canvas = pet.querySelector('canvas'), ctx = canvas.getContext('2d'), defaultTitle = pet.title;
+  const cargo = document.getElementById('pet-cargo'), cargoImage = document.getElementById('pet-cargo-image');
   const player = atlas.createPlayer(), motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let state = null, serial = -1, dragging = false, interactive = null;
   const images = new Map(), assetStatus = new Map();
   let disposed = false, timer = null;
   let elapsed = 0, lastTime = performance.now();
   const isAtlas = () => Boolean(state && images.has(state.animal));
+  const controlHint = '交互模式 · ← → 行走 · 空格跳跃 · E 抱起/放下 · Esc 退出';
+  function updateBubble() {
+    const carried = state.control?.carry;
+    const interaction = state.control?.iconInteraction;
+    const name = interaction?.name || '图标';
+    const iconHint = interaction && ({ standing: `站在「${name}」上 · ← → 行走 · 空格跳跃 · Esc 退出`,
+      jumping: `正在跳向「${name}」 · ← → 调整方向`,
+      target: `上方「${name}」 · 空格跳上 · ← → 行走 · Esc 退出`,
+      nearby: `靠近「${name}」 · ← → 行走 · 空格跳跃 · Esc 退出` })[interaction.kind];
+    const statusHint = ({ 'permission-required': '图标互动需要允许控制 Finder；授权后请重新开启交互模式。',
+      unsupported: '当前系统暂不支持桌面图标互动，可使用行走和跳跃。',
+      unavailable: '桌面图标暂时读不到，可继续行走和跳跃。', 'desktop-hidden': '桌面图标已隐藏，可继续行走和跳跃。',
+      'layout-unsupported': '请关闭桌面叠放和自动排列，使用手动排列或贴齐网格。' })[state.control?.iconsStatus];
+    const carryHint = carried ? ({ 'picking-up': `抱起「${carried.name}」…`,
+      carrying: `抱着「${carried.name}」 · E 放下 · ← → 行走 · 空格跳跃 · Esc 退出`,
+      'putting-down': `放下「${carried.name}」…` })[carried.phase]
+      : state.control?.pickable ? `靠近「${state.control.pickable}」 · E 抱起 · 空格跳跃 · Esc 退出` : '';
+    bubble.textContent = state.control?.active ? carryHint || state.control.carryNotice || iconHint || (statusHint ? `${controlHint}\n${statusHint}` : controlHint) : state.bubble;
+    bubble.hidden = !bubble.textContent;
+    bubble.title = state.control?.active ? '切换到其他应用也会退出交互模式' : '打开待办';
+  }
+  function drawCarry() {
+    const held = state.control?.active && state.control.carry;
+    cargo.hidden = !held; pet.dataset.carryPhase = held?.phase || '';
+    if (!held) { if (cargoImage.dataset.source) { cargoImage.src = 'assets/pets/carry-file.svg'; delete cargoImage.dataset.source; } return; }
+    const source = held.image || 'assets/pets/carry-file.svg';
+    if (cargoImage.dataset.source !== source) { cargoImage.src = source; cargoImage.dataset.source = source; }
+    const spec = atlas.getManifest(state.animal);
+    const w = state.size * (isAtlas() && spec ? spec.cellWidth / spec.cellHeight : 1), h = state.size;
+    const direction = state.control.facing === 'left' ? -1 : 1;
+    const side = Math.min(46, Math.max(20, h * .34));
+    const chest = { x: w * (direction < 0 ? .4 : .6), y: h * .63 };
+    let x = chest.x, y = chest.y, size = side, opacity = 1, angle = 0, grip = 1;
+    const p = motion.matches ? 1 : held.progress, ease = 1 - Math.pow(1 - p, 3);
+    const local = point => ({ x: point.x - (window.screenX || 0) - state.control.left,
+      y: point.y - (window.screenY || 0) - state.control.top });
+    if (held.phase === 'picking-up') {
+      const start = local({ x: held.source.x + held.source.width / 2, y: held.source.y + held.source.height / 2 });
+      x = start.x + (chest.x - start.x) * ease; y = start.y + (chest.y - start.y) * ease - Math.sin(p * Math.PI) * h * .12;
+      size = held.source.width + (side - held.source.width) * ease;
+      angle = Math.sin(p * Math.PI) * direction * 12; grip = Math.max(0, (p - .45) / .55);
+    } else if (held.phase === 'putting-down') {
+      const drop = held.dropAnchor;
+      const offset = Math.min(w * .28, w / 2 - side / 2 - 2);
+      const end = drop ? local({ x: drop.x + (drop.facing === 'left' ? -offset : offset), y: drop.y - side / 2 - 4 })
+        : { x: w / 2 + direction * offset, y: h - side / 2 - 4 };
+      x += (end.x - x) * ease; y += (end.y - y) * ease;
+      opacity = Math.min(1, (1 - p) / .4); grip = Math.max(0, 1 - p * 3);
+    }
+    cargo.style.width = `${size}px`; cargo.style.height = `${size}px`; cargo.style.opacity = String(opacity);
+    cargo.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px) rotate(${angle}deg)`;
+    cargo.style.setProperty('--cargo-grip', String(grip));
+    cargo.style.setProperty('--cargo-paw', ({ 'engineer-fox': '#d5965b', 'baby-dragon': '#b9c8a9', otter: '#a47f6b', cat: '#eee0ce', dog: '#dbbd96', 'fluffy-rabbit': '#f3e8d8', 'operator-rabbit': '#e7d8c8' })[state.animal] || '#ddc7a9');
+  }
+  cargoImage.addEventListener('error', () => {
+    if (!cargoImage.src.endsWith('assets/pets/carry-file.svg')) cargoImage.src = 'assets/pets/carry-file.svg';
+    cargoImage.dataset.source = state?.control?.carry?.image || 'assets/pets/carry-file.svg';
+  });
   function clock() {
     const time = performance.now();
     if (!document.hidden) elapsed += time - lastTime;
@@ -26,9 +85,9 @@
       bubble.textContent = `当前版本暂不支持宠物“${state.animal}”，原选择已保留。请更新软件。`;
       bubble.hidden = false; return;
     }
-    if (isAtlas()) { bubble.textContent = state.bubble; bubble.hidden = !state.bubble; }
+    if (isAtlas()) updateBubble();
     pet.title = spec && pet.dataset.assetStatus === 'failed'
-      ? `${spec.name}图集未能加载${spec.fallback ? '，暂用原像素外形。单击互动 · 双击打开主界面 · 拖动移动 · 右键菜单' : ''}` : defaultTitle;
+      ? `${spec.name}图集未能加载${spec.fallback ? '，暂用原像素外形。单击互动 · 双击打开主界面 · 拖动移动 · 右键菜单' : ''}` : state.control?.active ? controlHint : defaultTitle;
     const time = clock(), smooth = Boolean(isAtlas());
     pet.dataset.renderer = smooth ? 'atlas' : 'pixel';
     pet.classList.toggle('atlas', smooth);
@@ -53,7 +112,7 @@
           cellWidth, cellHeight, 0, 0, canvas.width, canvas.height);
       }
     } else {
-      resize(32, 32); pet.dataset.action = 'pixel';
+      resize(32, 32); pet.dataset.action = state.control?.active ? state.control.action : 'pixel';
       if (spec && !spec.fallback) {
         ctx.clearRect(0,0,canvas.width,canvas.height); pet.dataset.renderer='unavailable';
         bubble.textContent=assetStatus.get(state.animal)==='failed' ? `${spec.name}图集未能加载` : `正在加载${spec.name}…`;
@@ -62,6 +121,7 @@
       const animal = spec?.fallback || state.animal;
       ctx.putImageData(new ImageData(window.DMPetSprites.render(animal, state.mood, motion.matches ? 0 : window.DMPetSprites.frameAt(time)), 32, 32), 0, 0);
     }
+    drawCarry();
   }
   function schedule() {
     clearTimeout(timer); timer = null;
@@ -72,17 +132,25 @@
   function update(next) {
     if (!next || disposed) return;
     const changedAnimal = state?.animal !== next.animal;
+    const changedControl = Boolean(state?.control?.active) !== Boolean(next.control?.active);
+    if (changedControl) held.clear();
     player.update(next, clock()); state = next;
+    if (!state.control?.active || !state.control.carry) { cargo.hidden = true; pet.dataset.carryPhase = ''; }
     const spec = atlas.getManifest(state.animal);
     document.documentElement.style.setProperty('--pet-size', `${state.size}px`);
     document.documentElement.style.setProperty('--pet-aspect', spec ? String(spec.cellWidth / spec.cellHeight) : '1');
+    pet.dataset.control = state.control?.active ? 'active' : 'off';
+    pet.dataset.facing = state.control?.facing || 'right';
+    document.documentElement.style.setProperty('--carry-direction', state.control?.facing === 'left' ? '-1' : '1');
+    document.documentElement.style.setProperty('--pet-left', `${state.control?.left || 0}px`);
+    document.documentElement.style.setProperty('--pet-top', `${state.control?.top || 0}px`);
     pet.dataset.assetStatus = spec ? assetStatus.get(state.animal) || 'loading' : 'none';
-    bubble.textContent = state.bubble; bubble.hidden = !state.bubble;
-    if (serial !== state.serial || changedAnimal) {
+    updateBubble();
+    if (serial !== state.serial || changedAnimal || changedControl) {
       serial = state.serial;
       pet.classList.remove('pop', 'jump', 'shake');
       // The atlas contains its own motion; never add a second CSS jump.
-      if (!spec && state.animation) {
+      if (!spec && state.animation && !state.control?.active) {
         void pet.offsetWidth; pet.classList.add(state.animation);
       }
     }
@@ -114,7 +182,7 @@
   });
   document.addEventListener('pointerleave', () => { if (!dragging) setInteractive(false); });
   pet.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || state?.control?.active) return;
     dragging = true; pet.setPointerCapture(event.pointerId); api.press();
   });
   pet.addEventListener('pointerup', (event) => {
@@ -126,10 +194,22 @@
   const cancel = () => { if (dragging) { dragging = false; api.cancel(); } setInteractive(false); };
   pet.addEventListener('pointercancel', cancel);
   pet.addEventListener('lostpointercapture', cancel);
-  window.addEventListener('blur', cancel);
-  pet.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); api.press(); api.release(); } });
-  document.addEventListener('contextmenu', (event) => { event.preventDefault(); api.menu(); });
-  bubble.addEventListener('click', () => api.tasks());
+  const held = new Set();
+  function key(event, down) {
+    if (!state?.control?.active) return;
+    if (event.code === 'Escape') { event.preventDefault(); if (down) { held.clear(); api.exitControl(); } return; }
+    if (!['ArrowLeft', 'ArrowRight', 'Space', 'KeyE'].includes(event.code)) return;
+    event.preventDefault();
+    if (down && (event.repeat || held.has(event.code))) return;
+    if (down) held.add(event.code); else held.delete(event.code);
+    api.key(event.code, down);
+  }
+  document.addEventListener('keydown', event => key(event, true));
+  document.addEventListener('keyup', event => key(event, false));
+  window.addEventListener('blur', () => { held.clear(); cancel(); });
+  pet.addEventListener('keydown', (event) => { if (!state?.control?.active && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); api.press(); api.release(); } });
+  document.addEventListener('contextmenu', (event) => { event.preventDefault(); held.clear(); api.menu(); });
+  bubble.addEventListener('click', () => { if (!state?.control?.active) api.tasks(); });
   window.addEventListener('unload', () => {
     disposed = true; clearTimeout(timer); unsubscribe();
     document.removeEventListener('visibilitychange', visibility);

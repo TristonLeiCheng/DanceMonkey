@@ -9,10 +9,30 @@ canvas { width: 100%; height: 100%; image-rendering: pixelated; pointer-events: 
 #bubble[hidden] { display: none; }
 #pet.atlas { right: auto; left: 50%; margin-left: calc(var(--pet-size, 68px) * var(--pet-aspect, 1) / -2); width: calc(var(--pet-size, 68px) * var(--pet-aspect, 1)); }
 #pet.atlas canvas { image-rendering: auto; }
+#pet[data-control="active"] { left: var(--pet-left); top: var(--pet-top); right: auto; bottom: auto; margin-left: 0; cursor: default; }
+#pet[data-control="active"][data-renderer="pixel"][data-facing="left"] canvas { transform: scaleX(-1); }
+#pet[data-control="active"][data-renderer="pixel"][data-action="left"],
+#pet[data-control="active"][data-renderer="pixel"][data-action="right"] { animation: walk .24s ease-in-out infinite; }
+@keyframes walk { 50% { transform: translateY(-2px); } }
 #pet.pop { animation: pop .25s ease-out; }
 #pet.jump { animation: jump .55s ease-in-out; }
 #pet.shake { animation: shake .35s ease-in-out; }
 @keyframes pop { 50% { transform: scale(1.15, .9); } }
 @keyframes jump { 35% { transform: translateY(-10px) rotate(-5deg); } 65% { transform: translateY(-4px) rotate(4deg); } }
 @keyframes shake { 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
-@media (prefers-reduced-motion: reduce) { #pet.pop, #pet.jump, #pet.shake { animation: none; } }
+#pet-cargo { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; transform-origin: center; }
+#pet-cargo[hidden] { display: none; }
+#pet-cargo-image { display: block; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 2px #17223b33); pointer-events: none; }
+.cargo-grip { position: absolute; bottom: 12%; width: 24%; height: 27%; border-radius: 55%; background: var(--cargo-paw, #ddc7a9); box-shadow: inset 0 -2px 2px #51352222, 0 1px 1px #51352233; opacity: var(--cargo-grip, 1); }
+.cargo-grip-left { left: -8%; transform: rotate(-22deg); }
+.cargo-grip-right { right: -8%; transform: rotate(22deg); }
+#pet[data-renderer="pixel"][data-facing="left"] canvas { --pet-flip: -1; }
+#pet[data-carry-phase="picking-up"] canvas { animation: carry-reach .44s ease-in-out; }
+#pet[data-carry-phase="putting-down"] canvas { animation: carry-release .36s ease-in-out; }
+#pet[data-carry-phase="carrying"] canvas { transform: scaleX(var(--pet-flip, 1)) rotate(calc(var(--carry-direction, 1) * -2deg)); }
+#pet[data-carry-phase="carrying"][data-action="left"] #pet-cargo-image,
+#pet[data-carry-phase="carrying"][data-action="right"] #pet-cargo-image { animation: cargo-sway .32s ease-in-out infinite; }
+@keyframes carry-reach { 0%, 100% { transform: scaleX(var(--pet-flip, 1)); } 40% { transform: translateY(4px) scaleX(var(--pet-flip, 1)) rotate(calc(var(--carry-direction, 1) * 7deg)); } }
+@keyframes carry-release { 0%, 100% { transform: scaleX(var(--pet-flip, 1)); } 45% { transform: translateY(3px) scaleX(var(--pet-flip, 1)) rotate(calc(var(--carry-direction, 1) * 5deg)); } }
+@keyframes cargo-sway { 50% { transform: translateY(-2px) rotate(3deg); } }
+@media (prefers-reduced-motion: reduce) { #pet.pop, #pet.jump, #pet.shake, #pet[data-control="active"], #pet[data-carry-phase] canvas, #pet-cargo-image { animation: none; } }

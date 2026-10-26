@@ -2,7 +2,6 @@ const path = require("node:path");
 
 const packagerConfig = {
   asar: true,
-  // Keep development fixtures and design previews out of distributed applications.
   ignore: [/^\/(test|docs)(?:\/|$)/],
   afterCopy: [(buildPath, electronVersion, platform, arch, done) => {
     try { require('./electron/pet-package').writePetCatalog(buildPath); done(); }
@@ -10,6 +9,10 @@ const packagerConfig = {
   }],
   executableName: "DanceMonkey",
   appBundleId: "com.dancemonkey.desktop",
+  extendInfo: {
+    NSAppleEventsUsageDescription: "开启宠物交互模式后读取 Finder 桌面图标的位置，用于靠近、跳跃和携带图标动画。",
+    NSDesktopFolderUsageDescription: "在宠物交互模式中按 E 抱起图标时，获取所选桌面项目的系统图标用于携带动画。",
+  },
   // Packager resolves the matching .ico/.icns for the target platform,
   // including when building the Windows package on macOS.
   icon: path.join(__dirname, "assets", "logo"),

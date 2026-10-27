@@ -1,0 +1,16 @@
+# 宠物在更新或重启后恢复默认的修复
+
+2026-10-25检查发现，实际安装的v3.8.0发行包只有15种角色，缺少此前本地新增的海獭、小熊猫咖啡师、团子小龙和绒绒兔。配置仍保存petAnimal=otter，旧normalizeSettings遇到未知ID会返回cat；设置页和菜单随后可能把该回退值写回磁盘。
+
+修复：
+
+- 保留合法但当前暂不支持的角色ID。桌面窗口明确显示暂不支持且原选择已保留；设置表单提供原值选项，保存其他设置也不会换成小人。
+- 右键菜单只写入明确修改的字段，避免旧快照覆盖更新的选择。
+- 打包afterCopy校验所有19种角色和实际PNG尺寸、透明通道、哈希，生成assets/pets/catalog.json。缺图或图集损坏时打包失败。
+- Mac更新在准备阶段和真正替换前校验当前选择在候选包中存在，并校验图集。兼容没有清单的旧包时只读取其静态角色ID，不执行候选包代码。缺少当前角色则保留现有应用和配置，并给出说明。
+
+验证：436项测试通过；开发环境设置端到端回归通过（未知角色保存、刷新、保存其他设置、切回海獭并重启）；实际打包应用在隔离用户目录连续启动4次，验证海獭重启、未知角色重启及无关设置保存、切换绒绒兔后重启；真实Electron对ASAR包校验，修复包通过，缺失海獭的原发行包被拒绝。
+
+相关命令：npm test；node test/e2e-pet.mjs；DM_PET_E2E_EXECUTABLE=<Mac应用可执行文件> node test/e2e-pet-persistence.mjs。
+
+已安装本地v3.8.0修复版并启动；保留海獭、开启状态和128px设置。原应用与原始配置备份：/Users/lei.cheng/Library/Application Support/DanceMonkey-app-backups/before-pet-persistence-fix-RaGzgt。未公开发布GitHub新版本。

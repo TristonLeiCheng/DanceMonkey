@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>大胃袋良子 · 写实桌面角色</title>
+<style>
+  *{box-sizing:border-box} body{margin:0;padding:44px 24px;background:#f4f2eb;color:#343e3a;font:15px/1.6 system-ui,sans-serif}
+  main{max-width:1100px;margin:auto} .eyebrow{font-size:12px;letter-spacing:3px;color:#717f71} h1{font-size:36px;line-height:1.2;margin:12px 0} p{color:#737a72;margin:0 0 26px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px} button{font:inherit;border:1px solid #d4d8cd;background:#fff;padding:8px 15px;border-radius:30px;color:inherit;cursor:pointer}button[aria-pressed=true]{background:#3d5646;color:white;border-color:#3d5646}button:focus-visible{outline:3px solid #a2b976;outline-offset:3px}
+  .cards{display:grid;grid-template-columns:1fr;gap:18px;max-width:570px;margin:auto}.card{border:1px solid #d8dccf;border-radius:22px;overflow:hidden;background:#fffdf6}.stage{height:340px;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,#fffefb,#e7ebde)}
+  .dark .stage{background:#28332f}.card canvas{width:300px;height:300px}.info{padding:18px 22px}.info small{color:#7a826f}.info h2{font-size:21px;margin:0 0 4px}.badge{float:right;font-size:11px;border:1px solid #d4dcc8;border-radius:20px;padding:2px 9px;color:#60714e}
+  footer{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:22px;font-size:13px;color:#747b70}footer span{margin-right:auto}.error{color:#a33}
+  @media(max-width:740px){body{padding:24px 16px}.cards{grid-template-columns:1fr}.stage{height:245px}h1{font-size:28px}}
+</style>
+<main>
+  <div class="eyebrow">DANCEMONKEY · DESKTOP COMPANIONS</div>
+  <h1>大胃袋良子</h1>
+  <p>经典黑黄花纹短袖 · 写实全身人物 · 真实体态与动作。</p>
+  <div class="toolbar" aria-label="选择动作"></div>
+  <section class="cards" aria-label="角色动作预览"></section>
+  <footer><span>9 组自然动作 · 36 帧 · 透明 PNG</span><button id="pause" aria-pressed="false">暂停动画</button><button id="background" aria-pressed="false">深色背景</button></footer>
+</main>
+<script src="../src/pet-companion-atlases.js"></script>
+<script src="../src/pet-atlas.js"></script>
+<script>
+const actions={idle:'待机',right:'向右走',left:'向左走',wave:'招手',jump:'小跳',failed:'失落',waiting:'休息',working:'吃面',review:'点赞'};
+const descriptions={liangzi:['大胃袋良子','经典黄纹短袖 · 招手 · 吃面 · 点赞','新角色']};
+const cards=[], toolbar=document.querySelector('.toolbar');
+let action='idle', paused=false, elapsed=0, previous=performance.now();
+for(const [key,label] of Object.entries(actions)){
+ const button=document.createElement('button');button.textContent=label;button.dataset.action=key;button.setAttribute('aria-pressed',key===action);
+ button.onclick=()=>{action=key;elapsed=0;for(const b of toolbar.children)b.setAttribute('aria-pressed',b===button);draw()};toolbar.append(button);
+}
+for(const [animal,[name,description,badge]] of Object.entries(descriptions)){
+ const m=DMPetAtlas.getManifest(animal),card=document.createElement('article');card.className='card';
+ card.innerHTML=`<div class="stage"><canvas width="440" height="440" aria-label="${name}动作"></canvas></div><div class="info"><span class="badge">${badge}</span><h2>${name}</h2><small>${description}</small></div>`;
+ document.querySelector('.cards').append(card);const canvas=card.querySelector('canvas'),ctx=canvas.getContext('2d'),image=new Image();
+ const record={m,ctx,image,ready:false};cards.push(record);
+ image.onload=()=>{record.ready=true;window.previewReady=cards.every(c=>c.ready);draw()};image.onerror=()=>{card.querySelector('small').textContent='图片加载失败';card.querySelector('small').className='error'};image.src='../'+m.source;
+}
+function draw(){for(const {m,ctx,image,ready} of cards){
+ if(!ready)continue;ctx.clearRect(0,0,440,440);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+ const spec=m.actions[action], frame=Math.floor(elapsed*spec.fps/1000)%spec.frames,crop=m.frames?.[spec.row]?.[frame];
+ const scale=440/m.cellHeight, offset=(440-m.cellWidth*scale)/2;
+ DMPetAtlas.drawFrame(ctx,image,m,spec.row,frame,m.cellWidth*scale,440,offset);
+}}
+document.getElementById('pause').onclick=function(){paused=!paused;this.textContent=paused?'播放动画':'暂停动画';this.setAttribute('aria-pressed',paused)};
+document.getElementById('background').onclick=function(){const dark=document.body.classList.toggle('dark');this.textContent=dark?'浅色背景':'深色背景';this.setAttribute('aria-pressed',dark)};
+const motion=matchMedia('(prefers-reduced-motion: reduce)');
+function tick(time){if(!paused&&!document.hidden&&!motion.matches)elapsed+=Math.min(time-previous,100);previous=time;draw();requestAnimationFrame(tick)}requestAnimationFrame(tick);
+</script>
+</html>

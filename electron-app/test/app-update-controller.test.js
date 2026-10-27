@@ -115,3 +115,9 @@ test("unwritable Mac installations get an actionable message without exposing fi
   assert.match(result.error, /可写的应用程序文件夹/);
   assert.doesNotMatch(JSON.stringify(result), /private|EACCES/);
 });
+
+test('pet compatibility rejection explains preservation and never quits', async () => {
+  const message='更新包不包含当前选择的宠物，已保留当前版本与宠物设置。';
+  const {controller,counts}=setup({service:{checkAndPrepare:async()=>{throw Object.assign(new Error(message),{code:'DM_PET_UPDATE_UNAVAILABLE'});}}});
+  const result=await controller.check();assert.equal(result.error,message);assert.equal(counts().quits,0);
+});

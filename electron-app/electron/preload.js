@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld("lumen", {
     read: (path) => ipcRenderer.invoke("workspace:read", path),
     write: (path, content) => writeNotes("workspace:write", path, content),
     createFile: (parent, name) => writeNotes("workspace:createFile", parent, name),
+    createNote: (input) => writeNotes("workspace:createNote", input),
     createFolder: (parent, name) => writeNotes("workspace:createFolder", parent, name),
     rename: (path, name) => writeNotes("workspace:rename", path, name),
     remove: (path) => writeNotes("workspace:remove", path),
@@ -113,6 +114,22 @@ contextBridge.exposeInMainWorld("lumen", {
       return () => ipcRenderer.removeListener("screenshot:follow-up", listener);
     },
   },
+  reminders: {
+    list: () => ipcRenderer.invoke("reminders:list"),
+    save: input => ipcRenderer.invoke("reminders:save", input),
+    remove: id => ipcRenderer.invoke("reminders:remove", id),
+    reset: id => ipcRenderer.invoke("reminders:reset", id),
+    act: (id, action) => ipcRenderer.invoke("reminders:act", id, action),
+    test: input => ipcRenderer.invoke("reminders:test", input),
+    saveSettings: input => ipcRenderer.invoke("reminders:settings", input),
+    import: mode => ipcRenderer.invoke("reminders:import", mode),
+    export: () => ipcRenderer.invoke("reminders:export"),
+    onChanged: cb => {
+      const listener = () => cb();
+      ipcRenderer.on("reminders:changed", listener);
+      return () => ipcRenderer.removeListener("reminders:changed", listener);
+    },
+  },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),
     save: (payload) => ipcRenderer.invoke("settings:save", payload),
@@ -137,6 +154,8 @@ contextBridge.exposeInMainWorld("lumen", {
     disconnect: () => ipcRenderer.invoke("githubSync:disconnect"),
     bind: (input) => ipcRenderer.invoke("githubSync:bind", input),
     preview: () => ipcRenderer.invoke("githubSync:preview"),
+    inspectConflict: (input) => ipcRenderer.invoke("githubSync:inspectConflict", input),
+    resolveConflicts: (input) => ipcRenderer.invoke("githubSync:resolveConflicts", input),
     sync: (input) => ipcRenderer.invoke("githubSync:sync", input),
     openBackup: () => ipcRenderer.invoke("githubSync:openBackup"),
     onEditor: (cb) => {

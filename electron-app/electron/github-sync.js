@@ -316,6 +316,14 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
     for (const item of plan.deletions) if (item.side === "remote") delete merged[item.path];
     // 非笔记文件在远端保持原样，但也不能与新笔记路径产生文件/目录冲突。
     validatePaths(Object.keys(merged));
+    const synced = Object.keys(merged).filter(allowed);
+    let bytes = 0;
+    for (const file of synced) {
+      const data = merged[file].oid === local.files[file] ? local.data[file] : remote.data[file];
+      if (data.length > LIMITS.fileBytes) throw new Error(`合并后单文件超过 10 MiB：${file}`);
+      bytes += data.length;
+    }
+    if (synced.length > LIMITS.files || bytes > LIMITS.totalBytes) throw new Error("合并后笔记库超过 5000 个文件或 200 MiB。");
     for (const file of plan.downloads) safeTarget(file);
     for (const item of plan.deletions) if (item.side === "local") safeTarget(item.path);
     if (!plan.conflicts.length) {
@@ -332,6 +340,93 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
     return merged;
   }
 
+  function conflictOptions(p, file) {
+    const bothExist = Boolean(p.local.files[file] && p.remote.files[file]);
+    return ["local", "remote", ...(!TASK_DATA_FILES.has(file) ? ["both"] : []),
+      ...(bothExist && path.posix.extname(file).toLowerCase() === ".md" ? ["combine"] : [])];
+  }
+
+  function describe(p) {
+    return { id: p.id, uploads: p.uploads, downloads: p.downloads, deletions: p.deletions,
+      conflicts: p.conflicts, conflictDirectory: p.conflictDirectory, resolutions: p.resolutions || [],
+      conflictDetails: p.conflicts.map((file) => ({ path: file, options: conflictOptions(p, file),
+        localDeleted: !p.local.files[file], remoteDeleted: !p.remote.files[file] })),
+      counts: { uploads: p.uploads.length, downloads: p.downloads.length,
+        deletions: p.deletions.length, conflicts: p.conflicts.length } };
+  }
+
+  function requirePreview(id) {
+    if (!prepared || prepared.id !== id) throw new Error("预览已失效，请重新预览差异。");
+    return prepared;
+  }
+
+  function inspectConflict({ previewId, path: file } = {}) {
+    const p = requirePreview(previewId);
+    if (!p.conflicts.includes(file)) throw new Error("此文件不在当前冲突列表中。");
+    const text = TASK_DATA_FILES.has(file) || path.posix.extname(file).toLowerCase() === ".md";
+    const side = (snapshot) => {
+      const data = snapshot.data[file];
+      if (!data) return { deleted: true };
+      // Bound text excerpts and serve only supported raster images; never render
+      // Markdown/HTML from a vault as executable content.
+      const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" }[path.posix.extname(file).toLowerCase()];
+      return { deleted: false, bytes: data.length, text: text ? data.subarray(0, 16000).toString("utf8") : null,
+        image: mime ? `data:${mime};base64,${data.toString("base64")}` : null,
+        truncated: text && data.length > 16000 };
+    };
+    return { path: file, local: side(p.local), remote: side(p.remote) };
+  }
+
+  async function resolveConflicts({ previewId, resolutions } = {}) {
+    return exclusive(async () => {
+      const p = requirePreview(previewId);
+      if (!p.conflicts.length || !Array.isArray(resolutions) || resolutions.length !== p.conflicts.length ||
+          new Set(resolutions.map((item) => item?.path)).size !== p.conflicts.length) {
+        throw new Error("请为每个冲突文件选择一种处理方式。");
+      }
+      for (const item of resolutions) {
+        if (!p.conflicts.includes(item?.path) || !conflictOptions(p, item.path).includes(item.strategy)) {
+          throw new Error("冲突文件或处理方式无效，请重新选择。");
+        }
+      }
+      if (!same(scanLocal().files, p.local.files)) throw new Error("本地笔记已变化，请重新预览。");
+      const local = { files: { ...p.local.files }, data: { ...p.local.data } };
+      const next = { ...p, id: crypto.randomUUID(), local, sourceLocal: p.local,
+        uploads: [...p.uploads], downloads: [...p.downloads], deletions: [...p.deletions],
+        conflicts: [], resolutions: [], writeData: Object.create(null) };
+      const write = (file, data) => {
+        local.data[file] = data; local.files[file] = oidOf(data);
+        next.uploads.push(file); next.downloads.push(file); next.writeData[file] = data;
+      };
+      for (const { path: file, strategy } of resolutions) {
+        const resolution = { path: file, strategy };
+        const l = p.local.data[file], r = p.remote.data[file];
+        if (strategy === "combine") {
+          write(file, Buffer.concat([l, Buffer.from("\n\n---\n\n## 远端版本（拼接保留）\n\n"), r]));
+        } else if (strategy === "remote" || (strategy === "both" && !l)) {
+          if (r) next.downloads.push(file); else next.deletions.push({ path: file, side: "local" });
+        } else {
+          if (l) next.uploads.push(file); else next.deletions.push({ path: file, side: "remote" });
+          if (strategy === "both" && l && r) {
+            const ext = path.posix.extname(file);
+            const stem = file.slice(0, -ext.length);
+            let copy;
+            do { copy = `${stem}.remote-${crypto.randomUUID().slice(0, 8)}${ext}`; }
+            while (Object.hasOwn(local.files, copy) || Object.hasOwn(p.remote.entries, copy) || fs.existsSync(path.join(root, copy)));
+            write(copy, r);
+            resolution.copyPath = copy;
+          }
+        }
+        next.resolutions.push(resolution);
+      }
+      // Validate all choices together, including task/project references, before
+      // changing the prepared plan. Resolving only stages a plan, never files.
+      validateMerged(local, p.remote, next);
+      prepared = next;
+      return describe(next);
+    });
+  }
+
   async function preview() {
     return exclusive(async () => {
       prepared = null;
@@ -342,9 +437,7 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
       validateMerged(local, remote, plan);
       const conflictDirectory = exportConflicts(plan.conflicts, local, remote);
       prepared = { id: crypto.randomUUID(), ...plan, local, remote, base, conflictDirectory };
-      return { id: prepared.id, ...plan, conflictDirectory, counts: {
-        uploads: plan.uploads.length, downloads: plan.downloads.length, deletions: plan.deletions.length, conflicts: plan.conflicts.length,
-      } };
+      return describe(prepared);
     });
   }
 
@@ -394,8 +487,9 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
       const p = prepared;
       if (!p || p.id !== previewId) throw new Error("预览已失效，请重新预览差异。");
       prepared = null;
-      if (p.conflicts.length) throw new Error("存在冲突，双方内容已导出，请处理后重新预览。");
-      if (!same(scanLocal().files, p.local.files)) throw new Error("本地笔记已变化，请重新预览。");
+      if (p.conflicts.length) throw new Error("存在冲突，请先在界面选择处理方式。");
+      const sourceLocal = p.sourceLocal || p.local;
+      if (!same(scanLocal().files, sourceLocal.files)) throw new Error("本地笔记已变化，请重新预览。");
       const remote = await readRemote();
       if (remote.head !== p.remote.head) throw new Error("远端已变化，请重新预览，不会覆盖其他电脑的提交。");
       const merged = validateMerged(p.local, remote, p);
@@ -413,7 +507,7 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
       }
       const backup = path.join(directory, "backups", crypto.randomUUID());
       // 保存整份同步范围快照，包括即将上传和删除的笔记。
-      for (const [file, data] of Object.entries(p.local.data)) {
+      for (const [file, data] of Object.entries(sourceLocal.data)) {
         const dest = path.join(backup, "local", file);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.writeFileSync(dest, data, { flag: "wx", mode: 0o600 });
@@ -430,13 +524,13 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
         head = await git.writeCommit({ ...options, commit: { tree, parent: remote.head ? [remote.head] : [],
           author, committer: author, message: "Sync notes with DanceMonkey\n" } });
         await git.writeRef({ ...options, ref: `refs/heads/${state.binding.branch}`, value: head, force: true });
-        if (!same(scanLocal().files, p.local.files)) throw new Error("本地笔记已变化，未上传，请重新预览。");
+        if (!same(scanLocal().files, sourceLocal.files)) throw new Error("本地笔记已变化，未上传，请重新预览。");
         try {
           const result = await git.push({ ...await connection(), remote: "origin", ref: state.binding.branch, remoteRef: state.binding.branch, force: false });
           if (result.error || result.ok === false) throw new Error("push-rejected");
         } catch { throw new Error("上传未确认成功（可能是远端并发更新、分支保护或网络中断）。本地笔记未被覆盖，请重新预览。"); }
       }
-      applyFiles(pending, remote.data, p.local.files);
+      applyFiles(pending, { ...remote.data, ...p.writeData }, sourceLocal.files);
       if (!same(scanLocal().files, target)) throw new Error("同步落盘后检测到外部修改，已保留恢复记录，请重新预览。");
       const next = { ...state, base: target, lastSync: new Date().toISOString(), commit: head };
       atomicJson(stateFile, next);
@@ -464,7 +558,7 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
     return status();
   }
 
-  return { status, configure, preview, sync };
+  return { status, configure, preview, inspectConflict, resolveConflicts, sync };
 }
 
 module.exports = { createGitHubSync, planChanges, validatePath, validatePaths, LIMITS };

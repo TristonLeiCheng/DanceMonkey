@@ -1,7 +1,7 @@
 const { messages, taps } = require('../src/pet-dialogue');
-const ANIMALS = { human: '小人', cat: '猫咪', dog: '狗狗', rabbit: '兔子', fox: '狐狸', goose: '大鹅', cockroach: '蟑螂', mosquito: '蚊子', capybara: '水豚', frog: '青蛙', penguin: '企鹅', turtle: '乌龟', hedgehog: '刺猬', 'engineer-fox': '工程师' };
+const ANIMALS = { human: '小人', cat: '猫咪', dog: '狗狗', rabbit: '兔子', fox: '狐狸', goose: '大鹅', cockroach: '蟑螂', mosquito: '蚊子', capybara: '卡皮巴拉（水豚）', frog: '青蛙', penguin: '企鹅', turtle: '乌龟', hedgehog: '刺猬', 'engineer-fox': '工程师', otter: '抱贝壳的小海獭', 'red-panda': '小熊猫咖啡师', 'baby-dragon': '团子小龙', 'fluffy-rabbit': '绒绒兔', koala: '绒绒考拉', hamster: '糯米小仓鼠', seal: '奶团小海豹', liangzi: '大胃袋良子', 'realistic-cockroach': '仿真蟑螂', 'realistic-mosquito': '仿真蚊子' };
 const SIZES = [48, 68, 96, 128];
-const DEFAULTS = { petModeEnabled: false, petAnimal: 'human', petDisplaySize: 68, petMoodDecayEnabled: true,
+const DEFAULTS = { petModeEnabled: false, petAnimal: 'human', petDisplaySize: 68, petMoodDecayEnabled: true, petRoamingEnabled: true,
   petPreventSleepEnabled: true, todoReminderEnabled: false, todoReminderMinutes: 60 };
 function normalizeSettings(config = {}) {
   const result = {};
@@ -9,11 +9,15 @@ function normalizeSettings(config = {}) {
     const pascal = key[0].toUpperCase() + key.slice(1);
     result[key] = config[key] ?? config[pascal] ?? fallback;
   }
-  for (const key of ['petModeEnabled', 'petMoodDecayEnabled', 'petPreventSleepEnabled', 'todoReminderEnabled']) {
+  for (const key of ['petModeEnabled', 'petRoamingEnabled', 'petMoodDecayEnabled', 'petPreventSleepEnabled', 'todoReminderEnabled']) {
     result[key] = result[key] === true;
   }
   result.petAnimal = String(result.petAnimal).trim().toLowerCase();
-  if (!Object.hasOwn(ANIMALS, result.petAnimal)) result.petAnimal = 'cat';
+  // Retired skins use the default; unknown newer/custom skins still keep their IDs.
+  if (result.petAnimal === 'operator-rabbit') result.petAnimal = DEFAULTS.petAnimal;
+  // A newer/custom skin can be absent from this version. Keep its ID on disk;
+  // the renderer reports unavailable assets instead of silently selecting a cat.
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(result.petAnimal) || ['constructor', 'prototype'].includes(result.petAnimal)) result.petAnimal = 'cat';
   result.petDisplaySize = SIZES.includes(Number(result.petDisplaySize)) ? Number(result.petDisplaySize) : 68;
   const minutes = Number(result.todoReminderMinutes);
   result.todoReminderMinutes = Math.min(240, Math.max(45, Number.isFinite(minutes) ? Math.round(minutes) : 60));

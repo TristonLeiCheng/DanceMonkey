@@ -308,3 +308,88 @@ test("an atomic-write failure leaves the original file and removes temporary fil
   assert.equal(fs.readFileSync(filename, "utf8"), original);
   assert.equal(fs.readdirSync(path.dirname(filename)).some((name) => name.endsWith(".tmp")), false);
 });
+
+const demoTools = require("../src/persona-demos");
+
+test("six demos are opt-in, atomic, independently editable and never invoke AI on creation", async t => {
+  const { service, directory, calls, ai } = fixture(t);
+  assert.deepEqual(await service.list(), []);
+  const sameName = await service.create({ name: "孔子", description: "用户自己的同名人物" });
+  const original = await service.get(sameName.id);
+  for (const demo of demoTools.demos) {
+    const p = await service.create({ demoId: demo.id, name: "must not override template" });
+    assert.equal(p.name, demo.name); assert.equal(p.demoId, demo.id);
+    assert.equal(p.cardVersion, 1); assert.equal(p.cardSourceRevision, p.sourceRevision);
+    assert.deepEqual(p.card, demo.card); assert.equal(p.versions.length, 1);
+    assert.equal(p.sources.length, 1); assert.match(p.sources[0].title, /非本人原文/);
+    assert.equal(p.conversations.length, 1); assert.deepEqual(p.conversations[0].messages, []);
+    assert.match(p.card.boundaries, /并非本人、官方账号或背书/);
+    assert.match(p.card.boundaries, /真实引语/);
+    assert.equal(demo.starters.length, 2);
+    assert.equal(new Set(demo.starters).size, 2);
+  }
+  assert.equal(demoTools.demos.length, 6);
+  assert.equal(new Set(demoTools.demos.map(d => d.style)).size, 6);
+  assert.match(demoTools.get("laozi").bio, /争议/);
+  assert.doesNotMatch(demoTools.get("laozi").bio, /\d/);
+  assert.equal((await service.list()).length, 7); assert.equal(calls.length, 0);
+  assert.deepEqual(await service.get(sameName.id), original);
+  const reopened = createPersonaService({ userDataPath: directory, aiService: ai });
+  for (const demo of demoTools.demos) {
+    const p = await reopened.create({ demoId: demo.id });
+    assert.equal((await reopened.list()).filter(item => item.demoId === demo.id).length, 1);
+    assert.deepEqual(p.card, demo.card);
+  }
+  assert.equal(calls.length, 0);
+});
+
+test("demo re-entry serializes concurrent clicks and preserves customized cards, sources and history", async t => {
+  const { service, calls } = fixture(t, async () => "模拟分析：先验证最小假设。");
+  const created = await Promise.all(Array.from({ length: 12 }, () => service.create({ demoId: "musk" })));
+  assert.equal(new Set(created.map(p => p.id)).size, 1);
+  const id = created[0].id;
+  await service.updateProfile({ id, name: "我的工程助手", description: "自定义简介" });
+  let p = await service.addSources({ id, sources: [{ title: "自定义", text: "先做一个小实验。" }] });
+  p = await service.saveCard({ id, card: card("自定义"), baseVersion: p.cardVersion, sourceRevision: p.sourceRevision });
+  await service.chat({ id, message: "给个建议", requestId: "demo-chat" });
+  const before = await service.get(id);
+  assert.deepEqual(await service.create({ demoId: "musk" }), before);
+  assert.equal((await service.list()).length, 1);
+  assert.match(calls[0].systemPrompt, /不是真实人格复刻/);
+  assert.match(calls[0].systemPrompt, /实时信息/);
+  assert.match(calls[0].systemPrompt, /不得编造或冒充真实引语/);
+  await service.remove({ id });
+  assert.deepEqual(await service.list(), []);
+  const recreated = await service.create({ demoId: "musk" });
+  assert.notEqual(recreated.id, id); assert.equal(recreated.cardVersion, 1);
+});
+
+test("unknown demo ids fail without writes and missing/corrupt profiles are not silently replaced", async t => {
+  const { service, directory, calls } = fixture(t);
+  for (const demoId of ["unknown", "../musk", null, {}, 1, ""]) {
+    await assert.rejects(service.create({ demoId }), /名人示范不存在/);
+  }
+  assert.deepEqual(await service.list(), []);
+  const p = await service.create({ demoId: "jobs" });
+  const filename = path.join(directory, "personas", p.id + ".json");
+  fs.writeFileSync(filename, "corrupt fixture");
+  await assert.rejects(service.create({ demoId: "jobs" }), /损坏/);
+  assert.equal(fs.readFileSync(filename, "utf8"), "corrupt fixture");
+  assert.equal(fs.readdirSync(path.dirname(filename)).length, 1);
+  assert.equal(calls.length, 0);
+});
+
+test("each demo chats only with its own editorial context and retains simulation rules after edits", async t => {
+  const { service, calls } = fixture(t, async () => "这是模拟分析，并非真实引语。");
+  for (const demo of demoTools.demos) {
+    const p = await service.create({ demoId: demo.id });
+    const result = await service.chat({ id: p.id, message: demo.starters[0] });
+    const context = JSON.parse(calls.at(-1).messages.at(-1).content);
+    assert.equal(context.person.name, demo.name);
+    assert.deepEqual(context.card, demo.card);
+    assert.equal(context.cardMayBeOutdated, false);
+    assert.ok(context.retrievedEvidence.every(e => e.title.includes(demo.name)));
+    assert.equal(result.persona.conversations[0].messages.length, 2);
+    assert.match(calls.at(-1).systemPrompt, /模拟分析/);
+  }
+});

@@ -28,7 +28,7 @@ function editorContext(overrides = {}) {
   });
   vm.runInContext(`
     let tree = [{type:'folder',path:'Shared',children:[]},{type:'file',path:'Shared/a.md'}];
-    let vaultRoot = '/A'; let vaults = []; let vaultSwitching = false; let syncPaused = false;
+    let vaultRoot = '/A'; let vaults = []; let vaultSwitching = false; let syncPaused = false; let noteNavigation = 0;
     let activePath = 'same.md'; let selectedPath = 'Shared';
     let content = 'A content'; let savedContent = 'A content';
     let expanded = new Set(); let expandedRestored = true;

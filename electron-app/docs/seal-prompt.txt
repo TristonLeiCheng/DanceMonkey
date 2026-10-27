@@ -1,0 +1,16 @@
+Use case: stylized-concept.
+Asset type: production transparent PNG desktop pet animation atlas.
+Primary request: a sweet round BABY HARP SEAL called Naituan, a soft milk-white mochi-like seal pup with fluffy silky ivory fur, big glossy black bead eyes, tiny charcoal nose, soft whisker dots, short fine whiskers, subtle pale pink cheeks, tiny front flippers and two little rear flippers forming a rounded split tail. Cream-white belly with faint cool-pearl shading along the back. Compact horizontal oval body, plump round face, almost no neck, extremely soft cuddly volume. Natural seal anatomy: no legs, feet, hands, external ears or human body. All 36 cells unmistakably the SAME adorable baby seal. No clothes, hats, props, fish, ice or water.
+Technical layout: one production transparent PNG atlas, desired 1024x2304 pixels. EXACTLY FOUR columns and NINE rows, EXACTLY 36 separate complete full-body poses. Invisible regular square-cell grid. One character per cell, consistently centered and same scale in all 36 poses. Each pose stays within its OWN cell with at least 24 pixels of truly transparent margin on all four sides. Clear transparent gutters separate every row and every column. All ears, whiskers, tail, paws and props fully inside cells. True transparent ALPHA background, not an opaque checkerboard. No floor, shadows, cast shadows, halos, text, labels, title, borders, grid lines or watermark.
+Rendering style: polished soft 3D animated plush desktop companion, exquisite natural fluffy fur, gently rounded sculpted volume, warm diffuse lighting, clean transparent edges, a readable cute silhouette and face at 68 pixels. Keep identical species, proportions, face, fur color, camera angle and lighting across all 36 cells. No human anatomy, no clothing, no accessories, no extra animals.
+Rows from top to bottom, each four sequential phases left to right:
+1 IDLE: front-facing seal sits low with belly visible and flippers resting at sides, eyes open / half blink / closed blink / open, gentle breathing.
+2 RIGHT: full side profile facing RIGHT in ALL FOUR cells, four belly-scooting locomotion phases: reaches front flipper / gently pulls body / tiny tail push / settles, body stays centered. NO walking legs.
+3 LEFT: full side profile facing LEFT in ALL FOUR cells, matching four belly-scooting phases.
+4 WAVE: front-facing lifts one short flipper / waves outward / waves inward with warm smile / lowers flipper.
+5 JUMP: front-facing crouches lower / small rising playful bounce / airborne with flippers spread / settles on belly, same body scale, all parts within cell.
+6 SAD: front-facing head droops / looks down / gentle sigh eyes closed / looks up softly. No tears or symbols.
+7 REST: lies flat with chin on flippers / eyes sleepy / curled slightly resting / sleeping with tail tucked, no icons.
+8 BELLY PAT: front-facing upright plump sitting seal, taps round belly with left flipper / both flippers on belly / taps with right flipper / gentle contented belly pat. Natural seal flippers, no arms or hands.
+9 SHY FACE: front-facing raises both short flippers toward cheeks / flippers gently cover cheeks and lower part of face / peeks with head tilted / lowers flippers with sweet smile. Keep eyes and seal identity readable. No props.
+The usable image itself only. Strictly nine well-separated rows and four complete seals per row.

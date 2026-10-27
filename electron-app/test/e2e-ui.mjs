@@ -321,6 +321,7 @@ try {
   const otherRoot = vaultList.vaults.find((vault) => vault.root !== originalRoot)?.root;
   assert.ok(otherRoot, "the isolated fixture must register a second vault");
   const notePath = "工作资料/会议记录/本周计划.md";
+  await evaluate(`document.querySelector(${JSON.stringify(`.tree-row[data-path="${notePath}"] .tree-name`)}).click()`);
   await evaluate(`window.lumen.setState({ notes: [{ id: 'vault-a-quick-note', notebookId: 'inbox', title: 'A 库便签', body: '只属于 A 库', updatedAt: Date.now() }], activeNoteId: 'vault-a-quick-note' })`);
   await waitFor(() => evaluate(`document.querySelector('.ws-doc-name')?.textContent === '本周计划.md' && Boolean(document.querySelector('.tree-row[data-path="Journal"]'))`), { process: electron });
   const originalExpanded = await evaluate(`localStorage.getItem(window.DMTreeState.storageKey(${JSON.stringify(originalRoot)}))`);

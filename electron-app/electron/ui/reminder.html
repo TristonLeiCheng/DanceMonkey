@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+<title>DanceMonkey 提醒</title>
+<link rel="stylesheet" href="reminder.css">
+</head>
+<body>
+<main class="card" aria-live="polite">
+  <div class="island-compact" aria-hidden="true"><span class="compact-icon"></span><span class="compact-title"></span><span class="compact-signal"><i></i><i></i><i></i></span></div>
+  <button class="close" aria-label="稍后提醒">×</button>
+  <button class="collapse" aria-label="收起提醒"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m5 12 5-5 5 5"/></svg></button>
+  <div class="header">
+    <div class="icon" aria-hidden="true"></div>
+    <div class="heading"><div class="eyebrow">DANCEMONKEY · 提醒</div><h1></h1><span class="island-hint">点击展开提醒</span></div>
+    <span class="signal" aria-hidden="true"><i></i><i></i><i></i></span>
+  </div>
+  <p></p>
+  <div class="actions"><button class="primary" data-action="done"></button><button data-action="snooze"></button></div>
+  <div class="error" role="alert"></div>
+</main>
+<script src="reminder.js"></script>
+</body>
+</html>

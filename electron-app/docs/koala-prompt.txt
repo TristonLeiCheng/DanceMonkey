@@ -1,0 +1,15 @@
+Use case: stylized-concept.
+Asset type: production transparent PNG animation sprite atlas for a desktop pet application.
+Primary request: an irresistibly cute fluffy baby KOALA, matching a polished soft 3D animated toy companion aesthetic. Round oversized fluffy grey ears with cream inner fur, silver grey plush fur, cream belly and chin, large glossy dark warm brown eyes, a distinctive oval charcoal koala nose, tiny rounded paws, soft rosy cheeks. Oversized head and compact chubby baby body. No clothes. Gentle friendly personality. A small eucalyptus sprig only in eating/curious poses.
+Composition: EXACTLY 4 columns by 9 rows, 36 separate full-body poses. Portrait image approximately 1024x2304. Strict uniform invisible grid. Each pose centered within its own square cell, consistent character scale across ALL 36 cells. Every koala must be fully inside its cell with at least 24 pixels fully TRANSPARENT margin from ALL cell edges. Wide transparent gaps between every row and column. No overlapping neighboring poses, no clipped ears or feet, no floor or cast shadow, no decorative elements, NO text, labels, borders, grid lines or watermarks.
+Frames read left to right as four sequential animation phases per row. Keep species, anatomy, face, lighting and proportions perfectly consistent:
+Row 1 idle: front-facing sitting upright, arms down, eyes open / half blink / closed blink / open; gentle breathing.
+Row 2 walk right: full profile facing RIGHT in all four cells, alternating short foot steps in four clear walk phases. Centered body.
+Row 3 walk left: full profile facing LEFT in all four cells, corresponding four walking phases.
+Row 4 wave: front-facing raises one paw / waves outward / waves inward / lowers paw, happy welcoming expression.
+Row 5 jump: crouch / rising with paws up / airborne happy / landed. Keep scale consistent, all poses stay within cell.
+Row 6 disappointed: ears droop / looks down / eyes closed sigh / looks up softly, no tears.
+Row 7 sleepy: sits curled / yawns / eyes drooping / sleeping curled with paws tucked, no sleep icons.
+Row 8 eating: seated, holds the SAME small eucalyptus sprig in both paws in all four cells, lifts leaf / nibbles / chews / contented chewing. Leaves fit well inside cell.
+Row 9 curious: seated holding the SAME eucalyptus sprig near chest, examines leaf / sniffs leaf / tilts head / looks up, calm inquisitive expression.
+Rendering: exquisite soft plush fur detail, clean transparent edges, smooth sculpted 3D volume, warm diffuse studio light, readable at 68 pixel desktop size. GENUINE TRANSPARENT ALPHA BACKGROUND across entire sheet. No opaque backdrop or checkerboard painting. Only the 36 koalas and their small eating props.

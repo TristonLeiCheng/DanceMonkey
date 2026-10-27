@@ -1,4 +1,7 @@
-const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerSaveBlocker, safeStorage, screen, shell, Tray } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, powerSaveBlocker, safeStorage, screen, shell, Tray } = require("electron");
+const { createReminderService } = require("./reminders");
+const { createReminderPopup } = require("./reminder-popup");
+const { registerReminderIpc } = require("./reminder-ipc");
 const { createDesktopPet } = require("./desktop-pet");
 const { registerGitHubSync } = require("./github-ipc");
 const { fetchWithSystemProxy } = require("./system-proxy");
@@ -100,6 +103,8 @@ let appUpdateController;
 let quitController;
 let desktopIntegration;
 let desktopPet;
+let reminderService;
+let reminderPopup;
 let screenshotController;
 let appSettings;
 let proxyEnforcement;
@@ -385,18 +390,45 @@ app.whenReady().then(() => {
   }
   desktopPet = createDesktopPet({
     BrowserWindow, screen, Menu, powerSaveBlocker, configStore: legacyConfig,
+    desktopIcons: require('./desktop-icons').createDesktopIconReader(),
     getTasks: () => githubNotes?.busy ? null : zenTaskStore.load().tasks,
     openWorkspace,
     captureQuick: () => { void screenshotController.captureQuick(); },
     captureRegion: () => { void screenshotController.beginRegionCapture(); },
     requestQuit: () => { void quitController?.request(); },
     onSettingsChanged: broadcastPetSettings,
+    onReminderAction: (id, action) => { reminderService.act(id, action); reminderPopup.dismiss(id); },
+    onReminderFallback: (reminder, options) => reminderPopup.show(reminder, options),
     onError: (error) => dialog.showErrorBox("桌面宠物设置未能保存", error.message),
   });
   desktopPet.registerIpc(ipcMain);
+  reminderPopup = createReminderPopup({ BrowserWindow, screen, ipcMain,
+    onAction: (id, action) => { reminderService.act(id, action); desktopPet.dismissReminder(id); },
+    onError: error => dialog.showErrorBox("提醒未能显示", error.message),
+  });
+  try {
+    reminderService = createReminderService({ directory: path.dirname(legacyConfig.file), configStore: legacyConfig,
+      getIdleSeconds: () => powerMonitor.getSystemIdleTime(),
+      onDue: (reminder, options) => {
+        if (reminder.notifyStyle === "PetBubble" && desktopPet.notifyReminder(reminder, options)) return;
+        reminderPopup.show(reminder, options);
+      },
+      onChange: () => {
+        for (const win of [overlay, workspaceWindow]) {
+          if (win && !win.isDestroyed()) win.webContents.send("reminders:changed");
+        }
+      },
+      onError: error => console.error("reminders:", error),
+    });
+    registerReminderIpc({ ipcMain, service: reminderService, popup: reminderPopup, pet: desktopPet, dialog, BrowserWindow, trusted: githubNotes.trusted });
+    reminderService.start();
+  } catch (error) {
+    dialog.showErrorBox("定时提醒未能加载", error.message);
+  }
   appUpdateService = platform.createAppUpdateService({
     getExecutablePath: () => process.execPath,
     getUserDataDirectory: () => app.getPath("userData"),
+    getPetSettings: () => appSettings.get(),
     getInstallDirectory: () =>
       app.isPackaged ? path.dirname(process.execPath) : path.resolve(app.getAppPath()),
     getCurrentVersion: () => {
@@ -487,6 +519,7 @@ app.whenReady().then(() => {
     stopBackground: async () => {
       appUpdateController.stop();
       folderSyncScheduler.stop();
+      reminderService?.stop();
       for (const controller of syncAbortControllers.values()) controller.abort();
       aiService.cancelAll();
       personaService.cancelAll();
@@ -500,8 +533,9 @@ app.whenReady().then(() => {
       githubNotes.resume();
       appUpdateController.start();
       folderSyncScheduler.start();
+      reminderService?.start();
     },
-    cleanup: async () => { await proxyEnforcement.stop(); desktopPet.dispose(); globalShortcut.unregisterAll(); },
+    cleanup: async () => { await proxyEnforcement.stop(); reminderService?.stop(); reminderPopup?.dispose(); desktopPet.dispose(); globalShortcut.unregisterAll(); },
     quit: () => app.quit(),
     onError: (message) => dialog.showErrorBox("未能退出软件", message),
   });
@@ -588,6 +622,13 @@ app.whenReady().then(() => {
   ipcMain.handle("workspace:createFile", (_e, parent, name, generation) => {
     githubNotes.assertWritable(generation);
     const result = workspaceStore.createFile(parent, name);
+    refreshQuickNotes();
+    return result;
+  });
+  ipcMain.handle("workspace:createNote", (_e, input, generation) => {
+    githubNotes.assertWritable(generation);
+    if (input?.root !== workspaceStore.root) throw new Error("笔记库已变化，请返回主页重试。");
+    const result = workspaceStore.createNote(input);
     refreshQuickNotes();
     return result;
   });
@@ -859,6 +900,7 @@ app.whenReady().then(() => {
 
 app.on("before-quit", (event) => quitController?.beforeQuit(event));
 app.on("will-quit", () => {
+  reminderService?.stop();
   desktopPet?.dispose();
   desktopIntegration?.dispose();
   globalShortcut.unregisterAll();

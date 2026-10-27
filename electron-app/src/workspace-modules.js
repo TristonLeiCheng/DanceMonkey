@@ -55,6 +55,7 @@
     let settingsMessage = "";
     let settingsError = "";
     let settingsTab = "shortcuts";
+    let petPicker = null;
     const settingsTabs = [
       { id: "shortcuts", label: "快捷键", description: "设置唤出面板与截图的全局快捷键。" },
       { id: "pet", label: "桌面宠物", description: "选择宠物外形，调整互动、任务提醒与唤醒行为。" },
@@ -63,16 +64,21 @@
       { id: "about", label: "关于与更新", description: "查看当前版本，检查并安装应用更新。" },
     ];
     const editableSettingsTab = (id) => ["shortcuts", "pet", "proxy"].includes(id);
-    const petAnimals = { human: "小人", cat: "猫咪", dog: "狗狗", rabbit: "兔子", fox: "狐狸", goose: "大鹅", cockroach: "蟑螂", mosquito: "蚊子", capybara: "水豚", frog: "青蛙", penguin: "企鹅", turtle: "乌龟", hedgehog: "刺猬", "engineer-fox": "工程师" };
+    const petAnimals = { human: "小人", cat: "猫咪", dog: "狗狗", rabbit: "兔子", fox: "狐狸", goose: "大鹅", cockroach: "蟑螂", mosquito: "蚊子", capybara: "卡皮巴拉（水豚）", frog: "青蛙", penguin: "企鹅", turtle: "乌龟", hedgehog: "刺猬", "engineer-fox": "工程师", otter: "抱贝壳的小海獭", "red-panda": "小熊猫咖啡师", "baby-dragon": "团子小龙", "fluffy-rabbit": "绒绒兔", koala: "绒绒考拉", hamster: "糯米小仓鼠", seal: "奶团小海豹", liangzi: "大胃袋良子", "realistic-cockroach": "仿真蟑螂", "realistic-mosquito": "仿真蚊子" };
     api.settings?.onPetChanged?.((settings) => {
-      const keys = ["petModeEnabled", "petAnimal", "petDisplaySize", "petMoodDecayEnabled", "petPreventSleepEnabled", "todoReminderEnabled", "todoReminderMinutes"];
+      const keys = ["petModeEnabled", "petAnimal", "petDisplaySize", "petRoamingEnabled", "petMoodDecayEnabled", "petPreventSleepEnabled", "todoReminderEnabled", "todoReminderMinutes"];
       for (const key of keys) {
         if (settings[key] === undefined) continue;
         appSettings = { ...(appSettings || {}), [key]: settings[key] };
         const input = document.querySelector(`form[data-form="app-settings"] [name="${key}"]`);
+        if (key === 'petAnimal' && input && ![...input.options].some(option => option.value === settings[key])) {
+          const option = document.createElement('option');
+          option.value = settings[key]; option.textContent = '已保存的宠物（当前版本暂不支持）'; input.append(option);
+        }
         if (input?.type === "checkbox") input.checked = settings[key];
         else if (input) input.value = settings[key];
       }
+      petPicker?.sync();
     });
 
     const githubUI = window.DMGitHubSyncUI?.create(api, {
@@ -82,6 +88,7 @@
       esc, attr, rerender,
       openSettings: () => handleAction("ai-settings"),
     });
+    const remindersUI = window.DMRemindersUI?.create(api, { esc, attr, rerender });
     const projectManager = window.DMProjectManager.create({
       api, esc, attr, rerender,
       getState: () => ({ tasks, projects }),
@@ -189,7 +196,7 @@
 
     async function loadAll() {
       await personaManager?.load();
-      await Promise.all([loadZen(), loadLinks(), loadSync(), loadAi(), loadAppSettings()]);
+      await Promise.all([loadZen(), loadLinks(), loadSync(), loadAi(), loadAppSettings(), remindersUI?.load()]);
       if (!unsubscribeSyncProgress && api.folderSync?.onProgress) {
         unsubscribeSyncProgress = api.folderSync.onProgress((payload) => {
           if (payload?.profileId && payload.profileId !== syncSelectedId) return;
@@ -578,6 +585,8 @@
     function renderAppSettings() {
       const s = appSettings || {};
       const mode = s.proxyForceMode === "pac" ? "pac" : "manual";
+      const savedAnimal = s.petAnimal || "human";
+      const unavailableAnimal = Object.hasOwn(petAnimals, savedAnimal) ? "" : `<option value="${attr(savedAnimal)}" selected>已保存的宠物（当前版本暂不支持）</option>`;
       const current = settingsTabs.find((tab) => tab.id === settingsTab) || settingsTabs[0];
       const panel = (id) => `id="settings-panel-${id}" role="tabpanel" aria-labelledby="settings-tab-${id}" data-settings-panel="${id}" tabindex="0" ${settingsTab === id ? "" : "hidden"}`;
       return `<section class="module-page ws-settings-page">
@@ -600,10 +609,12 @@
             <h2>桌面宠物</h2>
             <p class="ws-settings-desc">单击互动，双击打开主界面，拖动调整位置，右键切换外形或使用快捷功能。保存后立即生效，也可从托盘开启。</p>
             <label class="ws-settings-check"><input type="checkbox" name="petModeEnabled" ${s.petModeEnabled ? "checked" : ""} /><span>开启桌面宠物</span></label>
+            <div data-pet-picker></div>
             <div class="form-columns">
-              <label>宠物外形<select name="petAnimal">${Object.entries(petAnimals).map(([id, name]) => `<option value="${id}" ${id === (s.petAnimal || "human") ? "selected" : ""}>${name}</option>`).join("")}</select></label>
+              <label hidden>宠物外形<select name="petAnimal" tabindex="-1">${unavailableAnimal}${Object.entries(petAnimals).map(([id, name]) => `<option value="${id}" ${id === (s.petAnimal || "human") ? "selected" : ""}>${name}</option>`).join("")}</select></label>
               <label>显示大小<select name="petDisplaySize">${[48, 68, 96, 128].map((size) => `<option value="${size}" ${size === (s.petDisplaySize || 68) ? "selected" : ""}>${size} px</option>`).join("")}</select></label>
             </div>
+            <label class="ws-settings-check"><input type="checkbox" name="petRoamingEnabled" ${s.petRoamingEnabled !== false ? "checked" : ""} /><span>仿真昆虫自由爬行 / 飞行（鼠标靠近时暂停）</span></label>
             <label class="ws-settings-check"><input type="checkbox" name="petMoodDecayEnabled" ${s.petMoodDecayEnabled !== false ? "checked" : ""} /><span>随互动和陪伴时间变化心情</span></label>
             <label class="ws-settings-check"><input type="checkbox" name="petPreventSleepEnabled" ${s.petPreventSleepEnabled !== false ? "checked" : ""} /><span>宠物开启期间保持电脑唤醒</span></label>
             <label class="ws-settings-check"><input type="checkbox" name="todoReminderEnabled" ${s.todoReminderEnabled ? "checked" : ""} /><span>通过宠物气泡提醒待办任务</span></label>
@@ -768,6 +779,7 @@
     }
 
     function render(section) {
+      if (section === "reminders") return remindersUI?.render() || '<div class="module-empty">提醒模块未加载。</div>';
       if (section !== "settings") githubUI?.pause();
       if (section === "personas") return personaManager?.render() || '<div class="module-empty">请在桌面版中使用人物分身。</div>';
       if (section === "ai") return renderAi();
@@ -794,8 +806,9 @@
       return {
         ...(appSettings || {}),
         petModeEnabled: Boolean(form.querySelector('[name="petModeEnabled"]')?.checked),
-        petAnimal: values.petAnimal || "human",
+        petAnimal: values.petAnimal || appSettings?.petAnimal || "human",
         petDisplaySize: Number(values.petDisplaySize) || 68,
+        petRoamingEnabled: Boolean(form.querySelector('[name="petRoamingEnabled"]')?.checked),
         petMoodDecayEnabled: Boolean(form.querySelector('[name="petMoodDecayEnabled"]')?.checked),
         petPreventSleepEnabled: Boolean(form.querySelector('[name="petPreventSleepEnabled"]')?.checked),
         todoReminderEnabled: Boolean(form.querySelector('[name="todoReminderEnabled"]')?.checked),
@@ -841,7 +854,7 @@
     }
 
     async function handleAction(action, id, setSection) {
-      if (await githubUI?.handleAction(action)) return true;
+      if (await githubUI?.handleAction(action, id)) return true;
       if (await projectManager.handleAction(action, id)) return true;
       if (action === "settings-reload") {
         settingsError = "";
@@ -1418,6 +1431,7 @@
     }
 
     function closeModal() {
+      if (remindersUI?.closeModal()) return true;
       if (!modal && projectManager.closeModal()) return true;
       if (!modal) return false;
       modal = null;
@@ -1440,6 +1454,7 @@
     }
 
     function bindSearch(scope) {
+      remindersUI?.bind(scope);
       personaManager?.bind(scope);
       projectManager.bind(scope);
       const taskProject = scope.querySelector('form[data-form="task"] select[name="projectId"]');
@@ -1465,11 +1480,17 @@
     }
 
     function bindSettings(scope) {
+      petPicker?.destroy(); petPicker = null;
+      const pickerRoot = scope.querySelector('[data-pet-picker]');
+      if (pickerRoot && window.DMPetPicker) petPicker = window.DMPetPicker.mount(pickerRoot, {
+        animals: petAnimals, input: scope.querySelector('[name="petAnimal"]'), active: settingsTab === 'pet',
+      });
       const tabs = [...scope.querySelectorAll("[data-settings-tab]")];
       const select = (id, focus = false) => {
         const current = settingsTabs.find((tab) => tab.id === id);
         if (!current) return;
         settingsTab = id;
+        petPicker?.setActive(id === 'pet');
         for (const tab of tabs) {
           const selected = tab.dataset.settingsTab === id;
           tab.setAttribute("aria-selected", String(selected));
@@ -1578,7 +1599,7 @@
       await Promise.all([loadZen(), githubUI?.load()]);
     }
 
-    return { pauseGitHub: () => githubUI?.pause(), prepareSync, reloadSyncedTasks: loadZen, reloadVault, loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id) };
+    return { pauseGitHub: () => githubUI?.pause(), disposePreviews: () => { petPicker?.destroy(); petPicker = null; }, prepareSync, reloadSyncedTasks: loadZen, reloadVault, loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id) };
   }
 
   window.DMWorkspaceModules = { create };

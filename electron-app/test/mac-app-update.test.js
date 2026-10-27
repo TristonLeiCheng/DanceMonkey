@@ -211,3 +211,16 @@ macTest("startup acknowledgement requires the expected version and a sibling upd
   createMacAppUpdateService(f.options).confirmStartup();
   assert.equal(fs.existsSync(path.join(outside, "ready")), false);
 });
+
+macTest('signed update missing the saved pet is rejected without touching application or preferences', async t=>{
+  const f=fixture(t);let animal='otter';
+  const service=createMacAppUpdateService({...f.options,getPetSettings:()=>({petAnimal:animal})});
+  await assert.rejects(service.checkAndPrepare(),{code:'DM_PET_UPDATE_UNAVAILABLE'});
+  assert.equal(version(f.installed),'3.5.0');assert.equal(fs.readFileSync(f.dataFile,'utf8'),'keep my notes');
+  animal=null;
+  const ready=await service.checkAndPrepare();
+  t.after(()=>fs.rmSync(ready.launchInfo.stagingRoot,{recursive:true,force:true}));
+  animal='fluffy-rabbit';
+  await assert.rejects(service.launchUpdaterAndRestart(ready.launchInfo),{code:'DM_PET_UPDATE_UNAVAILABLE'});
+  assert.equal(version(f.installed),'3.5.0');assert.equal(fs.existsSync(path.join(f.userData,'mac-update-pending.json')),false);
+});

@@ -18,6 +18,18 @@
 .ws-github-sync .github-preview ul { padding-left: 20px; font-size: 12px; line-height: 1.7; }
 .ws-github-sync .github-preview li { overflow-wrap: anywhere; }
 .ws-github-sync .github-preview p { font-size: 12px; line-height: 1.7; }
+.ws-github-sync .github-preview:has(.github-conflicts) { max-height: 620px; }
+.ws-github-sync .github-conflict { border-top: 1px solid var(--ws-line, currentColor); margin-top: 16px; padding: 14px 0; }
+.ws-github-sync .github-conflict h4 { margin: 0 0 8px; font-size: 13px; }
+.ws-github-sync .github-conflict button[aria-pressed="true"] { border-color: var(--ws-accent, #5285d6); background: var(--ws-accent-bg, #5285d626); box-shadow: inset 0 0 0 1px var(--ws-accent, #5285d6); }
+.ws-github-sync .github-choice { font-weight: 600; }
+.ws-github-sync .github-resolve-bar { position: sticky; bottom: 0; padding: 12px 0; margin-bottom: 0; background: rgb(var(--ws-surface, 24 25 28)); border-top: 1px solid var(--ws-line, currentColor); font-size: 12px; }
+.ws-github-sync .github-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.ws-github-sync .github-comparison section { min-width: 0; }
+.ws-github-sync .github-comparison h5 { margin: 0 0 8px; }
+.ws-github-sync .github-comparison img { display: block; max-width: 100%; max-height: 240px; object-fit: contain; }
+.ws-github-sync .github-comparison pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; border: 1px solid var(--ws-line, currentColor); border-radius: 6px; font: 12px/1.7 monospace; user-select: text; }
+@media (max-width: 700px) { .ws-github-sync .github-comparison { grid-template-columns: 1fr; } }
 .ws-github-sync .ws-settings-actions { flex-wrap: wrap; }
 .ws-github-sync button:disabled { opacity: .45; cursor: not-allowed; }
 .ws-github-sync .github-setup-dialog { width: min(480px, calc(100vw - 64px)); padding: 24px; border: 1px solid var(--ws-line); border-radius: 12px; background: rgb(var(--ws-surface)); color: var(--ws-text); box-shadow: 0 18px 60px #0006; }

@@ -405,3 +405,159 @@ test("oversized files and symlink paths stop before upload", async (t) => {
     await assert.rejects(a.service.preview(), /符号链接/);
   }
 });
+
+for (const strategy of ["local", "remote", "both", "combine"]) {
+  test(`click resolution ${strategy} stages without writes then converges both devices`, async (t) => {
+    const f = setup(t), a = f.client("a"), b = f.client("b");
+    a.put("Notes/note.md", "base"); await f.run(a); await f.run(b);
+    a.put("Notes/note.md", "远端内容"); b.put("Notes/note.md", "本地内容"); await f.run(a);
+    const p = await b.service.preview();
+    assert.deepEqual(p.conflictDetails[0].options, ["local", "remote", "both", "combine"]);
+    const detail = b.service.inspectConflict({ previewId: p.id, path: "Notes/note.md" });
+    assert.equal(detail.local.text, "本地内容"); assert.equal(detail.remote.text, "远端内容");
+    assert.throws(() => b.service.inspectConflict({ previewId: p.id, path: "../private" }), /冲突列表/);
+    const head = f.command(["--git-dir", f.remote, "rev-parse", "main"]).toString();
+    const resolved = await b.service.resolveConflicts({ previewId: p.id, resolutions: [{ path: "Notes/note.md", strategy }] });
+    assert.equal(b.read("Notes/note.md"), "本地内容");
+    assert.equal(f.command(["--git-dir", f.remote, "rev-parse", "main"]).toString(), head);
+    assert.notEqual(p.id, resolved.id); assert.deepEqual(resolved.conflicts, []);
+    const result = await b.service.sync({ previewId: resolved.id }); await f.run(a);
+    const expected = strategy === "remote" ? "远端内容" : strategy === "combine" ? "本地内容\n\n---\n\n## 远端版本（拼接保留）\n\n远端内容" : "本地内容";
+    assert.equal(a.read("Notes/note.md"), expected); assert.equal(b.read("Notes/note.md"), expected);
+    if (strategy === "both") {
+      const copy = resolved.resolutions[0].copyPath;
+      assert.match(copy, /^Notes\/note\.remote-[a-f0-9]{8}\.md$/);
+      assert.equal(a.read(copy), "远端内容"); assert.equal(b.read(copy), "远端内容");
+    }
+    assert.equal(fs.readFileSync(path.join(result.backupDirectory, "local/Notes/note.md"), "utf8"), "本地内容");
+    assert.equal(fs.readFileSync(path.join(p.conflictDirectory, "remote/Notes/note.md"), "utf8"), "远端内容");
+    assert.deepEqual((await b.service.preview()).counts, { uploads: 0, downloads: 0, deletions: 0, conflicts: 0 });
+  });
+}
+
+for (const deletedSide of ["local", "remote"]) {
+  for (const strategy of ["local", "remote", "both"]) {
+    test(`click resolution ${strategy} handles ${deletedSide} deletion versus modification`, async (t) => {
+      const f = setup(t), a = f.client("a"), b = f.client("b");
+      a.put("note.md", "base"); await f.run(a); await f.run(b);
+      if (deletedSide === "local") { b.remove("note.md"); a.put("note.md", "new"); }
+      else { a.remove("note.md"); b.put("note.md", "new"); }
+      await f.run(a);
+      const p = await b.service.preview();
+      assert.equal(p.conflictDetails[0][`${deletedSide}Deleted`], true);
+      assert.equal(p.conflictDetails[0].options.includes("combine"), false);
+      const resolved = await b.service.resolveConflicts({ previewId: p.id, resolutions: [{ path: "note.md", strategy }] });
+      await b.service.sync({ previewId: resolved.id }); await f.run(a);
+      for (const client of [a, b]) {
+        if (strategy === deletedSide) assert.equal(fs.existsSync(path.join(client.root, "note.md")), false);
+        else assert.equal(client.read("note.md"), "new");
+      }
+    });
+  }
+}
+
+test("resolution validates all choices, limits text previews and preserves binary bytes", async (t) => {
+  const f = setup(t), a = f.client("a"), b = f.client("b");
+  a.put("long.md", "r".repeat(20000)); b.put("long.md", "l".repeat(20000));
+  const remoteImage = Buffer.from([0, 255, 1, 128]), localImage = Buffer.from([255, 0, 7]);
+  a.put("image.png", remoteImage); b.put("image.png", localImage); await f.run(a);
+  const p = await b.service.preview();
+  const long = b.service.inspectConflict({ previewId: p.id, path: "long.md" });
+  assert.equal(long.remote.text.length, 16000); assert.equal(long.remote.truncated, true);
+  const image = b.service.inspectConflict({ previewId: p.id, path: "image.png" });
+  assert.equal(image.local.text, null); assert.equal(image.local.image, `data:image/png;base64,${localImage.toString("base64")}`);
+  for (const resolutions of [[], [{ path: "long.md", strategy: "local" }],
+    [{ path: "long.md", strategy: "local" }, { path: "long.md", strategy: "remote" }],
+    [{ path: "../secret", strategy: "local" }, { path: "image.png", strategy: "remote" }],
+    [{ path: "long.md", strategy: "local" }, { path: "image.png", strategy: "combine" }]]) {
+    await assert.rejects(b.service.resolveConflicts({ previewId: p.id, resolutions }), /选择|无效/);
+  }
+  const resolved = await b.service.resolveConflicts({ previewId: p.id,
+    resolutions: [{ path: "long.md", strategy: "combine" }, { path: "image.png", strategy: "both" }] });
+  await b.service.sync({ previewId: resolved.id }); await f.run(a);
+  assert.ok(b.read("long.md").includes("r".repeat(20000)));
+  const copy = resolved.resolutions.find((item) => item.path === "image.png").copyPath;
+  assert.deepEqual(fs.readFileSync(path.join(b.root, copy)), remoteImage);
+  assert.deepEqual(fs.readFileSync(path.join(a.root, "image.png")), localImage);
+});
+
+test("task choices reject broken associations and allow correcting choices without editing files", async (t) => {
+  const f = setup(t), a = f.client("a"), b = f.client("b");
+  for (const [client, id] of [[a, "a"], [b, "b"]]) {
+    client.put(TASK_FILE, JSON.stringify([{ Id: `task-${id}`, ProjectId: id }]));
+    client.put(PROJECT_FILE, JSON.stringify([{ Id: id }]));
+  }
+  await f.run(a); const p = await b.service.preview();
+  for (const detail of p.conflictDetails) assert.deepEqual(detail.options, ["local", "remote"]);
+  await assert.rejects(b.service.resolveConflicts({ previewId: p.id, resolutions: [
+    { path: TASK_FILE, strategy: "local" }, { path: PROJECT_FILE, strategy: "remote" },
+  ] }), /悬空引用/);
+  await assert.rejects(b.service.resolveConflicts({ previewId: p.id,
+    resolutions: p.conflicts.map((file) => ({ path: file, strategy: "both" })) }), /无效/);
+  const resolved = await b.service.resolveConflicts({ previewId: p.id,
+    resolutions: p.conflicts.map((file) => ({ path: file, strategy: "local" })) });
+  await b.service.sync({ previewId: resolved.id }); await f.run(a);
+  assert.equal(a.read(TASK_FILE), b.read(TASK_FILE)); assert.equal(a.read(PROJECT_FILE), b.read(PROJECT_FILE));
+});
+
+test("resolution refuses stale snapshots and failed upload never applies staged merged data", async (t) => {
+  const f = setup(t), a = f.client("a"), b = f.client("b");
+  a.put("note.md", "remote"); b.put("note.md", "local"); await f.run(a);
+  let p = await b.service.preview(); b.put("note.md", "newer local");
+  const resolutions = [{ path: "note.md", strategy: "combine" }];
+  await assert.rejects(b.service.resolveConflicts({ previewId: p.id, resolutions }), /本地.*变化/);
+  p = await b.service.preview(); let resolved = await b.service.resolveConflicts({ previewId: p.id, resolutions });
+  a.put("note.md", "newer remote"); await f.run(a);
+  await assert.rejects(b.service.sync({ previewId: resolved.id }), /远端已变化/);
+  assert.equal(b.read("note.md"), "newer local");
+  p = await b.service.preview(); resolved = await b.service.resolveConflicts({ previewId: p.id, resolutions });
+  f.failPush(true);
+  await assert.rejects(b.service.sync({ previewId: resolved.id }), /上传未确认/);
+  assert.equal(b.read("note.md"), "newer local");
+  f.failPush(false); p = await b.service.preview();
+  resolved = await b.service.resolveConflicts({ previewId: p.id, resolutions });
+  await b.service.sync({ previewId: resolved.id }); await f.run(a);
+  assert.equal(a.read("note.md"), b.read("note.md")); assert.match(b.read("note.md"), /newer remote/);
+});
+
+test("resolved copy recovers after push and disk failure without duplicating the remote copy", async (t) => {
+  const f = setup(t), a = f.client("a"); let b = f.client("b");
+  a.put("note.md", "remote"); b.put("note.md", "local"); await f.run(a);
+  const p = await b.service.preview();
+  const resolved = await b.service.resolveConflicts({ previewId: p.id, resolutions: [{ path: "note.md", strategy: "both" }] });
+  const copy = resolved.resolutions[0].copyPath, rename = fs.renameSync;
+  fs.renameSync = (source, target) => {
+    if (target === path.join(fs.realpathSync(b.root), copy)) throw new Error("disk unavailable");
+    return rename(source, target);
+  };
+  try { await assert.rejects(b.service.sync({ previewId: resolved.id }), /本地写入未完成/); }
+  finally { fs.renameSync = rename; }
+  assert.equal(b.read("note.md"), "local");
+  b = f.client("b"); const resumed = await b.service.preview();
+  assert.deepEqual(resumed.conflicts, []); assert.deepEqual(resumed.downloads, [copy]);
+  await b.service.sync({ previewId: resumed.id }); await f.run(a);
+  assert.equal(a.read(copy), "remote"); assert.equal(b.read(copy), "remote");
+  assert.equal(b.service.status().pending, false);
+});
+
+test("oversized concatenation is rejected while other click choices remain available", async (t) => {
+  const f = setup(t), a = f.client("a"), b = f.client("b");
+  a.put("large.md", Buffer.alloc(5 * 1024 * 1024, 65));
+  b.put("large.md", Buffer.alloc(5 * 1024 * 1024, 66)); await f.run(a);
+  const p = await b.service.preview();
+  await assert.rejects(b.service.resolveConflicts({ previewId: p.id, resolutions: [{ path: "large.md", strategy: "combine" }] }), /合并后单文件超过/);
+  const resolved = await b.service.resolveConflicts({ previewId: p.id, resolutions: [{ path: "large.md", strategy: "remote" }] });
+  assert.deepEqual(resolved.conflicts, []);
+  assert.equal(fs.readFileSync(path.join(b.root, "large.md"))[0], 66);
+});
+
+test("local edits after choosing a resolution invalidate the plan without losing edits", async (t) => {
+  const f = setup(t), a = f.client("a"), b = f.client("b");
+  a.put("note.md", "remote"); b.put("note.md", "local"); await f.run(a);
+  const p = await b.service.preview();
+  const resolved = await b.service.resolveConflicts({ previewId: p.id, resolutions: [{ path: "note.md", strategy: "combine" }] });
+  b.put("note.md", "new edit after choosing");
+  await assert.rejects(b.service.sync({ previewId: resolved.id }), /本地.*变化/);
+  assert.equal(b.read("note.md"), "new edit after choosing");
+  assert.equal(f.command(["--git-dir", f.remote, "show", "main:note.md"]).toString(), "remote");
+});

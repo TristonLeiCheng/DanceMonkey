@@ -8,9 +8,23 @@
 </head>
 <body>
   <button id="bubble" hidden title="打开待办" aria-live="polite"></button>
-  <button id="pet" aria-label="桌面宠物：单击互动，双击打开主界面，拖动移动，右键打开菜单" title="单击互动 · 双击打开主界面 · 拖动移动 · 右键菜单"><canvas width="32" height="32" aria-hidden="true"></canvas></button>
+  <section id="pet-reminder" hidden role="dialog" aria-labelledby="pet-reminder-title">
+    <div class="pet-reminder-pole" aria-hidden="true"></div>
+    <div class="pet-reminder-board">
+      <div class="pet-reminder-eyebrow"><span id="pet-reminder-icon" aria-hidden="true"></span><span id="pet-reminder-kind">宠物提醒</span><span class="pet-reminder-dot" aria-hidden="true"></span></div>
+      <h1 id="pet-reminder-title"></h1>
+      <p id="pet-reminder-message" tabindex="0"></p>
+      <p id="pet-reminder-error" hidden role="alert"></p>
+      <div class="pet-reminder-actions"><button id="pet-reminder-later" type="button"></button><button id="pet-reminder-done" type="button"></button></div>
+      <span class="pet-reminder-tack tack-left" aria-hidden="true"></span><span class="pet-reminder-tack tack-right" aria-hidden="true"></span>
+    </div>
+    <span class="pet-reminder-paw" aria-hidden="true"></span>
+  </section>
+  <button id="pet" aria-label="桌面宠物：单击互动，双击打开主界面，拖动移动，右键打开菜单" title="单击互动 · 双击打开主界面 · 拖动移动 · 右键菜单"><canvas width="32" height="32" aria-hidden="true"></canvas><span id="pet-cargo" hidden aria-hidden="true"><img id="pet-cargo-image" src="assets/pets/carry-file.svg" alt="" draggable="false"/><span class="cargo-grip cargo-grip-left"></span><span class="cargo-grip cargo-grip-right"></span></span></button>
   <script src="src/pet-sprites.js"></script>
+  <script src="src/pet-companion-atlases.js"></script>
   <script src="src/pet-atlas.js"></script>
+  <script src="src/pet-reminder-view.js"></script>
   <script src="src/pet.js"></script>
 </body>
 </html>

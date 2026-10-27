@@ -1,0 +1,12 @@
+Create a production-ready transparent RGBA PNG animation sprite atlas for an original adorable fluffy pet bunny. Exactly FOUR columns and NINE rows, 36 complete full-body poses, chronological frames left to right. Prefer 1024x2304 portrait canvas. Soft high quality 3D animated-film rendering with very fluffy cream-white angora fur, round chubby body, plump cheeks, tiny rosy nose, glossy dark brown eyes, soft pale pink ear interiors, two medium-long plush ears with one ear tip gently bent, tiny paws and a cotton-ball tail. Natural baby rabbit proportions, not human, no clothes, glasses, hat or accessories. Sweet gentle personality. Every frame must be the SAME rabbit with the same ears and proportions. No text, borders, labels, background, floor or cast ground shadow. Genuine alpha transparency, not a checkerboard. All complete bodies, ears, tails and paws MUST fit comfortably inside each cell. Make each pose only 65-70% of cell width and height, with large completely transparent gutters between rows and columns; no touching or overlapping neighboring poses. Keep all parts connected, no detached symbols, sparkles or effects. White fur remains clearly defined with soft warm-gray shading.
+Exact row order, four subtle consecutive animation frames per row:
+1 idle: sitting comfortably, gentle breathing, open eyes then blink then open;
+2 moving RIGHT: natural small rabbit hopping gait in side profile facing right, crouch and extend paws, consistent scale;
+3 moving LEFT: same gentle hopping gait facing left;
+4 wave: seated, lifting one front paw to give a small greeting, then lowering;
+5 happy jump: crouch, rise, midair tiny joyful hop, soft landing with ears bouncing;
+6 disappointed: ears lowered slightly, head droops, tiny sigh, recover;
+7 waiting/rest: curl into a fluffy ball, yawn, sleepy blink, drowsy closed eyes;
+8 busy/grooming: seated washing face with both front paws and brushing cheeks, no props;
+9 curiosity: tilt head and gently twitch nose, inspect front paws, ears attentive.
+Keep gentle clean silhouettes and ample transparent clearance around long ears in EVERY frame.

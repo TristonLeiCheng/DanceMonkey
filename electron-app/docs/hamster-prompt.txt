@@ -1,0 +1,16 @@
+Use case: stylized-concept.
+Asset type: production transparent PNG desktop pet animation atlas.
+Primary request: an irresistibly cute tiny cream-and-honey baby HAMSTER called Nuomi, like a round little mochi. Big round head flowing into a chubby round body with almost no neck, plump food-pouch cheeks, tiny pink nose, glossy dark brown bead eyes, very small round peach-lined ears, very short tiny paws and pink toe pads. Milk-cream muzzle, cheeks and belly, pale honey-beige crown and back, delicate soft fur and a barely visible little hamster tail. Warm peach blush, short delicate whiskers. A natural baby hamster, no human face or adult posture, no long limbs, no clothes. Cheeks and body are the key rounded forms. Gentle cheerful personality.
+Technical layout: one production transparent PNG atlas, desired 1024x2304 pixels. EXACTLY FOUR columns and NINE rows, EXACTLY 36 separate complete full-body poses. Invisible regular square-cell grid. One character per cell, consistently centered and same scale in all 36 poses. Each pose stays within its OWN cell with at least 24 pixels of truly transparent margin on all four sides. Clear transparent gutters separate every row and every column. All ears, whiskers, tail, paws and props fully inside cells. True transparent ALPHA background, not an opaque checkerboard. No floor, shadows, cast shadows, halos, text, labels, title, borders, grid lines or watermark.
+Rendering style: polished soft 3D animated plush desktop companion, exquisite natural fluffy fur, gently rounded sculpted volume, warm diffuse lighting, clean transparent edges, a readable cute silhouette and face at 68 pixels. Keep identical species, proportions, face, fur color, camera angle and lighting across all 36 cells. No human anatomy, no clothing, no accessories, no extra animals.
+Rows from top to bottom, each four sequential phases left to right:
+1 IDLE: sits front-facing with tiny paws on belly, eyes open / half blink / closed blink / open, slight cheek breathing.
+2 RIGHT: full profile facing RIGHT in all four cells, four short scurrying walk-cycle phases with alternating tiny feet. Body stays centered.
+3 LEFT: full profile facing LEFT in all four cells, corresponding four walking phases.
+4 WAVE: front-facing, lifts tiny paw / waves outward / waves inward with delighted smile / lowers paw.
+5 JUMP: little crouch / rising with tiny paws up / airborne cheerful / landing, consistent body scale. Entire animal stays inside cell.
+6 SAD: ears tilt down / looks down / gentle sigh eyes closed / looks up hopefully. No tears, no symbols.
+7 REST: seated eyes droop / paws tuck in / curled sleeping fluffy ball / cozy sleeping with chin on paws. No text or sleeping symbols.
+8 EATING: front-facing seated holding one SAME small striped sunflower seed in both paws at chest in ALL FOUR cells: lifts seed / nibbles / cheeks puff / contentedly chews. Seed and paws below face, face clearly visible; no crumbs, no scattered food.
+9 GROOMING: front-facing seated, paws touch cheeks / rub left cheek / rub right cheek / lowers paws with happy round cheeks. No props in this row.
+The usable image itself only. Strictly nine well-separated rows and four complete hamsters per row.

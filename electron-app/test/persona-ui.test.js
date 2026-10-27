@@ -5,6 +5,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const profileSource = fs.readFileSync(path.join(__dirname, "../src/persona-profile.js"), "utf8");
+const demoSource = fs.readFileSync(path.join(__dirname, "../src/persona-demos.js"), "utf8");
 const source = fs.readFileSync(path.join(__dirname, "../src/persona-manager.js"), "utf8");
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const escape = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -34,7 +35,7 @@ function fixture(overrides = {}, initial = [person("A"), person("B")], outlookSe
   };
   const scope = { querySelector: (selector) => selector === ".persona-page" ? page : selector === "[data-persona-stream]" ? stream : selector === "[data-persona-progress]" ? progressNode : null };
   const context = vm.createContext({ window: {}, Date, Math });
-  vm.runInContext(profileSource + "\n" + source, context);
+  vm.runInContext(profileSource + "\n" + demoSource + "\n" + source, context);
   const manager = context.window.DMPersonaManager.create({ personas: service, ...(outlookService ? { outlook: outlookService } : {}), workspace: { list: async () => ({ root, tree: [{ type: "file", path: "one.md", name: "One" }] }) } }, { esc: escape, attr: escape, rerender: () => { html = manager.render(); manager.bind(scope); } });
   const set = (key, value, tagName = "INPUT") => {
     const field = { value, tagName, dataset: { personaField: key } };
@@ -61,7 +62,7 @@ function outlookFixture(overrides = {}, stateOverrides = {}) {
 }
 
 test("browser preview explicitly requires desktop and does not fabricate a persona", () => {
-  const context = vm.createContext({ window: {} }); vm.runInContext(profileSource + "\n" + source, context);
+  const context = vm.createContext({ window: {} }); vm.runInContext(profileSource + "\n" + demoSource + "\n" + source, context);
   const manager = context.window.DMPersonaManager.create({}, { esc: escape, attr: escape, rerender() {} });
   assert.match(manager.render(), /桌面版/);
   assert.doesNotMatch(manager.render(), /data-persona-action="create"/);
@@ -284,4 +285,63 @@ test("Outlook status failure leaves personas usable and insecure storage is expl
   assert.match(f.html(), /连接读取失败/); f.set("text", "普通资料"); await f.manager.handleAction("add-source"); assert.equal(f.records.get("A").sources.length, 1);
   fail = false; await f.manager.handleAction("outlook-refresh");
   assert.match(f.html(), /本机安全存储不可用/); assert.doesNotMatch(f.html(), /连接读取失败/);
+});
+
+const demos = require("../src/persona-demos").demos;
+
+test("gallery previews all six demos, cancels without persistence and uses existing create API", async () => {
+  let creates = 0, chats = 0, f;
+  f = fixture({ create: async ({ demoId }) => {
+    creates++;
+    const demo = demos.find(d => d.id === demoId);
+    const p = { ...person(demoId), name: demo.name, demoId, card: clone(demo.card) };
+    f.records.set(demoId, p); return p;
+  }, chat: async () => { chats++; } }, []);
+  await f.manager.load();
+  assert.equal((f.html().match(/class="persona-demo-card"/g) || []).length, 6);
+  assert.match(f.html(), /名人示范/);
+  for (const demo of demos) {
+    await f.manager.handleAction("preview-demo", demo.id);
+    assert.match(f.html(), new RegExp(demo.name + " · 示范预览"));
+    for (const prompt of demo.starters) assert.ok(f.html().includes(prompt));
+    await f.manager.handleAction("close-demo");
+    await f.manager.handleAction("use-demo", demo.id);
+    assert.equal(creates, demos.indexOf(demo));
+    await f.manager.handleAction("preview-demo", demo.id);
+    await f.manager.handleAction("use-demo", demo.id);
+    assert.match(f.html(), /点击填入，可编辑后发送/);
+    for (let index = 0; index < demo.starters.length; index++) {
+      await f.manager.handleAction("starter", String(index));
+      assert.ok(f.html().includes(`>${demo.starters[index]}</textarea>`));
+    }
+    assert.match(f.html(), /并非本人、官方账号或背书/);
+  }
+  assert.equal(creates, 6); assert.equal(chats, 0);
+  assert.equal(f.records.size, 6);
+});
+
+test("demo repeated clicks are guarded while busy and failures keep preview available for retry", async () => {
+  let resolve, reject, calls = 0;
+  const f = fixture({ create: () => { calls++; return new Promise((yes, no) => { resolve = yes; reject = no; }); } }, []);
+  await f.manager.load(); await f.manager.handleAction("preview-demo", "jobs");
+  const pending = f.manager.handleAction("use-demo", "jobs");
+  await f.manager.handleAction("use-demo", "jobs");
+  await f.manager.handleAction("preview-demo", "musk");
+  assert.equal(calls, 1);
+  reject(new Error("磁盘写入失败")); await pending;
+  assert.match(f.html(), /磁盘写入失败/); assert.match(f.html(), /乔布斯 · 示范预览/);
+  const retry = f.manager.handleAction("use-demo", "jobs");
+  resolve({ ...person("jobs"), demoId: "jobs", card: clone(demos.find(d => d.id === "jobs").card) }); await retry;
+  assert.equal(calls, 2); assert.doesNotMatch(f.html(), /磁盘写入失败/);
+  assert.match(f.html(), /示范已就绪/);
+});
+
+
+test("saved demos open in chat after renderer restart and preserve edited labels", async () => {
+  const demo = demos[0];
+  const p = { ...person("saved-demo"), name: "我的学习伙伴", demoId: demo.id, card: clone(demo.card) };
+  const f = fixture({}, [p]); await f.manager.load();
+  assert.match(f.html(), /我的学习伙伴/);
+  assert.match(f.html(), /点击填入，可编辑后发送/);
+  assert.match(f.html(), /并非本人、官方账号或背书/);
 });

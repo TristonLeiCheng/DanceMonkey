@@ -122,10 +122,18 @@ try {
   socket.close(); await connect(workspace.webSocketDebuggerUrl);
   await waitFor(() => evaluate(`document.querySelectorAll('.reminder-card').length === 2`), { process: electron });
   assert.equal(await evaluate(`document.querySelector('[data-action="section"][data-value="reminders"]').classList.contains('active')`), true);
+  assert.equal(await evaluate(`document.querySelector('[name="reminder-default-style"]').value`),'PetBubble');
+  assert.equal(await evaluate(`document.querySelector('[name="reminder-default-style"] option[value="PetBubble"]').textContent`),'宠物提醒');
+  assert.equal(await evaluate(`document.querySelector('[name="reminder-default-style"]').options.length`),7);
+  await evaluate(`document.querySelector('[name="reminder-default-style"]').value='Toast';document.querySelector('[data-reminder-action="settings"]').click()`);
+  await waitFor(()=>evaluate(`document.querySelector('[name="reminder-default-style"]').value==='Toast' && document.querySelectorAll('.reminder-meta').length===2 && [...document.querySelectorAll('.reminder-meta')].every(n=>n.textContent.includes('右下角 Toast'))`));
+  await evaluate(`document.querySelector('[name="reminder-default-style"]').value='PetBubble';document.querySelector('[data-reminder-action="settings"]').click()`);
+  await waitFor(()=>evaluate(`document.querySelector('[name="reminder-default-style"]').value==='PetBubble' && [...document.querySelectorAll('.reminder-meta')].every(n=>n.textContent.includes('宠物提醒'))`));
   await evaluate(`document.querySelector('[data-reminder-action="new"]').click()`);
   await waitFor(() => evaluate(`!!document.querySelector('[data-reminder-form]')`));
   await evaluate(`(() => {const f=document.querySelector('[data-reminder-form]'); f.elements.title.value='桌面弹窗测试'; f.elements.message.value='提醒正文 <script>安全文本</script>'; f.elements.kind.value='Daily'; f.elements.kind.dispatchEvent(new Event('change')); })()`);
   assert.equal(await evaluate(`document.querySelector('[data-reminder-form] [name="title"]').value`), '桌面弹窗测试');
+  assert.equal(await evaluate(`document.querySelector('[data-reminder-form] [name="notifyStyle"]').value`),'Default');
   await evaluate(`document.querySelector('[data-reminder-form] [name="times"]').value='09:00, 14:00'; document.querySelector('[data-reminder-form] [name="enabled"]').checked=false; document.querySelector('[data-reminder-action="save"]').click()`);
   await waitFor(() => evaluate(`document.querySelectorAll('.reminder-card').length === 3 && !document.querySelector('[data-reminder-form]')`));
   const id = await evaluate(`window.lumen.reminders.list().then(data=>data.reminders.find(item=>item.title==='桌面弹窗测试').id)`);
@@ -166,7 +174,7 @@ try {
   assert.equal(await evaluate(`document.querySelector('[name="title"]').value`),'该喝水啦','mode changes retain unsaved fields');
   assert.equal(await evaluate(`document.querySelector('[name="popupStyleOverride"]').closest('label').hidden`),true);
   await evaluate(`document.querySelector('[data-reminder-action="save"]').click()`);
-  await waitFor(()=>evaluate(`!document.querySelector('[data-reminder-form]') && document.querySelector('.reminders-page').textContent.includes('宠物举牌提醒')`));
+  await waitFor(()=>evaluate(`!document.querySelector('[data-reminder-form]') && document.querySelector('.reminders-page').textContent.includes('宠物提醒')`));
   const petId = await evaluate(`window.lumen.reminders.list().then(data=>data.reminders.find(item=>item.title==='该喝水啦'&&!item.isBuiltIn).id)`);
   socket.close(); await connect(pet.webSocketDebuggerUrl);
   await waitFor(()=>evaluate(`document.querySelector('#pet').dataset.assetStatus==='ready'`));

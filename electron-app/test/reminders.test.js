@@ -171,3 +171,44 @@ test('border-free popup keeps test isolation, native close snooze and queued rem
   assert.equal(f.windows[1].options.vibrancy, undefined);
   f.windows[1].close(); assert.deepEqual(f.actions, [['water', 'snooze']]);
 });
+
+test('pet delivery is the default; global switching changes inherited reminders without resetting schedules or stats', t => {
+  const f=fixture(t);
+  assert.equal(f.service.list().settings.defaultNotifyStyle,'PetBubble');
+  assert.ok(f.service.list().reminders.every(item=>item.useDefaultDelivery));
+  f.service.save(definition());
+  f.service.save(definition({id:'explicit-pet',notifyStyle:'PetBubble',useDefaultDelivery:false}));
+  f.service.save(definition({id:'explicit-popup',notifyStyle:0,useDefaultDelivery:false,popupStyleOverride:'Banner'}));
+  f.service.act('custom','done');
+  const before=f.service.exportData();
+  f.service.test('custom');assert.equal(f.events.at(-1).item.notifyStyle,'PetBubble');
+  f.service.saveSettings({defaultNotifyStyle:'DesktopPopup',defaultPopupStyle:'Toast',acrylic:true});
+  assert.deepEqual(f.service.exportData(),before,'global changes do not restart timers or reset completion counts');
+  f.service.test('custom');assert.equal(f.events.at(-1).item.notifyStyle,'DesktopPopup');assert.equal(f.events.at(-1).options.defaultPopupStyle,'Toast');
+  f.service.test('explicit-pet');assert.equal(f.events.at(-1).item.notifyStyle,'PetBubble');
+  f.service.saveSettings({defaultNotifyStyle:'PetBubble',defaultPopupStyle:'Toast',acrylic:false});
+  f.service.test('explicit-popup');assert.equal(f.events.at(-1).item.notifyStyle,'DesktopPopup');assert.equal(f.events.at(-1).item.popupStyleOverride,'Banner');
+  const restart=f.make();assert.equal(restart.list().settings.defaultNotifyStyle,'PetBubble');
+  restart.test('custom');assert.equal(f.events.at(-1).item.notifyStyle,'PetBubble');
+  const encoded=restart.exportData().reminders;
+  assert.equal(encoded.find(i=>i.id==='explicit-pet').notifyStyle,1);assert.equal(encoded.find(i=>i.id==='explicit-popup').notifyStyle,0);
+  assert.equal(encoded.find(i=>i.id==='custom').useDefaultDelivery,true);
+});
+
+test('legacy built-ins migrate to the default once, while custom and individually styled reminders keep their delivery', t => {
+  const f=fixture(t);f.service.save(definition({notifyStyle:'DesktopPopup',useDefaultDelivery:false}));
+  const legacy=f.service.exportData();delete legacy.defaultDeliveryVersion;
+  for(const i of legacy.reminders){delete i.useDefaultDelivery;i.notifyStyle=0;}
+  legacy.reminders.find(i=>i.id==='builtin-sedentary').popupStyleOverride=5;
+  legacy.runtime.find(i=>i.reminderId==='builtin-water').todayAckCount=4;
+  fs.writeFileSync(path.join(f.directory,'reminders.json'),JSON.stringify(legacy));
+  const migrated=f.make(),items=migrated.list().reminders;
+  assert.equal(items.find(i=>i.id==='builtin-water').useDefaultDelivery,true);
+  assert.equal(items.find(i=>i.id==='builtin-water').runtime.todayAckCount,4);
+  assert.equal(items.find(i=>i.id==='builtin-sedentary').useDefaultDelivery,false);
+  assert.equal(items.find(i=>i.id==='custom').useDefaultDelivery,false);
+  migrated.test('builtin-water');assert.equal(f.events.at(-1).item.notifyStyle,'PetBubble');
+  const water=items.find(i=>i.id==='builtin-water');migrated.save({...water,notifyStyle:'DesktopPopup',useDefaultDelivery:false});
+  const restarted=f.make();restarted.test('builtin-water');assert.equal(f.events.at(-1).item.notifyStyle,'DesktopPopup','explicit choices after migration survive restart');
+  assert.equal(restarted.exportData().defaultDeliveryVersion,1);
+});

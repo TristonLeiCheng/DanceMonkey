@@ -2,10 +2,11 @@
 
 > 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。
 
-## 最新版本 · v3.11.0
+## 最新版本 · v3.12.0
 
-[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.11.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.11.0.md)
+[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.12.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.12.0.md)
 
+- **默认宠物提醒**：统一命名为“宠物提醒”，在顶部“默认提醒方式”下拉框直接选择；新建提醒跟随默认，单条提醒可单独指定。
 - **新动画伙伴**：考拉、仓鼠、海豹、经典黄纹短袖写实良子及仿真昆虫；蟑螂随机爬行，蚊子曲线飞行与悬停。
 - **定时提醒**：喝水、久坐与自定义日程，六种桌面通知样式和宠物举牌，支持稍后提醒、完成记录与导入导出。
 - **笔记主页**：快捷新建六类笔记、个人使用统计、近期笔记与快速搜索，笔记库和模板入口收纳到侧栏底部。

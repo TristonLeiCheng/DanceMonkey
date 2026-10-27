@@ -32,7 +32,8 @@ function normalizeReminder(input) {
   return {
     id, title: title.slice(0, 200), message: String(input.message || '').slice(0, 4000), icon: String(input.icon || '🔔').slice(0, 32),
     enabled: input.enabled !== false, isBuiltIn: BUILT_INS.includes(id),
-    notifyStyle: enumValue(input.notifyStyle, ['DesktopPopup', 'PetBubble'], 'DesktopPopup'),
+    notifyStyle: enumValue(input.notifyStyle, ['DesktopPopup', 'PetBubble'], 'PetBubble'),
+    useDefaultDelivery: input.useDefaultDelivery === true || input.notifyStyle == null || input.notifyStyle === 'Default',
     popupStyleOverride: input.popupStyleOverride == null || input.popupStyleOverride === '' ? null : enumValue(input.popupStyleOverride, STYLES, null),
     doneLabel: String(input.doneLabel || '已完成').slice(0, 40), laterLabel: String(input.laterLabel || '稍后提醒').slice(0, 40),
     snoozeMinutes: bounded(input.snoozeMinutes, 10, 1, 240), trackDailyStats: input.trackDailyStats !== false,
@@ -45,7 +46,7 @@ function builtIns(config = {}) {
   return [
     { id: BUILT_INS[0], title: '该喝水啦', message: '起身倒杯水，给自己补充一点水分。', icon: '💧', doneLabel: '已喝水', laterLabel: '稍后再喝', schedule: { kind: 'IntervalMinutes', intervalMinutes: config.waterReminderMinutes ?? config.WaterReminderMinutes ?? 45 } },
     { id: BUILT_INS[1], title: '该起身活动了', message: '站起来伸展一下身体，活动活动筋骨吧。', icon: '🏃', doneLabel: '已活动', laterLabel: '稍后活动', schedule: { kind: 'ActiveUseInterval', intervalMinutes: config.movementReminderMinutes ?? config.MovementReminderMinutes ?? 60 } },
-  ].map(item => normalizeReminder({ ...item, enabled }));
+  ].map(item => normalizeReminder({ ...item, enabled, useDefaultDelivery: true }));
 }
 function dueSlot(reminder, now, lastSlot) {
   const { kind, times, weekdays, dayOfMonth } = reminder.schedule;
@@ -74,7 +75,7 @@ function createReminderService({ directory, configStore, onDue = () => {}, onCha
   getIdleSeconds = () => 0, now = Date.now, timers = globalThis }) {
   const file = path.join(directory, 'reminders.json');
   fs.mkdirSync(directory, { recursive: true });
-  let data = { schemaVersion: 1, reminders: builtIns(configStore.read()), runtime: [] };
+  let data = { schemaVersion: 1, defaultDeliveryVersion: 1, reminders: builtIns(configStore.read()), runtime: [] };
   const pending = new Set();
   const idle = new Map();
   let timer = null, lastTick = now();
@@ -98,10 +99,18 @@ function createReminderService({ directory, configStore, onDue = () => {}, onCha
   if (fs.existsSync(file)) {
     try {
       const loaded = JSON.parse(fs.readFileSync(file, 'utf8'));
-      data = { schemaVersion: 1, reminders: validateFile(loaded), runtime: Array.isArray(loaded.runtime) ? loaded.runtime.filter(item => item && typeof item.reminderId === 'string').map(item => ({ ...item, reminderId: item.reminderId.toLowerCase() })) : [] };
+      data = { schemaVersion: 1, defaultDeliveryVersion: loaded.defaultDeliveryVersion || 0, reminders: validateFile(loaded), runtime: Array.isArray(loaded.runtime) ? loaded.runtime.filter(item => item && typeof item.reminderId === 'string').map(item => ({ ...item, reminderId: item.reminderId.toLowerCase() })) : [] };
     } catch (error) { throw new Error(`无法读取提醒文件，原文件已保留：${error.message}`); }
   }
   for (const item of builtIns(configStore.read())) if (!data.reminders.some(value => value.id === item.id)) data.reminders.push(item);
+  // Existing built-ins without an individual popup override adopt the new
+  // default once. Explicit per-item choices made after this migration persist.
+  if (!data.defaultDeliveryVersion) {
+    for (const item of data.reminders) {
+      if (item.isBuiltIn && item.notifyStyle === 'DesktopPopup' && !item.popupStyleOverride) item.useDefaultDelivery = true;
+    }
+    data.defaultDeliveryVersion = 1;
+  }
   for (const item of data.reminders) {
     const state = runtime(item);
     // Time while the app was closed is not continuous computer use.
@@ -124,10 +133,18 @@ function createReminderService({ directory, configStore, onDue = () => {}, onCha
     if (!item) throw new Error('提醒不存在，请刷新后重试。');
     return item;
   }
-  function list() {
+  function preferences() {
     const config = configStore.read();
+    return { defaultNotifyStyle: enumValue(config.defaultReminderNotifyStyle ?? config.DefaultReminderNotifyStyle, ['DesktopPopup', 'PetBubble'], 'PetBubble'),
+      defaultPopupStyle: enumValue(config.defaultReminderPopupStyle ?? config.DefaultReminderPopupStyle, STYLES, 'GlassCard'),
+      acrylic: config.reminderPopupAcrylic ?? config.ReminderPopupAcrylic ?? true };
+  }
+  function delivery(item) {
+    return { ...clone(item), notifyStyle: item.useDefaultDelivery ? preferences().defaultNotifyStyle : item.notifyStyle };
+  }
+  function list() {
     return clone({ reminders: data.reminders.map(item => ({ ...item, runtime: runtime(item), pending: pending.has(item.id) || runtime(item).awaitingAction === true })),
-      settings: { defaultPopupStyle: enumValue(config.defaultReminderPopupStyle ?? config.DefaultReminderPopupStyle, STYLES, 'GlassCard'), acrylic: config.reminderPopupAcrylic ?? config.ReminderPopupAcrylic ?? true } });
+      settings: preferences() });
   }
   function save(input) {
     const item = normalizeReminder(input);
@@ -194,7 +211,7 @@ function createReminderService({ directory, configStore, onDue = () => {}, onCha
       try { persist(); }
       catch (error) { restore(state, previous); onError(error); continue; }
       pending.add(item.id);
-      try { onDue(clone(item), { test: false, ...list().settings }); }
+      try { onDue(delivery(item), { test: false, ...preferences() }); }
       catch (error) {
         pending.delete(item.id); restore(state, previous);
         try { persist(); } catch (saveError) { onError(saveError); }
@@ -205,7 +222,7 @@ function createReminderService({ directory, configStore, onDue = () => {}, onCha
   }
   function test(input) {
     const item = typeof input === 'string' ? find(input) : normalizeReminder(input);
-    onDue(clone(item), { test: true, ...list().settings });
+    onDue(delivery(item), { test: true, ...preferences() });
     return true;
   }
   function importData(input, mode = 'merge') {
@@ -227,9 +244,10 @@ function createReminderService({ directory, configStore, onDue = () => {}, onCha
     exportData: () => serializeStore(data),
     reset: id => { const item = builtIns(configStore.read()).find(value => value.id === id); if (!item) throw new Error('只能重置内置提醒。'); return save(item); },
     saveSettings: input => {
-      const style = enumValue(input?.defaultPopupStyle, STYLES, null);
-      if (!style) throw new Error('弹窗样式无效。');
-      configStore.write({ defaultReminderPopupStyle: STYLES.indexOf(style), reminderPopupAcrylic: input.acrylic !== false }); onChange(); return list();
+      const style = enumValue(input?.defaultPopupStyle ?? preferences().defaultPopupStyle, STYLES, null);
+      const notifyStyle = enumValue(input?.defaultNotifyStyle ?? 'DesktopPopup', ['DesktopPopup', 'PetBubble'], null);
+      if (!style || !notifyStyle) throw new Error('提醒方式无效。');
+      configStore.write({ defaultReminderNotifyStyle: notifyStyle === 'PetBubble' ? 1 : 0, defaultReminderPopupStyle: STYLES.indexOf(style), reminderPopupAcrylic: input.acrylic !== false }); onChange(); return list();
     },
     start: () => { if (timer === null) { lastTick = now(); timer = timers.setInterval(() => { try { tick(); } catch (error) { onError(error); } }, 15000); timer?.unref?.(); } },
     stop: () => { if (timer !== null) timers.clearInterval(timer); timer = null; },

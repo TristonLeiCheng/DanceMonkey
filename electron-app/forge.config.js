@@ -2,6 +2,8 @@ const path = require("node:path");
 
 const packagerConfig = {
   asar: true,
+  // Keep development fixtures and design previews out of distributed applications.
+  ignore: [/^\/(test|docs)(?:\/|$)/],
   afterCopy: [(buildPath, electronVersion, platform, arch, done) => {
     try { require('./electron/pet-package').writePetCatalog(buildPath); done(); }
     catch (error) { done(error); }

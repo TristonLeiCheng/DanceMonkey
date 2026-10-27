@@ -20,7 +20,7 @@ async function connect(target){socket?.close();socket=new WebSocket(target.webSo
 async function evaluate(expression){const id=++serial;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(id);reject(Error('CDP timeout'));},10000);pending.set(id,m=>{clearTimeout(timer);if(m.result?.exceptionDetails)reject(Error(m.result.exceptionDetails.text));else resolve(m.result?.result?.value);});socket.send(JSON.stringify({id,method:'Runtime.evaluate',params:{expression,awaitPromise:true,returnByValue:true}}));});}
 async function launch(animal){
   exited=false;log='';
-  child=spawn(executable,['--no-proxy-server'],{env:{...process.env,DM_E2E_ROOT:root,DM_E2E_PORT:String(port)},stdio:['ignore','pipe','pipe']});
+  child=spawn(executable,['--no-proxy-server','--use-mock-keychain'],{env:{...process.env,DM_E2E_ROOT:root,DM_E2E_PORT:String(port)},stdio:['ignore','pipe','pipe']});
   child.stdout.on('data',b=>log=(log+b).slice(-4000));child.stderr.on('data',b=>log=(log+b).slice(-4000));child.once('exit',()=>exited=true);
   const pet=await wait(async()=>{if(exited)throw Error('Application exited');return(await targets()).find(t=>t.url.endsWith('/pet.html'));});
   await connect(pet);

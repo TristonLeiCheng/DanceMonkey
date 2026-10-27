@@ -92,7 +92,7 @@ function renderer({ fail = false, reduced = false, deferred = false } = {}) {
     setTimeout: (fn, ms) => { pending.set(++nextId, { fn, ms }); return nextId; }, clearTimeout: id => pending.delete(id),
   };
   context.window = { ...events('window'), devicePixelRatio: 2, innerWidth: 240, innerHeight: 264, DMPetAtlas: api,
-    DMPetSprites: { animals: require('../src/pet-sprites').animals, render: (...args) => { pixelCalls.push(args); return new Uint8ClampedArray(4096); } },
+    DMPetSprites: { frameAt: require('../src/pet-sprites').frameAt, animals: require('../src/pet-sprites').animals, render: (...args) => { pixelCalls.push(args); return new Uint8ClampedArray(4096); } },
     matchMedia: () => motion,
     desktopPet: { onState: fn => { received = fn; return () => unsubscribed++; }, get: async () => null },
   };
@@ -410,4 +410,33 @@ test('roaming uses world-paced frames, turns safely and yields to keyboard/remin
   r.update(state({animal:'realistic-cockroach',roaming:{...roaming,phase:'rest',action:'waiting',tilt:0}}));
   assert.ok(r.calls.some(c=>c[0]==='scale'&&c[1]<0),'left-facing insects keep their heading while resting');
   r.event('window','unload');
+});
+
+
+test('pixel renderer uses shared blink timing and stays still with reduced motion', () => {
+  const r = renderer(); r.update(state({animal:'rabbit'}));
+  assert.equal(r.pixelCalls.at(-1)[2], 0);
+  r.time(2660); r.update(state({animal:'rabbit'}));
+  assert.equal(r.pixelCalls.at(-1)[2], 3);
+  assert.equal([...r.pending.values()][0].ms, 140);
+  r.context.document.hidden = true; r.event('document', 'visibilitychange');
+  r.time(10000); r.context.document.hidden = false; r.event('document', 'visibilitychange');
+  assert.equal(r.pixelCalls.at(-1)[2], 3, 'hidden time does not skip the current pose');
+  r.event('window', 'unload'); assert.equal(r.pending.size, 0);
+  const still=renderer({reduced:true}); still.update(state({animal:'rabbit'}));
+  still.time(2660); still.update(state({animal:'rabbit'}));
+  assert.equal(still.pixelCalls.at(-1)[2], 0); assert.equal(still.pending.size, 0);
+  still.event('window', 'unload');
+});
+test('hidden time does not advance atlas animation and reduced motion schedules no animation timer', async () => {
+  const r = renderer(); r.update(state({ mood: 'working' })); await settle();
+  r.time(250); r.update(state({ mood: 'working' }));
+  const before = r.calls.filter(call => call[0] === 'atlas').at(-1)[2];
+  r.context.document.hidden = true; r.event('document', 'visibilitychange');
+  r.time(9000); r.context.document.hidden = false; r.event('document', 'visibilitychange');
+  assert.equal(r.calls.filter(call => call[0] === 'atlas').at(-1)[2], before);
+  r.event('window', 'unload');
+  const still = renderer({ reduced: true }); still.update(state({ animation: 'jump', serial: 2 })); await settle();
+  assert.equal(still.pending.size, 0); assert.equal(still.calls.filter(call => call[0] === 'atlas').at(-1)[2], 0);
+  still.event('window', 'unload');
 });

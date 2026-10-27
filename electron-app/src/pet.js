@@ -178,7 +178,7 @@
         bubble.hidden=false; positionBubble(); return;
       }
       const animal = spec?.fallback || state.animal;
-      const frame = motion.matches ? 0 : Math.floor(time / 420) % 4;
+      const frame = motion.matches ? 0 : window.DMPetSprites.frameAt(time);
       ctx.putImageData(new ImageData(window.DMPetSprites.render(animal, state.mood, frame), 32, 32), 0, 0);
       frameKey = `pixel:${animal}:${state.mood}:${frame}`;
     }
@@ -188,7 +188,7 @@
   function schedule() {
     clearTimeout(timer); timer = null;
     if (!state || disposed || document.hidden || motion.matches) return;
-    timer = setTimeout(() => { draw(); schedule(); }, isAtlas() ? 1000 / player.sample(elapsed).fps : 420);
+    timer = setTimeout(() => { draw(); schedule(); }, isAtlas() ? 1000 / player.sample(elapsed).fps : 140);
   }
   function refresh() { draw(); schedule(); }
   function update(next) {

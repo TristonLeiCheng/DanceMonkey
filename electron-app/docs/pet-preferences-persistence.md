@@ -12,5 +12,3 @@
 验证：436项测试通过；开发环境设置端到端回归通过（未知角色保存、刷新、保存其他设置、切回海獭并重启）；实际打包应用在隔离用户目录连续启动4次，验证海獭重启、未知角色重启及无关设置保存、切换绒绒兔后重启；真实Electron对ASAR包校验，修复包通过，缺失海獭的原发行包被拒绝。
 
 相关命令：npm test；node test/e2e-pet.mjs；DM_PET_E2E_EXECUTABLE=<Mac应用可执行文件> node test/e2e-pet-persistence.mjs。
-
-已安装本地v3.8.0修复版并启动；保留海獭、开启状态和128px设置。原应用与原始配置备份：/Users/lei.cheng/Library/Application Support/DanceMonkey-app-backups/before-pet-persistence-fix-RaGzgt。未公开发布GitHub新版本。

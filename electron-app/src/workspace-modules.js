@@ -607,7 +607,7 @@
         <form class="ws-settings-form" data-form="app-settings" onsubmit="return false;">
           <section class="ws-settings-card" ${panel("pet")}>
             <h2>桌面宠物</h2>
-            <p class="ws-settings-desc">单击互动，双击打开主界面，拖动调整位置，右键切换外形或使用快捷功能。保存后立即生效，也可从托盘开启。</p>
+            <p class="ws-settings-desc">单击互动，双击打开主界面，拖动调整位置，右键使用快捷功能。在下方选择宠物外形，保存后立即生效，也可从托盘开启。</p>
             <label class="ws-settings-check"><input type="checkbox" name="petModeEnabled" ${s.petModeEnabled ? "checked" : ""} /><span>开启桌面宠物</span></label>
             <div data-pet-picker></div>
             <div class="form-columns">

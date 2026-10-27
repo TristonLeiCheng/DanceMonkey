@@ -168,7 +168,8 @@ test('pet IPC rejects other renderers, recognizes taps/double taps and saves cla
   assert.equal(h.config.petWindowX, win.getBounds().x); assert.equal(h.config.petWindowY, win.getBounds().y);
   const restored = { x: h.config.petWindowX, y: h.config.petWindowY };
   h.pet.toggle(); h.pet.toggle(); assert.equal(h.pet.window.getBounds().x, restored.x); assert.equal(h.pet.window.getBounds().y, restored.y);
-  h.emit('pet:menu'); h.menu.find((item) => item.label === '关闭桌面宠物').click();
+  h.emit('pet:menu'); assert.equal(h.menu.some(item=>item.label==='宠物外形'),false);
+  h.menu.find((item) => item.label === '关闭桌面宠物').click();
   assert.equal(h.config.petModeEnabled, false); h.pet.dispose();
 });
 
@@ -183,14 +184,11 @@ test('task reminder timers honor enable and interval changes instead of resettin
 });
 
 
-test('工程师 is additive, normalizes and is selectable in the existing menu at every legacy size', () => {
+test('工程师 is additive, normalizes and applies from settings at every legacy size', () => {
   assert.equal(Object.keys(ANIMALS).length, 24);
   assert.equal(normalizeSettings({ petAnimal: 'engineer-fox' }).petAnimal, 'engineer-fox');
   const h = harness({ petModeEnabled: true }); h.pet.sync();
-  h.emit('pet:menu');
-  const skins = h.menu.find(item => item.label === '宠物外形').submenu;
-  assert.equal(skins.length, 24);
-  skins.find(item => item.label === '工程师').click();
+  h.config.petAnimal = 'engineer-fox'; h.pet.sync();
   assert.equal(h.config.petAnimal, 'engineer-fox');
   for (const size of [48, 68, 96, 128]) {
     h.pet.sync({ ...h.config, petDisplaySize: size });
@@ -207,11 +205,11 @@ test('工程师 is additive, normalizes and is selectable in the existing menu a
   h.pet.dispose(); assert.equal(h.intervals.size, 0);
 });
 
-test('new companion species persist through settings and expose their own menu and dialogue', () => {
+test('new companion species persist through settings and expose their own dialogue', () => {
   for (const animal of ['otter', 'red-panda', 'baby-dragon', 'fluffy-rabbit', 'koala', 'hamster', 'seal', 'liangzi', 'realistic-cockroach', 'realistic-mosquito']) {
     assert.equal(normalizeSettings({petAnimal:animal}).petAnimal,animal);
-    const h=harness({petModeEnabled:true,petAnimal:'cat'}); h.pet.sync(); h.emit('pet:menu');
-    h.menu.find(item=>item.label==='宠物外形').submenu.find(item=>item.label===ANIMALS[animal]).click();
+    const h=harness({petModeEnabled:true,petAnimal:'cat'}); h.pet.sync();
+    h.config.petAnimal=animal; h.pet.sync();
     assert.equal(h.config.petAnimal,animal); assert.equal(h.pet.window.state.animal,animal);
     h.emit('pet:press'); h.emit('pet:release');
     assert.ok(require('../src/pet-dialogue').taps[animal].includes(h.pet.window.state.bubble));
@@ -231,8 +229,7 @@ test('retired operator skin resolves to the default and is absent from the pet m
   assert.equal(Object.hasOwn(ANIMALS,'operator-rabbit'),false);
   assert.equal(require('../src/pet-atlas').getManifest('operator-rabbit'),null);
   const h=harness({petModeEnabled:true,petAnimal:'rabbit'});h.pet.sync();h.emit('pet:menu');
-  const skins=h.menu.find(item=>item.label==='宠物外形').submenu;
-  assert.equal(skins.some(item=>item.label==='话务员兔子'),false);
+  assert.equal(h.menu.some(item=>item.label==='宠物外形'),false);
   assert.equal(h.config.petAnimal,'rabbit');h.pet.dispose();
 });
 
@@ -442,4 +439,11 @@ test('roaming respects settings, reduced motion, hidden windows, display changes
   h.pet.sync({...h.config,petAnimal:'cat',petRoamingEnabled:true});h.emit('pet:ready');
   assert.equal(win.state.roaming,null);assert.equal([...h.intervals.values()].some(i=>i.ms===32),false);
   h.pet.dispose();assert.equal(h.intervals.size,0);
+});
+
+
+test('pixel idle timing keeps a short blink and a longer resting pose, including after pause', () => {
+  assert.deepEqual([0, 1399, 1400, 1959, 1960, 2659, 2660, 2799, 2800].map(sprites.frameAt), [0, 0, 1, 1, 2, 2, 3, 3, 0]);
+  assert.equal(sprites.frameAt(2800 * 20 + 2660), 3);
+  assert.equal(sprites.frameAt(NaN), 0);
 });

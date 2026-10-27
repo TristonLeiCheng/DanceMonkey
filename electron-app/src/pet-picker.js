@@ -2,7 +2,7 @@
 (() => {
   const actions = { idle:'待机', right:'向右行走', left:'向左行走', wave:'招手', jump:'跳跃', failed:'失落', waiting:'休息', working:'忙碌', review:'好奇 / 阅读' };
   const pixelMoods = { idle:'normal', jump:'happy', failed:'bored', waiting:'sleepy', working:'working', review:'reading' };
-  const descriptions = { 'realistic-cockroach':'栗褐色翅鞘 · 随机快爬与停步探路', 'realistic-mosquito':'半透明薄翅 · 曲线飞行与悬停', liangzi:'经典黄纹短袖 · 写实人物动作', hamster:'鼓鼓腮帮子 · 抱着瓜子的奶油团子', seal:'雪白小团子 · 拍拍肚皮陪着你', koala:'圆圆绒耳朵 · 抱着桉树叶慢慢陪你', 'fluffy-rabbit':'奶油白绒毛 · 软乎乎的小尾巴', otter:'抱着贝壳，慢慢陪你', 'red-panda':'圈圈尾巴与一杯暖咖啡', 'baby-dragon':'圆滚滚的小翅膀', 'engineer-fox':'戴上护目镜，一起开工', cat:'灵巧好奇的猫咪工程师', dog:'温暖活泼的狗狗工程师', capybara:'吃草、发呆，悠闲自在' };
+  const descriptions = { human:'蓬松刘海 · 软蓝色小毛衣', rabbit:'粉粉长耳 · 奶油色小肚皮', fox:'尖尖耳朵 · 蓬松奶油尾尖', goose:'圆圆翅膀 · 摇摆小脚蹼', cockroach:'栗色小甲壳 · 晃晃触角', mosquito:'透亮小翅膀 · 轻盈悬停', frog:'薄荷绿小脸 · 笑眯眯', penguin:'奶油围兜 · 摇摆小鳍', turtle:'拼花小龟壳 · 慢慢探头', hedgehog:'栗色小刺 · 软软的脸颊', 'realistic-cockroach':'栗褐色翅鞘 · 随机快爬与停步探路', 'realistic-mosquito':'半透明薄翅 · 曲线飞行与悬停', liangzi:'经典黄纹短袖 · 写实人物动作', hamster:'鼓鼓腮帮子 · 抱着瓜子的奶油团子', seal:'雪白小团子 · 拍拍肚皮陪着你', koala:'圆圆绒耳朵 · 抱着桉树叶慢慢陪你', 'fluffy-rabbit':'奶油白绒毛 · 软乎乎的小尾巴', otter:'抱着贝壳，慢慢陪你', 'red-panda':'圈圈尾巴与一杯暖咖啡', 'baby-dragon':'圆滚滚的小翅膀', 'engineer-fox':'戴上护目镜，一起开工', cat:'灵巧好奇的猫咪工程师', dog:'温暖活泼的狗狗工程师', capybara:'吃草、发呆，悠闲自在' };
   const characterActions = {
     'realistic-cockroach': {idle:'摆触须',right:'右爬',left:'左爬',wave:'抬前足',jump:'窜一下',failed:'伏低',waiting:'静伏',working:'梳触须',review:'探路'},
     'realistic-mosquito': {idle:'悬停',right:'右飞',left:'左飞',wave:'抬前足',jump:'上飞',failed:'缓降',waiting:'落地',working:'梳理',review:'警觉'},
@@ -103,7 +103,7 @@
         if(c.card.hidden||!c.visible)continue;
         load(c);
         const spec=c.spec, action=c.action, motionFrame=motion.matches?0:Math.max(0,elapsed-c.started);
-        const frames=spec?.actions[action], frame=frames?Math.floor(motionFrame*frames.fps/1000)%frames.frames:Math.floor(motionFrame/420)%4;
+        const frames=spec?.actions[action], frame=frames?Math.floor(motionFrame*frames.fps/1000)%frames.frames:sprites.frameAt(motionFrame);
         const key=`${action}/${frame}/${c.status}/${window.devicePixelRatio}`;if(c.frame===key)continue;c.frame=key;
         c.canvas.dataset.action=action;c.canvas.dataset.frame=String(frame);c.canvas.dataset.status=c.status;
         if(c.image){

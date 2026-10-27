@@ -9,5 +9,3 @@
 Electron设置端到端验证通过：独立动作同时播放、选择值不被动作按钮修改、帧序列播放、紧凑宽度、无嵌套按钮、暂停、键盘选择、切换选项卡、保存持久化和重启恢复。
 
 [界面截图](pet-picker-compact-preview.png)。Mac安装包已构建并通过签名及包内源文件一致性核验。
-
-2026-10-25：经用户确认内容已保存并允许强制重启后，已关闭退出超时的进程，更新 /Applications/DanceMonkey.app 并启动。旧应用备份：/Users/lei.cheng/Library/Application Support/DanceMonkey-app-backups/before-compact-picker-dcYJ68。

@@ -396,7 +396,6 @@ function createDesktopPet({ BrowserWindow, screen, Menu, powerSaveBlocker, confi
       { type: 'separator' },
       { label: '显示主界面', click: () => openWorkspace('notes') },
       { type: 'separator' },
-      { label: '宠物外形', submenu: Object.entries(ANIMALS).map(([id, label]) => ({ label, type: 'radio', checked: id === settings.petAnimal, click: () => save({ petAnimal: id }) })) },
       { label: '宠物大小', submenu: SIZES.map((size) => ({ label: `${size} px`, type: 'radio', checked: size === settings.petDisplaySize, click: () => save({ petDisplaySize: size }) })) },
       ...(supportsRoaming(settings.petAnimal) ? [{ id: 'pet-roaming', label: '自由爬行 / 飞行', type: 'checkbox', checked: settings.petRoamingEnabled, click: item => save({ petRoamingEnabled: item.checked }) }] : []),
       { label: '防止电脑休眠', type: 'checkbox', checked: settings.petPreventSleepEnabled, click: (item) => save({ petPreventSleepEnabled: item.checked }) },

@@ -11,7 +11,7 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), "dm-pet-e2e-"));
 const cwd = path.resolve(import.meta.dirname, "..");
 const children = [];
 const appExecutable = process.env.DM_PET_E2E_EXECUTABLE || path.resolve(cwd, "node_modules/.bin/electron");
-const appArgs = process.env.DM_PET_E2E_EXECUTABLE ? ["--no-proxy-server"] : ["--no-proxy-server", "."];
+const appArgs = process.env.DM_PET_E2E_EXECUTABLE ? ["--no-proxy-server", "--use-mock-keychain"] : ["--no-proxy-server", "."];
 const secondVault = path.join(root, "个人笔记库");
 fs.mkdirSync(path.join(secondVault, "工作资料/会议记录"), { recursive: true });
 fs.mkdirSync(path.join(secondVault, "仅B目录"));

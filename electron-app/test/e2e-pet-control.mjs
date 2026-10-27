@@ -96,7 +96,7 @@ async function assertBubbleNear(label) {
   assert.ok(layout.contained,label+': bubble stays inside native window');
 }
 async function key(code, down) { await send('Input.dispatchKeyEvent',{type:down?'keyDown':'keyUp',key:code==='Space'?' ':code==='KeyE'?'e':code,code,windowsVirtualKeyCode:{ArrowLeft:37,ArrowRight:39,Space:32,Escape:27,KeyE:69}[code]}); }
-async function toggle() {await evaluate('desktopPet.menu()');await command('menu-toggle');await waitFor(async()=>(await state()).control.active);await waitFor(async()=>(await command('metrics')).focused);}
+async function toggle() {await command('focus');await waitFor(async()=>(await command('metrics')).focused);await evaluate('desktopPet.menu()');await command('menu-toggle');await waitFor(async()=>(await state()).control.active);await waitFor(async()=>(await command('metrics')).focused);}
 try {
   const target=await waitFor(async()=>(await(await fetch(`http://127.0.0.1:${port}/json`)).json()).find(t=>t.url.endsWith('/pet.html')));
   socket=new WebSocket(target.webSocketDebuggerUrl);await new Promise((resolve,reject)=>{socket.onopen=resolve;socket.onerror=reject;});

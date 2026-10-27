@@ -10,6 +10,8 @@ const { createPkb } = createRequire(import.meta.url)("../electron/pkb");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "dm-ui-e2e-"));
 const cwd = path.resolve(import.meta.dirname, "..");
 const children = [];
+const appExecutable = process.env.DM_E2E_EXECUTABLE || path.resolve(cwd, "node_modules/.bin/electron");
+const appArgs = process.env.DM_E2E_EXECUTABLE ? ["--no-proxy-server", "--use-mock-keychain"] : ["--no-proxy-server", "."];
 const evidence = process.env.DM_REMINDER_QA_OUTPUT || path.join(cwd, 'docs');
 fs.mkdirSync(evidence, { recursive: true });
 const secondVault = path.join(root, "个人笔记库");
@@ -81,14 +83,14 @@ try {
   await waitFor(async () => (await fetch(`http://127.0.0.1:${serverPort}/`)).ok, { process: server });
 
   // All Electron persistence paths point under this disposable root; no user vault is opened.
-  const electron = start("Electron", path.resolve(cwd, "node_modules/.bin/electron"), ["--no-proxy-server", "."], {
+  const electron = start("Electron", appExecutable, appArgs, {
     DM_E2E_ROOT: root,
     DM_E2E_PORT: String(debugPort),
     DM_E2E_SERVER_PORT: String(serverPort),
   });
   const target = await waitFor(async () => {
     const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
-    return targets.find((item) => item.type === "page" && !item.url.includes("#workspace") && item.url.includes(`127.0.0.1:${serverPort}`));
+    return targets.find((item) => item.type === "page" && !item.url.includes("#workspace") && (item.url.includes(`127.0.0.1:${serverPort}`) || item.url.startsWith("file:") && item.url.includes("/index.html")));
   }, { process: electron });
 
   let serial = 0;
@@ -205,7 +207,10 @@ try {
   for (const action of ['done','snooze']) {
     await schedulePet();
     socket.close(); await connect(pet.webSocketDebuggerUrl);
-    await waitFor(()=>evaluate(`desktopPet.get().then(s=>s.reminder?.phase==='presenting'&&!s.reminder.test)`),{timeout:35000});
+    await waitFor(()=>evaluate(`desktopPet.get().then(s=>s.reminder?.phase==='presenting'&&!s.reminder.test)`),{timeout:35000}).catch(async error=>{
+      console.error('Due reminder diagnostics',action,await evaluate('desktopPet.get()'),await targets());
+      socket.close();await connect(workspace.webSocketDebuggerUrl);console.error('Reminder service state',await evaluate('window.lumen.reminders.list()'));throw error;
+    });
     await evaluate(`document.querySelector(${JSON.stringify('#pet-reminder-'+(action==='done'?'done':'later'))}).click()`);
     await waitFor(()=>evaluate(`desktopPet.get().then(s=>!s.reminder)`));
     socket.close(); await connect(workspace.webSocketDebuggerUrl);

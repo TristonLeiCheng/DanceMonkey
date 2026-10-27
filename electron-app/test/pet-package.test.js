@@ -20,7 +20,10 @@ test('release preflight indexes every real skin and refuses missing or modified 
   fs.cpSync(path.join(current,'electron'),path.join(f.source,'electron'),{recursive:true});
   fs.cpSync(path.join(current,'assets/pets'),path.join(f.source,'assets/pets'),{recursive:true});
   const catalog=writePetCatalog(f.source);
-  assert.equal(Object.keys(catalog.animals).length,24);
+  assert.equal(Object.values(catalog.animals).filter(entry=>!entry.retired).length,24);
+  assert.deepEqual(catalog.animals['operator-rabbit'],{name:'已移除的话务员兔子',retired:true,replacement:'human'});
+  assert.doesNotThrow(()=>assertPetUpdateCompatible(f.app,'operator-rabbit'));
+  assert.equal(require('../electron/pet-model').normalizeSettings({petAnimal:'operator-rabbit'}).petAnimal,'human');
   assertPetUpdateCompatible(f.app,'otter');assertPetUpdateCompatible(f.app,'fluffy-rabbit');assertPetUpdateCompatible(f.app,'koala');assertPetUpdateCompatible(f.app,'hamster');assertPetUpdateCompatible(f.app,'seal');assertPetUpdateCompatible(f.app,'liangzi');assertPetUpdateCompatible(f.app,'realistic-cockroach');assertPetUpdateCompatible(f.app,'realistic-mosquito');
   const source=catalog.animals.otter.source;
   fs.appendFileSync(path.join(f.source,source),'tampered');

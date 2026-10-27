@@ -19,6 +19,10 @@ function writePetCatalog(root) {
     if (manifest.sha256 && manifest.sha256 !== sha256) throw new Error(`宠物 ${id} 图集校验失败`);
     animals[id] = { name, source: manifest.source, sha256 };
   }
+  // v3.9/v3.10 updaters check the selected ID in this map before installing.
+  // Keep a migration-only entry so retiring a skin cannot strand those clients.
+  // It has no sprite and is never part of the selectable ANIMALS registry.
+  animals['operator-rabbit'] = { name: '已移除的话务员兔子', retired: true, replacement: 'human' };
   const catalog = { format: 1, animals };
   fs.writeFileSync(path.join(root, 'assets/pets/catalog.json'), JSON.stringify(catalog, null, 2) + '\n');
   return catalog;

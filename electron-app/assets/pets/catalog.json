@@ -100,6 +100,11 @@
       "name": "仿真蚊子",
       "source": "assets/pets/realistic-mosquito/spritesheet-realistic.png",
       "sha256": "e3c1b102c40c9e2ae13dc21b190a774a3c514d1a38e00d210952bfd70357544c"
+    },
+    "operator-rabbit": {
+      "name": "已移除的话务员兔子",
+      "retired": true,
+      "replacement": "human"
     }
   }
 }

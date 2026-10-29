@@ -25,6 +25,7 @@
       target: `上方「${name}」 · 空格跳上 · ← → 行走 · Esc 退出`,
       nearby: `靠近「${name}」 · ← → 行走 · 空格跳跃 · Esc 退出` })[interaction.kind];
     const statusHint = ({ 'permission-required': '图标互动需要允许控制 Finder；授权后请重新开启交互模式。',
+      unsupported: '当前系统暂不支持桌面图标互动，可使用行走和跳跃。',
       unavailable: '桌面图标暂时读不到，可继续行走和跳跃。', 'desktop-hidden': '桌面图标已隐藏，可继续行走和跳跃。',
       'layout-unsupported': '请关闭桌面叠放和自动排列，使用手动排列或贴齐网格。' })[state.control?.iconsStatus];
     const carryHint = carried ? ({ 'picking-up': `抱起「${carried.name}」…`,

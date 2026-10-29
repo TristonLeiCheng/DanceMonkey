@@ -106,5 +106,45 @@
       "retired": true,
       "replacement": "human"
     }
+  },
+  "interactions": {
+    "format": 1,
+    "features": [
+      "keyboard-movement",
+      "jumping",
+      "icon-platforms",
+      "icon-carry",
+      "insect-roaming",
+      "pet-reminders",
+      "network-three-modes"
+    ],
+    "keyboardPlatforms": [
+      "darwin",
+      "win32"
+    ],
+    "desktopIconPlatforms": [
+      "darwin"
+    ],
+    "files": {
+      "electron/main.js": "56aab0f9775ae7d019e3fb2f11df79d95c938dee96a6616227f3f89b0f45ce57",
+      "electron/desktop-pet.js": "1c386c303016b97fd80981ea74eecb81c6dc8a2ff4d9ca2f8442f908031e2817",
+      "electron/pet-motion.js": "4d1c715cceb95459198c0326ac9f776a665582584a3522217407f5807151103f",
+      "electron/pet-carry.js": "7a0e1d0a9bdd4b8dba8a220bcaf4f082b42dd847a4bd23d5742b309730b6d758",
+      "electron/desktop-icons.js": "d2766ac3c36ab805513ad9173114d913376254983aff66829538867b8d91c0ed",
+      "electron/pet-preload.js": "f22eb85a30f12b7dbbe847a3ce6506bc52b24f77ff9de2ca0250b9f4f96cd243",
+      "src/pet-atlas.js": "e262d562f61e3f08d8b748950e75d9155eef99758edb044baf52cd37859c1f63",
+      "src/pet.js": "0eabb1e246fe33230f8db957563d482755e3429bbad491a77cbfe6b310dfe7f7",
+      "src/pet.css": "8a5de8f2afec0f8f2afb5eced44718038e37664edadf65d73a4b35b5aa6b1a49",
+      "pet.html": "58e042d05e9caa4a298b482db3613076bf35139a84a9120d6647869c3df6e258",
+      "assets/pets/carry-file.svg": "33e8e3bdd19f65fbdd1e147b4f94837b55313afa5313009d161c5d6171b1dbbb",
+      "electron/pet-roaming.js": "51f3ed9805337514a9356b3aa63a54a7f809014ce33e9f4fd5583a95020acada",
+      "electron/pet-reminder.js": "fb8f58628179ad38520bc353943b76f7dd169dd1ea366853cb16a0dda077f7b8",
+      "src/pet-reminder-view.js": "eb482eb92af2887f42054e6d5bf44f5524e55bd66caa0db5a906ab3288397378",
+      "electron/reminders.js": "0bbc6d586ec23ec10308d82534fcbe01088ed6f42c3ef63311d42e846f20d970",
+      "src/reminders-ui.js": "05edd2a982733c1bd675d06ef16592fd0f05feef1ebe3880464bd35d38ac224d",
+      "electron/system-proxy.js": "dda4a01ae9715f1ef7340ba89d2209b993ba342fec8660e747f1f45319f4e3d9",
+      "electron/config-migration.js": "64399b1b2e64adba2e42aa9ef000056a91551e64461b608341b5dae052ace0e0",
+      "electron/proxy-enforcement.js": "87428ea702a029193bb979c6e33794bb40c5fc4026ec38c0ee81dc648a3cf6da"
+    }
   }
 }

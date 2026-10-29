@@ -1,10 +1,18 @@
 const petModel = require("./pet-model");
+const {
+  migrateConfig,
+  normalizeNetworkMode,
+  normalizeManualProxy,
+  normalizeApplicationProxy,
+} = require("./config-migration");
 const SETTINGS_KEYS = [
   ...Object.keys(petModel.DEFAULTS),
   "globalChatHotkey",
   "quickScreenshotHotkey",
   "regionScreenshotHotkey",
   "proxyForceEnabled",
+  "aiNetworkMode",
+  "networkProxyMode", "manualProxyProtocol", "manualProxyHost", "manualProxyPort", "manualProxyBypass",
   "proxyForceMode",
   "proxyPacUrl",
   "proxyServer",
@@ -24,6 +32,9 @@ const DEFAULT_SETTINGS = {
   quickScreenshotHotkey: "Ctrl+Shift+S",
   regionScreenshotHotkey: "Ctrl+Shift+R",
   proxyForceEnabled: false,
+  aiNetworkMode: "direct",
+  networkProxyMode: "system",
+  manualProxyProtocol: "http", manualProxyHost: "", manualProxyPort: 8080, manualProxyBypass: "",
   proxyForceMode: "manual",
   proxyPacUrl: "",
   proxyServer: "",
@@ -38,35 +49,30 @@ const DEFAULT_SETTINGS = {
 };
 
 function pickSettings(config = {}) {
+  config = migrateConfig(config);
   const next = { ...DEFAULT_SETTINGS };
   for (const key of SETTINGS_KEYS) {
-    if (config[key] !== undefined && config[key] !== null) next[key] = config[key];
+    if (config[key] !== undefined && config[key] !== null)
+      next[key] = config[key];
   }
-  // 兼容旧版 PascalCase
-  if (config.GlobalChatHotkey) next.globalChatHotkey = config.GlobalChatHotkey;
-  if (config.QuickScreenshotHotkey) next.quickScreenshotHotkey = config.QuickScreenshotHotkey;
-  if (config.RegionScreenshotHotkey) next.regionScreenshotHotkey = config.RegionScreenshotHotkey;
-  if (config.ProxyForceEnabled != null) next.proxyForceEnabled = config.ProxyForceEnabled;
-  if (config.ProxyForceMode) next.proxyForceMode = config.ProxyForceMode;
-  if (config.ProxyPacUrl != null) next.proxyPacUrl = config.ProxyPacUrl;
-  if (config.ProxyServer != null) next.proxyServer = config.ProxyServer;
-  if (config.ProxyPort != null) next.proxyPort = config.ProxyPort;
-  if (config.ProxyBypass != null) next.proxyBypass = config.ProxyBypass;
-  if (config.ProxyRefreshMinutes != null) next.proxyRefreshMinutes = config.ProxyRefreshMinutes;
-  if (config.ProxyPacUrlShanghai != null) next.proxyPacUrlShanghai = config.ProxyPacUrlShanghai;
-  if (config.ProxyPacUrlBeijing != null) next.proxyPacUrlBeijing = config.ProxyPacUrlBeijing;
-  if (config.UpdateManifestUrl != null) next.updateManifestUrl = config.UpdateManifestUrl;
-  if (config.UpdateGitHubRepo != null) next.updateGitHubRepo = config.UpdateGitHubRepo;
-  if (config.UpdateAssetKeyword != null) next.updateAssetKeyword = config.UpdateAssetKeyword;
-
-  next.proxyForceEnabled = Boolean(next.proxyForceEnabled);
-  next.proxyForceMode = String(next.proxyForceMode || "manual").toLowerCase() === "pac" ? "pac" : "manual";
-  next.proxyPort = Number(next.proxyPort) || 8080;
+  next.proxyForceEnabled =
+    next.proxyForceEnabled === true || next.proxyForceEnabled === "true";
+  next.aiNetworkMode = normalizeNetworkMode(next.aiNetworkMode);
+  next.networkProxyMode = ["direct", "manual"].includes(next.networkProxyMode) ? next.networkProxyMode : "system";
+  next.manualProxyPort = Number(next.manualProxyPort);
+  next.proxyForceMode =
+    String(next.proxyForceMode || "manual").toLowerCase() === "pac"
+      ? "pac"
+      : "manual";
+  next.proxyPort = Number.isFinite(Number(next.proxyPort))
+    ? Number(next.proxyPort)
+    : 8080;
   next.proxyRefreshMinutes = Number(next.proxyRefreshMinutes) || 3;
   next.updateManifestUrl = String(next.updateManifestUrl || "").trim();
   next.updateGitHubRepo =
     String(next.updateGitHubRepo || "").trim() || "TristonLeiCheng/DanceMonkey";
-  next.updateAssetKeyword = String(next.updateAssetKeyword || "").trim() || "win-x64";
+  next.updateAssetKeyword =
+    String(next.updateAssetKeyword || "").trim() || "win-x64";
   Object.assign(next, petModel.normalizeSettings(config));
   return next;
 }
@@ -74,11 +80,25 @@ function pickSettings(config = {}) {
 function parseHotkey(value) {
   const raw = String(value || "").trim();
   if (!raw) return null;
-  const parts = raw.split("+").map((part) => part.trim()).filter(Boolean);
+  const parts = raw
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean);
   if (parts.length < 2) return null;
   const key = parts[parts.length - 1];
   const mods = parts.slice(0, -1).map((part) => part.toLowerCase());
-  const hasMod = mods.some((mod) => ["ctrl", "control", "alt", "shift", "win", "meta", "cmd", "command"].includes(mod));
+  const hasMod = mods.some((mod) =>
+    [
+      "ctrl",
+      "control",
+      "alt",
+      "shift",
+      "win",
+      "meta",
+      "cmd",
+      "command",
+    ].includes(mod),
+  );
   if (!hasMod || !key) return null;
   return raw.replace(/\s+/g, "");
 }
@@ -96,7 +116,10 @@ function toAccelerator(value, fallback) {
 }
 
 function validateSettings(input = {}) {
+  if (input.networkProxyMode != null && !["system", "direct", "manual"].includes(input.networkProxyMode)) throw Error("请选择有效的应用连接方式。");
+  if (input.aiNetworkMode != null && !["system", "direct", "manual", "inherit"].includes(input.aiNetworkMode)) throw Error("请选择有效的 AI 连接方式。");
   const next = pickSettings(input);
+  if (next.networkProxyMode === "manual" || next.aiNetworkMode === "manual") Object.assign(next, normalizeApplicationProxy(next));
   const hotkeys = [
     ["globalChatHotkey", "唤出面板快捷键"],
     ["quickScreenshotHotkey", "全屏截图快捷键"],
@@ -107,28 +130,43 @@ function validateSettings(input = {}) {
       throw new Error(`${label}无效，请使用如 Ctrl+Shift+S 的组合键。`);
     }
   }
-  const values = hotkeys.map(([key]) => String(next[key]).toLowerCase().replace(/\s+/g, ""));
+  const values = hotkeys.map(([key]) =>
+    String(next[key]).toLowerCase().replace(/\s+/g, ""),
+  );
   if (new Set(values).size !== values.length) {
     throw new Error("三个快捷键不能重复。");
   }
   if (next.proxyForceEnabled) {
     if (next.proxyForceMode === "pac") {
-      if (!/^https?:\/\//i.test(String(next.proxyPacUrl || "").trim())) {
-        throw new Error("启用强制代理（PAC）时，请填写有效的 PAC 地址。");
+      try {
+        const url = new URL(String(next.proxyPacUrl || "").trim());
+        if (
+          !["http:", "https:"].includes(url.protocol) ||
+          url.username ||
+          url.password
+        )
+          throw Error("invalid");
+        next.proxyPacUrl = url.href;
+      } catch {
+        throw new Error("请填写有效的 HTTP/HTTPS PAC 地址，不包含账号或密码。");
       }
-    } else if (!String(next.proxyServer || "").trim()) {
-      throw new Error("启用强制代理（手动）时，请填写代理地址。");
-    }
-    const port = Number(next.proxyPort);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
-      throw new Error("代理端口必须在 1-65535 之间。");
+    } else {
+      const parsed = normalizeManualProxy(next.proxyServer, next.proxyPort);
+      next.proxyServer = parsed.server;
+      next.proxyPort = parsed.port;
     }
   }
-  next.proxyRefreshMinutes = Math.min(60, Math.max(1, Math.round(Number(next.proxyRefreshMinutes) || 3)));
+  next.proxyRefreshMinutes = Math.min(
+    60,
+    Math.max(1, Math.round(Number(next.proxyRefreshMinutes) || 3)),
+  );
   return next;
 }
 
-function createAppSettings(configStore, { proxyEnforcement, onHotkeysChanged, onPetChanged } = {}) {
+function createAppSettings(
+  configStore,
+  { proxyEnforcement, onHotkeysChanged, onPetChanged } = {},
+) {
   function get() {
     return pickSettings(configStore.read());
   }
@@ -137,10 +175,11 @@ function createAppSettings(configStore, { proxyEnforcement, onHotkeysChanged, on
     const validated = validateSettings({ ...get(), ...input });
     const saved = configStore.write(validated);
     const settings = pickSettings(saved);
-    onPetChanged?.(settings);
     if (proxyEnforcement) {
-      await proxyEnforcement.startOrUpdate(settings);
+      const result = await proxyEnforcement.startOrUpdate(settings);
+      if (result?.notice) settings.proxyNotice = result.notice;
     }
+    onPetChanged?.(settings);
     if (typeof onHotkeysChanged === "function") {
       onHotkeysChanged(settings);
     }
@@ -150,13 +189,20 @@ function createAppSettings(configStore, { proxyEnforcement, onHotkeysChanged, on
   async function applyProxyNow() {
     const settings = get();
     if (!settings.proxyForceEnabled) {
-      throw new Error("请先启用强制代理并保存。");
+      throw new Error("请先启用系统代理自动维护并保存。");
     }
     await proxyEnforcement.applyNow(settings);
     return { success: true };
   }
 
-  return { get, save, applyProxyNow, pickSettings, toAccelerator, validateSettings };
+  return {
+    get,
+    save,
+    applyProxyNow,
+    pickSettings,
+    toAccelerator,
+    validateSettings,
+  };
 }
 
 module.exports = {

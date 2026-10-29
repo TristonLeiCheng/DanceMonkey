@@ -187,7 +187,8 @@ try {
     await evaluate('desktopPet.interactive(false);desktopPet.menu()');await pause(80);
     const menu=(await command('metrics')).bounds;await pause(450);
     assert.deepEqual((await command('metrics')).bounds,menu,'menu freezes native movement');await command('close-menu');
-    await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});await pause(80);
+    await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+    await waitFor(async()=>await evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches") && (await state()).roaming?.paused);
     const reduced=(await command('metrics')).bounds;await pause(450);assert.deepEqual((await command('metrics')).bounds,reduced);
     await send('Emulation.setEmulatedMedia',{features:[]});
     await command('hide');const hidden=(await command('metrics')).bounds;await pause(350);assert.deepEqual((await command('metrics')).bounds,hidden);

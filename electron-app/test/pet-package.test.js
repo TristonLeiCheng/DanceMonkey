@@ -19,7 +19,16 @@ test('release preflight indexes every real skin and refuses missing or modified 
   fs.cpSync(path.join(current,'src'),path.join(f.source,'src'),{recursive:true});
   fs.cpSync(path.join(current,'electron'),path.join(f.source,'electron'),{recursive:true});
   fs.cpSync(path.join(current,'assets/pets'),path.join(f.source,'assets/pets'),{recursive:true});
+  fs.copyFileSync(path.join(current,'pet.html'),path.join(f.source,'pet.html'));
   const catalog=writePetCatalog(f.source);
+  assert.deepEqual(catalog.interactions.desktopIconPlatforms, ['darwin']);
+  for (const file of require('../electron/pet-package').INTERACTION_FILES) {
+    assert.match(catalog.interactions.files[file], /^[a-f0-9]{64}$/);
+    const bytes = fs.readFileSync(path.join(f.source,file));
+    fs.unlinkSync(path.join(f.source,file));
+    assert.throws(() => writePetCatalog(f.source), /ENOENT/, `reject missing ${file}`);
+    f.put(file,bytes);
+  }
   assert.equal(Object.values(catalog.animals).filter(entry=>!entry.retired).length,24);
   assert.deepEqual(catalog.animals['operator-rabbit'],{name:'已移除的话务员兔子',retired:true,replacement:'human'});
   assert.doesNotThrow(()=>assertPetUpdateCompatible(f.app,'operator-rabbit'));

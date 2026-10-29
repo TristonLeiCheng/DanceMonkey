@@ -134,6 +134,8 @@ contextBridge.exposeInMainWorld("lumen", {
     get: () => ipcRenderer.invoke("settings:get"),
     save: (payload) => ipcRenderer.invoke("settings:save", payload),
     applyProxy: () => ipcRenderer.invoke("settings:apply-proxy"),
+    openSystemProxy: () => ipcRenderer.invoke("settings:open-system-proxy"),
+    refreshProxy: () => ipcRenderer.invoke("settings:refresh-proxy"),
     onPetChanged: (cb) => {
       const listener = (_event, settings) => cb(settings);
       ipcRenderer.on("settings:pet-changed", listener);

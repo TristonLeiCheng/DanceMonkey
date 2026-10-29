@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { migrateConfig } = require('./config-migration');
 
 const DEFAULT_CONFIG = {
   provider: "openai",
@@ -18,6 +19,9 @@ const DEFAULT_CONFIG = {
   quickScreenshotHotkey: "Ctrl+Shift+S",
   regionScreenshotHotkey: "Ctrl+Shift+R",
   proxyForceEnabled: false,
+  aiNetworkMode: 'direct',
+  networkProxyMode: 'system',
+  manualProxyProtocol: 'http', manualProxyHost: '', manualProxyPort: 8080, manualProxyBypass: '',
   proxyForceMode: "manual",
   proxyPacUrl: "",
   proxyServer: "",
@@ -49,14 +53,14 @@ function createLegacyConfig(appDataPath) {
   function read() {
     ensureConfig();
     try {
-      return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(file, "utf8")) };
+      return { ...DEFAULT_CONFIG, ...migrateConfig(JSON.parse(fs.readFileSync(file, "utf8"))) };
     } catch {
       return { ...DEFAULT_CONFIG };
     }
   }
 
   function write(partial) {
-    const next = { ...read(), ...partial };
+    const next = migrateConfig({ ...read(), ...partial });
     const temporary = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(temporary, JSON.stringify(next, null, 2), "utf8");
     fs.renameSync(temporary, file);

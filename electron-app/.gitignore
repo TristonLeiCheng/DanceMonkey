@@ -9,5 +9,7 @@ vendor/_extract/
 .env
 .env.*
 *.pem
+!test/fixtures/proxy-tls/test-only-key.pem
+!test/fixtures/proxy-tls/test-only-cert.pem
 *.key
 credentials.json

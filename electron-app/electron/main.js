@@ -4,7 +4,7 @@ const { createReminderPopup } = require("./reminder-popup");
 const { registerReminderIpc } = require("./reminder-ipc");
 const { createDesktopPet } = require("./desktop-pet");
 const { registerGitHubSync } = require("./github-ipc");
-const { fetchWithSystemProxy } = require("./system-proxy");
+const { fetchWithSystemProxy, refreshSystemProxy, configureApplicationProxy } = require("./system-proxy");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createAiService } = require("./ai");
@@ -271,6 +271,7 @@ function openWorkspace(section = "notes") {
 
 app.whenReady().then(() => {
   legacyConfig = createLegacyConfig(app.getPath("appData"));
+  configureApplicationProxy(() => legacyConfig.read());
   store = createStore(app.getPath("userData"));
   const initialRoot = legacyConfig.notesRoot(app.getPath("documents"));
   if (legacyConfig.read().notesVaults?.length && !fs.existsSync(initialRoot)) {
@@ -373,7 +374,9 @@ app.whenReady().then(() => {
     applyShell,
     isDev,
   });
-  proxyEnforcement = platform.createProxyEnforcement();
+  proxyEnforcement = platform.createProxyEnforcement({
+    backupFile: path.join(app.getPath("userData"), "proxy-restore.json"), onChanged: refreshSystemProxy,
+  });
   appSettings = createAppSettings(legacyConfig, {
     proxyEnforcement,
     onHotkeysChanged: () => registerAllHotkeys(),
@@ -535,7 +538,11 @@ app.whenReady().then(() => {
       folderSyncScheduler.start();
       reminderService?.start();
     },
-    cleanup: async () => { await proxyEnforcement.stop(); reminderService?.stop(); reminderPopup?.dispose(); desktopPet.dispose(); globalShortcut.unregisterAll(); },
+    cleanup: async () => {
+      try { await proxyEnforcement.stop(); }
+      catch { console.warn("Windows 代理恢复未完成，恢复记录已保留，启动后将重试。"); }
+      reminderService?.stop(); reminderPopup?.dispose(); desktopPet.dispose(); globalShortcut.unregisterAll();
+    },
     quit: () => app.quit(),
     onError: (message) => dialog.showErrorBox("未能退出软件", message),
   });
@@ -835,6 +842,14 @@ app.whenReady().then(() => {
     } catch (error) {
       return { success: false, error: error?.message || "保存失败" };
     }
+  });
+  ipcMain.handle("settings:open-system-proxy", async () => {
+    await shell.openExternal(process.platform === "win32" ? "ms-settings:network-proxy" : "x-apple.systempreferences:com.apple.Network-Settings.extension");
+    return { success: true };
+  });
+  ipcMain.handle("settings:refresh-proxy", async () => {
+    try { await refreshSystemProxy(); return { success: true }; }
+    catch { return { success: false, error: "无法刷新公司系统代理，请检查系统网络设置。" }; }
   });
   ipcMain.handle("settings:apply-proxy", async () => {
     try {

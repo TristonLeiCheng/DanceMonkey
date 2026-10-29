@@ -3,11 +3,12 @@ const assert = require("node:assert/strict");
 const vm = require("node:vm");
 const fs = require("node:fs");
 const path = require("node:path");
+const requireAi = require("node:module").createRequire(path.join(__dirname, "../electron/ai.js"));
 
 function service(fetch, configStore = { read: () => ({ apiKey: "test-only", apiEndpoint: "http://localhost/v1", model: "test-model" }) }) {
   const module = { exports: {} };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../electron/ai.js"), "utf8"), {
-    module, require: (name) => name === "./system-proxy" ? { fetchWithSystemProxy: fetch } : require(name),
+    module, require: (name) => name === "./system-proxy" ? { fetchWithSystemProxy: fetch } : requireAi(name),
     AbortController, TextDecoder, setTimeout, clearTimeout, Buffer,
   });
   return module.exports.createAiService(configStore);
@@ -59,4 +60,24 @@ test("multi-call AI sessions keep the original provider when global settings cha
   assert.equal(calls[0].model, "model-a");
   assert.equal(calls[2].model, "model-b");
   assert.notEqual(calls[2].authorization, calls[0].authorization);
+});
+
+test('AI and captured persona sessions use the latest network mode while keeping their provider snapshot',async()=>{
+ let config={apiKey:'fixture',apiEndpoint:'http://localhost/v1',model:'fixture-model',aiNetworkMode:'system',petAnimal:'engineer-fox',petDisplaySize:128};
+ const calls=[];const store={read:()=>config,write:patch=>(config={...config,...patch})};
+ const ai=service(async(_url,_options,mode)=>{calls.push(mode.mode);return Response.json({choices:[{message:{content:'ok'}}]});},store);
+ const persona=ai.createSession();ai.saveSettings({apiEndpoint:config.apiEndpoint,apiKey:config.apiKey,model:config.model,aiNetworkMode:'direct'});
+ await persona.chat({});await ai.chat({});assert.deepEqual(calls,['direct','direct']);assert.equal(config.petAnimal,'engineer-fox');assert.equal(config.petDisplaySize,128);
+ ai.saveSettings({apiEndpoint:config.apiEndpoint,apiKey:config.apiKey,model:config.model});assert.equal(ai.getSettings().aiNetworkMode,'direct','older partial saves preserve network mode');
+ config.aiNetworkMode='system';await persona.chat({});assert.equal(calls.at(-1),'system');
+});
+
+
+test("AI default is direct when old profiles have no network setting", async () => {
+  const modes=[];
+  const ai=service(async(_url,_options,mode)=>{modes.push(mode.mode);return Response.json({choices:[{message:{content:"ok"}}]});});
+  assert.equal(ai.getSettings().aiNetworkMode,"direct");
+  await ai.chat({});
+  await ai.createSession().chat({});
+  assert.deepEqual(modes,["direct","direct"]);
 });

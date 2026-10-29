@@ -142,7 +142,7 @@
       "src/pet-reminder-view.js": "eb482eb92af2887f42054e6d5bf44f5524e55bd66caa0db5a906ab3288397378",
       "electron/reminders.js": "0bbc6d586ec23ec10308d82534fcbe01088ed6f42c3ef63311d42e846f20d970",
       "src/reminders-ui.js": "05edd2a982733c1bd675d06ef16592fd0f05feef1ebe3880464bd35d38ac224d",
-      "electron/system-proxy.js": "dda4a01ae9715f1ef7340ba89d2209b993ba342fec8660e747f1f45319f4e3d9",
+      "electron/system-proxy.js": "8c06e187d27be22f561fa5f7f4608f78da998aecf7f149993903a4ec5229b6b4",
       "electron/config-migration.js": "64399b1b2e64adba2e42aa9ef000056a91551e64461b608341b5dae052ace0e0",
       "electron/proxy-enforcement.js": "87428ea702a029193bb979c6e33794bb40c5fc4026ec38c0ee81dc648a3cf6da"
     }

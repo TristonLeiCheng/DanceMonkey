@@ -145,7 +145,7 @@ try {
   await key('KeyE',false);await key('KeyE',true);await pause(80);
   assert.equal((await state()).control.carry.phase,'putting-down');await key('KeyE',false);
   await waitFor(async()=>(await state()).control.carry===null);
-  assert.equal(await evaluate(`document.querySelector('#pet-cargo').hidden`),true);
+  await waitFor(()=>evaluate(`document.querySelector('#pet-cargo').hidden`));
   assert.deepEqual(await command('icons-state'),[platform],'pickup and put-down never alter source icon layout');
   await key('KeyE',true);await key('KeyE',false);await waitFor(async()=>(await state()).control.carry?.phase==='carrying');
   await command('remove-icons');
@@ -153,7 +153,7 @@ try {
   await waitFor(async()=>{const r=await metrics();return Math.abs(r.y+r.height-area.y-area.height)<2;});
   assert.equal((await state()).control.carry.phase,'carrying','the captured icon image remains until put down or exit');
   await key('Escape',true);await key('Escape',false);await waitFor(async()=>!(await state()).control.active);
-  assert.equal(await evaluate(`document.querySelector('#pet-cargo').hidden`),true);
+  await waitFor(()=>evaluate(`document.querySelector('#pet-cargo').hidden`));
   await toggle();await key('ArrowLeft',true);await command('blur');await waitFor(async()=>!(await state()).control.active);
   const stopped=await metrics();await pause(180);assert.equal((await metrics()).x,stopped.x,'blur clears held input');
   await command('pixel');await toggle();await waitFor(async()=>(await state()).control.grounded);

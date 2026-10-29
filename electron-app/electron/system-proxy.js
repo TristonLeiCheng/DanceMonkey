@@ -63,7 +63,7 @@ function bypassesProxy(url, rules = "") {
     rule = rule.toLowerCase();
     if (rule === "<local>") return !host.includes(".") && !host.includes(":");
     if (rule.includes("/")) {
-      const [address, bits] = rule.split("/"), family = isIP(host);
+      const [rawAddress, bits] = rule.split("/"), address = rawAddress.replace(/^\[|\]$/g, ""), family = isIP(host);
       if (!family || family !== isIP(address)) return false;
       const block = new BlockList();
       block.addSubnet(address, Number(bits), family === 4 ? "ipv4" : "ipv6");

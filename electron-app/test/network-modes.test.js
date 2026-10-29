@@ -136,6 +136,7 @@ test('fixed endpoint validation and host exclusions support IPv4, IPv6, CIDR and
   assert.throws(() => validateSettings({ networkProxyMode: 'unknown' }));
   assert.throws(() => validateSettings({ aiNetworkMode: 'unknown' }));
   assert.throws(() => normalizeApplicationProxy({ manualProxyHost: '127.0.0.1', manualProxyBypass: '10.0.0.0/33' }));
+  assert.equal(bypassesProxy('http://[::1]', '[::1]/128'), true);
   for (const [url, rules, expected] of [['http://10.2.3.4', '10.0.0.0/8', true], ['http://[::1]', '::1/128', true], ['https://sub.company.example', '*.company.example', true], ['https://company.example.evil', '*.company.example', false], ['http://printer', '<local>', true], ['http://127.0.0.1', '127.*', true]]) assert.equal(bypassesProxy(url, rules), expected);
 });
 

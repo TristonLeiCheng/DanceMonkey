@@ -45,7 +45,7 @@
   let vaultSwitching = false;
   let expanded = new Set();
   let expandedRestored = false;
-  let viewMode = localStorage.getItem("lumen-workspace-view") || "split";
+  let viewMode = localStorage.getItem("lumen-workspace-view") || "live";
   let effect = localStorage.getItem("lumen-workspace-effect") || "glass";
   let theme = localStorage.getItem("lumen-workspace-theme") || "dark";
   if (!THEMES.some(([value]) => value === theme)) theme = "dark";
@@ -66,6 +66,12 @@
   let section = sectionFromHash();
   let modulesReady = false;
   let modulesInstance = null;
+  let pendingProject = null;
+  api.onWorkspaceProject?.(async id => {
+    if (!modulesReady) { pendingProject = id; return; }
+    await setSection("projects");
+    await modulesInstance.openProject(id);
+  });
 
   const updateUI = window.DMAppUpdateUI.create(api, { esc, beforeApply: async () => {
     await saveActive();
@@ -568,7 +574,11 @@
       .join("");
   }
 
+  let markdownEditor, noteImageTransfer;
   function renderShell() {
+    if (noteImageTransfer?.busy) { void noteImageTransfer.flush().then(renderShell); return; }
+    noteImageTransfer?.destroy(); noteImageTransfer = null;
+    markdownEditor?.text(); markdownEditor?.destroy(); markdownEditor = null;
     const lightTheme = LIGHT_THEMES.has(theme) ? "light" : "";
     root.className = `workspace-root effect-${effect} theme-${theme} ${lightTheme} ${maximized ? "maximized" : ""}`;
     root.style.setProperty("--editor-width", `${editorWidth}%`);
@@ -624,6 +634,7 @@
           <button class="ws-home-button ${activePath ? "" : "active"}" data-action="notes-home" aria-current="${activePath ? "false" : "page"}">${treeIcon("vault")} 笔记主页</button>
           <div class="ws-sidebar-head">
             <strong>文件</strong>
+            ${api.note ? `<button class="ws-tool" data-action="open-local-md" title="打开本机 MD 文件" aria-label="打开本机 MD 文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v2M3 8h7l3 3h8l-3 9H5L3 8Z"/></svg></button>` : ''}
             <button class="ws-tool" data-action="new-file" title="在所选位置新建笔记" aria-label="新建笔记">${treeIcon("newFile")}</button>
             <button class="ws-tool" data-action="new-folder" title="在所选位置新建文件夹" aria-label="新建文件夹">${treeIcon("newFolder")}</button>
             <button class="ws-tool" data-action="refresh" title="刷新目录树" aria-label="刷新目录树">${treeIcon("refresh")}</button>
@@ -667,14 +678,17 @@
                   <div class="ws-doc-name">${esc(activePath.split("/").pop())}</div>
                   <span class="ws-save-state">${content === savedContent ? "已保存" : "待保存"}</span>
                   <button class="ws-mode" data-action="note-to-tasks" title="选中文字生成候选任务；未选中时读取整篇笔记">生成项目任务</button>
+                  <button class="ws-mode" data-action="popout-note">弹出窗口 ↗</button>
                   <div class="ws-mode-group">
+                    <button class="ws-mode ${viewMode === "live" ? "active" : ""}" data-action="view" data-value="live">实时预览</button>
                     <button class="ws-mode ${viewMode === "edit" ? "active" : ""}" data-action="view" data-value="edit">编辑</button>
                     <button class="ws-mode ${viewMode === "split" ? "active" : ""}" data-action="view" data-value="split">分栏</button>
                     <button class="ws-mode ${viewMode === "preview" ? "active" : ""}" data-action="view" data-value="preview">预览</button>
                   </div>
                 </div>
+                ${window.DMMarkdownTools.toolbar(viewMode === "preview")}
                 <div class="ws-editor-area view-${viewMode}">
-                  <textarea class="ws-editor" spellcheck="false" aria-label="Markdown 编辑器">${esc(content)}</textarea>
+                  ${viewMode === "live" ? '<div class="note-editor ws-live-editor"></div>' : `<textarea class="ws-editor" spellcheck="false" aria-label="Markdown 编辑器">${esc(content)}</textarea>`}
                   <div class="ws-editor-resizer" role="separator" aria-label="调整编辑与预览宽度" tabindex="0"></div>
                   <article class="ws-preview">${renderMarkdown(content)}</article>
                 </div>`
@@ -687,6 +701,7 @@
         }
       </div>
       <footer class="ws-statusbar">
+        ${isNotes && activePath ? `<span class="note-file-path" title="${attr(vaultRoot + '/' + activePath)}" aria-label="文档路径">${esc(vaultRoot + '/' + activePath)}</span>` : ""}
         <span>${
           isNotes
             ? "Markdown"
@@ -761,68 +776,35 @@
 
   async function openNoteTaskDialog() {
     const editor = root.querySelector(".ws-editor");
-    if (!editor || !activePath) return;
-    const selected = editor.selectionStart !== editor.selectionEnd;
-    const text = selected ? editor.value.slice(editor.selectionStart, editor.selectionEnd) : editor.value;
-    const candidates = window.DMZenModel.taskCandidatesFromNote(text);
+    if ((!editor && !markdownEditor) || !activePath) return;
+    const sel = markdownEditor?.view.state.selection.main;
+    const selected = sel ? !sel.empty : editor.selectionStart !== editor.selectionEnd;
+    const text = sel ? (selected ? markdownEditor.view.state.sliceDoc(sel.from, sel.to) : content) : (selected ? editor.value.slice(editor.selectionStart, editor.selectionEnd) : editor.value);
     const sourcePath = activePath;
     await saveActive();
-    const state = await api.zenTask.load();
-    const projects = state.projects.filter((project) => !window.DMZenModel.archived(project));
-    const existing = root.querySelector(".ws-note-task-backdrop");
-    existing?.remove();
-    const overlay = document.createElement("div");
-    overlay.className = "module-modal-backdrop ws-note-task-backdrop";
-    overlay.innerHTML = `<form class="module-modal ws-note-task-dialog"><h2>从${selected ? "选中内容" : "整篇笔记"}生成任务</h2><p class="pm-muted">预览并编辑候选项后再保存；每个任务会保留来源笔记与摘录。</p>${!projects.length ? '<div class="module-error">请先在「项目」中新建项目。</div>' : `<label>目标项目<select name="projectId" required>${projects.map((project) => `<option value="${attr(window.DMZenModel.value(project, "Id"))}">${esc(window.DMZenModel.value(project, "Name"))}</option>`).join("")}</select></label><label>里程碑<select name="milestoneId"><option value="">未分配阶段</option></select></label>`}${!candidates.length ? '<div class="module-error">未找到可生成的内容。请选择正文或输入列表项后重试。</div>' : `<div class="ws-note-task-list">${candidates.map((item, index) => `<label class="ws-note-task-row"><input type="checkbox" data-candidate="${index}" checked /><input class="ws-note-task-title" data-title="${index}" maxlength="160" value="${attr(item.title)}" aria-label="候选任务 ${index + 1}" /></label>`).join("")}</div>`}<div class="module-error ws-note-task-error" hidden></div><div class="module-modal-actions"><button type="button" data-note-task-cancel>取消</button><button type="submit" class="module-primary" ${!projects.length || !candidates.length ? "disabled" : ""}>创建选中任务</button></div></form>`;
-    root.append(overlay);
-    const form = overlay.querySelector("form");
-    const projectSelect = form.querySelector('[name="projectId"]');
-    const stageSelect = form.querySelector('[name="milestoneId"]');
-    const syncPreview = () => {
-      const marked = window.DMZenModel.duplicateTaskCandidates(candidates.map((item, index) => ({ ...item, title: form.querySelector(`[data-title="${index}"]`)?.value || item.title })), state.tasks || [], projectSelect.value, sourcePath);
-      marked.forEach((item, index) => {
-        const box = form.querySelector(`[data-candidate="${index}"]`);
-        const row = box?.closest(".ws-note-task-row");
-        row?.querySelector(".ws-duplicate-hint")?.remove();
-        if (item.suspectedDuplicate) {
-          row?.insertAdjacentHTML("beforeend", `<small class="ws-duplicate-hint">${item.duplicate ? "已从此笔记导入" : "疑似同名任务"}</small>`);
-          if (item.duplicate) { box.checked = false; box.disabled = true; }
-        } else if (box) box.disabled = false;
-      });
-    };
-    const syncStages = () => {
-      const project = projects.find((entry) => window.DMZenModel.value(entry, "Id") === projectSelect.value);
-      stageSelect.innerHTML = `<option value="">未分配阶段</option>${window.DMZenModel.list(project, "Milestones").map((stage) => `<option value="${attr(window.DMZenModel.value(stage, "Id"))}">${esc(window.DMZenModel.value(stage, "Name"))}</option>`).join("")}`;
-      syncPreview();
-    };
-    form.querySelectorAll("[data-title]").forEach((input) => { input.oninput = syncPreview; });
-    if (projectSelect) { projectSelect.onchange = syncStages; syncStages(); }
-    overlay.onclick = (event) => { if (event.target === overlay || event.target.closest("[data-note-task-cancel]")) overlay.remove(); };
-    form.onsubmit = async (event) => {
-      event.preventDefault();
-      const chosen = [...form.querySelectorAll("[data-candidate]:checked")].map((box) => ({ box, index: Number(box.dataset.candidate), title: form.querySelector(`[data-title="${box.dataset.candidate}"]`).value.trim() }));
-      const errorBox = form.querySelector(".ws-note-task-error");
-      const showError = (message) => { errorBox.hidden = false; errorBox.textContent = message; };
-      if (!chosen.length) return showError("请至少选择一项任务。");
-      if (chosen.some((item) => !item.title)) return showError("任务标题不能为空。");
-      const submit = form.querySelector('[type="submit"]');
-      submit.disabled = true;
-      try {
-        const project = projects.find((entry) => window.DMZenModel.value(entry, "Id") === projectSelect.value);
-        if (!project) throw new Error("请选择目标项目");
-        const targetProjectId = projectSelect.value;
-        const payload = chosen.map((item) => ({ title: item.title, projectId: targetProjectId, milestoneId: stageSelect.value, sourceNotePath: sourcePath, sourceExcerpt: candidates[item.index].excerpt }));
-        await api.zenTask.addTasksBatch(payload);
-        form.innerHTML = `<h2>已创建 ${payload.length} 项任务</h2><p class="pm-muted">整批保存成功，来源笔记与项目关联已一并保留。</p><div class="module-modal-actions"><button type="button" data-note-task-source>返回来源笔记</button><button type="button" class="module-primary" data-note-task-project>查看项目任务</button></div>`;
-        form.querySelector("[data-note-task-source]").onclick = () => overlay.remove();
-        form.querySelector("[data-note-task-project]").onclick = async () => { overlay.remove(); await setSection("projects"); await modulesInstance?.openProject?.(targetProjectId); };
-      } catch (error) {
-        showError(`${error?.message || "创建失败"}。本次未保存任何任务，可修改后安全重试。`);
-      } finally { submit.disabled = false; }
-    };
+    return window.DMNoteTasks.open({ root, text, sourcePath, selected, api: api.zenTask, esc, attr,
+      onProjects: async id => { await setSection("projects"); await modulesInstance?.openProject?.(id); } });
   }
 
   function bindShell() {
+    const formatbar = root.querySelector('.md-formatbar');
+    if (formatbar) {
+      formatbar.onmousedown = event => { if (event.target.closest('button')) event.preventDefault(); };
+      formatbar.onclick = async event => {
+        const button = event.target.closest('[data-md-command]');
+        if (!button || button.disabled || syncPaused || vaultSwitching) return;
+        const action = button.dataset.mdCommand, currentEditor = markdownEditor;
+        const textarea = root.querySelector('.ws-editor'), selection = markdownEditor?.view.state.selection.main;
+        let options;
+        if (action === 'link' || action === 'image') {
+          const label = selection ? markdownEditor.view.state.sliceDoc(selection.from, selection.to) : textarea.value.slice(textarea.selectionStart, textarea.selectionEnd);
+          options = await window.DMMarkdownTools.askDestination(root, action === 'image', label);
+          if (!options || !formatbar.isConnected || syncPaused || vaultSwitching) return;
+        }
+        if (currentEditor) currentEditor.command(action, options);
+        else if (textarea) window.DMMarkdownTools.applyTextarea(textarea, action, options);
+      };
+    }
     root.onclick = async (event) => {
       if (syncPaused || vaultSwitching) return;
       if (modulesReady && section !== "notes") {
@@ -842,6 +824,7 @@
         return;
       }
 
+      if (action === "open-local-md") { try { await api.note.choose(); } catch (error) { alert(error?.message || "无法打开文件"); } return; }
       if (action === "pkb-setup") { await openPkbSetup(); return; }
       if (action === "pkb-note") { await openPkbNote(); return; }
       if (action === "pkb-search") { openPkbSearch(); return; }
@@ -872,6 +855,10 @@
       if (action === "new-file") openDialog("file");
       if (action === "new-folder") openDialog("folder");
       if (action === "note-to-tasks") { try { await openNoteTaskDialog(); } catch (error) { alert(error?.message || "无法生成项目任务"); } }
+      if (action === "popout-note") {
+        try { await saveActive(); await api.note.open(activePath, vaultRoot); activePath = null; content = savedContent = ""; renderShell(); } catch (error) { alert(error.message); }
+        return;
+      }
       if (action === "view") {
         viewMode = control.dataset.value;
         localStorage.setItem("lumen-workspace-view", viewMode);
@@ -937,11 +924,25 @@
       };
     }
 
+    const host = root.querySelector('.ws-live-editor');
+    if (host && window.DMMarkdownEditor) {
+      markdownEditor = window.DMMarkdownEditor(host, { content, mode: 'live',
+        resolveImage: src => api.note.image(src, activePath, vaultRoot),
+        onSave: () => { void saveActive().catch(error => alert(error.message)); },
+        onChange: text => {
+          content = text;
+          root.querySelector('.ws-count').textContent = `${content.length} 字符`;
+          root.querySelector('.ws-save-state').textContent = '待保存';
+          clearTimeout(saveTimer); saveTimer = setTimeout(() => { void saveActive().catch(error => { const status = root.querySelector('.ws-save-state'); if(status) status.textContent = error.message; }); }, 650);
+        } });
+      host.addEventListener('md-source-request', () => { viewMode = 'edit'; renderShell(); });
+    }
     const editor = root.querySelector(".ws-editor");
     if (editor) {
       editor.oninput = () => {
         content = editor.value;
         root.querySelector(".ws-preview").innerHTML = renderMarkdown(content);
+        if (api.note) window.DMNoteImages.hydrateImages(root.querySelector(".ws-preview"), src => api.note.image(src, activePath, vaultRoot));
         root.querySelector(".ws-count").textContent = `${content.length} 字符`;
         root.querySelector(".ws-save-state").textContent = "保存中…";
         clearTimeout(saveTimer);
@@ -960,6 +961,27 @@
           editor.dispatchEvent(new Event("input"));
         }
       };
+    }
+
+    const imageHost = root.querySelector('.ws-editor-area');
+    if (imageHost && api.note?.importImages) {
+      const targetPath = activePath, targetRoot = vaultRoot;
+      noteImageTransfer = window.DMNoteImages.attachImageImport(imageHost, {
+        canImport: () => !syncPaused && !vaultSwitching && viewMode !== 'preview' && !root.dataset.quitting,
+        getSelection: event => {
+          if (!markdownEditor) return { from: editor.selectionStart, to: editor.selectionEnd };
+          const cursor = event.type === 'drop' ? markdownEditor.view.posAtCoords({ x: event.clientX, y: event.clientY }) : null;
+          return cursor === null ? markdownEditor.view.state.selection.main : { from: cursor, to: cursor };
+        },
+        importImages: images => api.note.importImages(images, targetPath, targetRoot),
+        insert: (markdown, selection) => {
+          if (markdownEditor) markdownEditor.insertImageMarkdown(markdown, selection);
+          else { const change = window.DMNoteImages.imageInsertion(editor.value, markdown, selection); editor.setRangeText(change.insert, change.from, change.to, 'end'); editor.dispatchEvent(new Event('input', { bubbles: true })); }
+        },
+        onBusy: busy => { root.inert = busy || syncPaused || vaultSwitching || Boolean(root.dataset.quitting); if (busy) root.querySelector('.ws-save-state').textContent = '正在导入图片…'; },
+        onError: message => { root.querySelector('.ws-save-state').textContent = message; },
+      });
+      window.DMNoteImages.hydrateImages(root.querySelector('.ws-preview'), src => api.note.image(src, targetPath, targetRoot));
     }
 
     const resizer = root.querySelector(".ws-resizer");
@@ -1084,6 +1106,7 @@
     const origin = vaultRoot;
     await saveActive();
     if (syncPaused || vaultSwitching || origin !== vaultRoot || navigation !== noteNavigation) return;
+    if (await api.note?.focusExisting?.(path)) return;
     const nextContent = await api.workspace.read(path);
     if (syncPaused || vaultSwitching || origin !== vaultRoot || navigation !== noteNavigation) return;
     activePath = path;
@@ -1095,8 +1118,10 @@
   }
 
   function saveActive() {
+    markdownEditor?.text();
     clearTimeout(saveTimer);
     const request = saveInFlight.catch(() => {}).then(async () => {
+      await noteImageTransfer?.flush();
       if (!activePath || content === savedContent) return;
       const target = activePath;
       const snapshot = content;
@@ -1577,6 +1602,7 @@
     applyTree(await api.workspace.list());
     if (section !== "notes" && modulesInstance) await modulesInstance.loadAll();
     renderShell();
+    if (pendingProject) { await setSection("projects"); await modulesInstance.openProject(pendingProject); pendingProject = null; }
   })();
 
   api.onWorkspaceSection?.((next) => {

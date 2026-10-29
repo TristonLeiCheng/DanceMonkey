@@ -728,8 +728,8 @@
           <div class="ai-composer">
             <textarea class="ai-input" rows="2" aria-label="输入消息" placeholder="想聊些什么？" ${aiBusy ? "disabled" : ""}>${escapeHtml(aiDraft)}</textarea>
             <div class="ai-composer-bottom"><div class="ai-composer-tools">
-              <button class="ai-tool" data-act="screenshot-region" title="框选屏幕 · Ctrl+Shift+R" ${aiBusy ? "disabled" : ""}>${icons.expand}<span>框选</span></button>
-              <button class="ai-tool" data-act="screenshot-quick" title="截取全屏 · Ctrl+Shift+S" ${aiBusy ? "disabled" : ""}>${icons.workspace}<span>截屏</span></button>
+              <button class="ai-tool" data-act="screenshot-region" title="框选屏幕 · ${/Mac/.test(navigator.platform) ? '⌘' : 'Ctrl'}+Shift+R" ${aiBusy ? "disabled" : ""}>${icons.expand}<span>框选</span></button>
+              <button class="ai-tool" data-act="screenshot-quick" title="截取全屏 · ${/Mac/.test(navigator.platform) ? '⌘' : 'Ctrl'}+Shift+S" ${aiBusy ? "disabled" : ""}>${icons.workspace}<span>截屏</span></button>
               <select class="ai-snippet-select" aria-label="提示词片段" title="提示词片段" ${aiBusy ? "disabled" : ""}>
                 <option value="">默认提示词</option>
                 ${(aiSettings?.promptSnippets || []).map((snippet, index) => `<option value="${index}" ${String(index) === activeSnippet ? "selected" : ""}>${escapeHtml(snippet.title || `片段 ${index + 1}`)}</option>`).join("")}
@@ -1346,7 +1346,7 @@
 
   const root = document.getElementById("root");
 
-  if (location.hash.startsWith("#workspace")) return;
+  if (location.hash.startsWith("#workspace") || location.hash === "#document") return;
 
   if (isElectron) {
     if (api.softwareRender) document.documentElement.dataset.render = "software";

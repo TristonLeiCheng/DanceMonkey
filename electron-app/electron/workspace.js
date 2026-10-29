@@ -41,7 +41,7 @@ function writeAtomic(target, content) {
   }
 }
 
-function createWorkspace(notesRootPath) {
+function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
   fs.mkdirSync(path.resolve(notesRootPath), { recursive: true });
   const root = fs.realpathSync(path.resolve(notesRootPath));
 
@@ -236,7 +236,7 @@ function createWorkspace(notesRootPath) {
     return synced.sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
-  ensureRoot();
+  if (initializeQuickNotes) ensureRoot();
 
   return {
     root,

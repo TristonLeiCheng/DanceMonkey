@@ -103,6 +103,7 @@ try {
   // system clipboard, windows, preload bridges and screenshot IPC remain real.
   fs.writeFileSync(path.join(root, "bootstrap.cjs"), `
     const { app, BrowserWindow, clipboard, ClipboardItem, desktopCapturer, nativeImage, screen, session } = require('electron');
+    require('electron').systemPreferences.getMediaAccessStatus = () => 'granted';
     const fs = require('node:fs'), path = require('node:path'), http = require('node:http');
     const { Blob } = require('node:buffer');
     const root = ${JSON.stringify(root)}, vault = fs.realpathSync(${JSON.stringify(vault)});
@@ -171,6 +172,7 @@ try {
           let raw = ''; for await (const chunk of request) raw += chunk;
           const payload = JSON.parse(raw || '{}');
           if (request.url === '/status') return response.end(JSON.stringify({ ready: true, restored, captures, captureSize, petHiddenDuringCapture, petVisible: Boolean(petWindow()?.isVisible()), electron: process.versions.electron }));
+          if (request.url === '/paste-note') { const win = BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().endsWith('#document')); win.webContents.paste(); return response.end('{}'); }
           if (request.url === '/restore') return response.end(JSON.stringify(await restoreClipboard()));
           if (request.url === '/compare') {
             const items = await clipboard.read();
@@ -258,6 +260,22 @@ try {
   assert.equal((await control("compare", { file: editedFile })).matches, true);
   await editor.evaluate('setTimeout(() => document.querySelector("[data-act=close]").click(), 30); true');
   await waitFor(async () => !(await targets()).some(item => item.url.includes("screenshot-editor.html")), { process: electron });
+
+  // Paste the real OS clipboard PNG into a Markdown document. The original
+  // clipboard formats are restored by this test's existing finally block.
+  fs.writeFileSync(path.join(vault,'剪贴板图片.md'),'# 粘贴验收\n\n');
+  await workspace.evaluate(`window.lumen.note.open('剪贴板图片.md')`);
+  const doc = await connect((await findWindow('#document')).webSocketDebuggerUrl);
+  await waitFor(()=>doc.evaluate(`Boolean(document.querySelector('.cm-content'))`),{process:electron});
+  await doc.send('Page.bringToFront');
+  await doc.evaluate(`document.querySelector('.cm-content').focus()`);
+  await control('paste-note');
+  await waitFor(()=>fs.readFileSync(path.join(vault,'剪贴板图片.md'),'utf8').includes('](<images/'),{process:electron});
+  await waitFor(()=>doc.evaluate(`document.querySelector('.md-media img')?.naturalWidth > 0`),{process:electron});
+  const relative = fs.readFileSync(path.join(vault,'剪贴板图片.md'),'utf8').match(/<([^>]+)>/)[1];
+  assert.equal((await control('compare',{file:path.join(fs.realpathSync(vault),relative)})).matches,true,'pasted file matches the OS clipboard image');
+  await doc.evaluate(`setTimeout(()=>window.lumen.window.close(),30);true`);
+  await waitFor(async()=>!(await targets()).some(t=>t.url.endsWith('#document')),{process:electron});
 
   // A region selection follows real pointer handlers and region:submit IPC.
   await workspace.evaluate('document.querySelector("[data-module-action=screenshot-region]").click()');

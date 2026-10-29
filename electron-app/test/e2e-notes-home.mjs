@@ -135,17 +135,37 @@ try {
   await evaluate(`document.querySelector('[data-action="refresh"]').click()`);
   await waitFor(() => evaluate(`document.querySelector('.notes-home-results')?.textContent.includes('历史回顾')`), {process:electron});
   assert.equal(await evaluate(`document.querySelector('.notes-home-results').textContent.includes('AAAA-template')`), false);
+  const documentTarget = async name => {
+    const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
+    return targets.find(item => item.url.endsWith('#document') && item.title.includes(name));
+  };
+  const switchTo = async target => { socket.close(); await connect(target.webSocketDebuggerUrl); };
+  const popout = async () => { await waitFor(() => evaluate(`Boolean(document.querySelector('[data-action="popout-note"]'))`), {process:electron}); await evaluate(`document.querySelector('[data-action="popout-note"]').click()`); };
+  const closeDocument = async name => {
+    const target = await waitFor(() => documentTarget(name), {process:electron});
+    await switchTo(target);
+    await waitFor(() => evaluate(`Boolean(document.querySelector('.cm-content'))`), {process:electron});
+    await evaluate(`setTimeout(() => void window.lumen.window.close(), 30); true`);
+    await waitFor(async () => !await documentTarget(name), {process:electron});
+    await switchTo(workspace);
+  };
   const paths = [];
   for (const type of ['blank','note','daily','meeting','project','person']) {
     await evaluate(`document.querySelector('[data-action="home-new"][data-value="${type}"]').click()`);
     await waitFor(() => evaluate(`Boolean(document.querySelector('[data-home-create]'))`), {process:electron});
     await evaluate(`(()=>{const form=document.querySelector('[data-home-create]'); form.elements.title.value='主页测试-${type}';form.requestSubmit();})()`);
-    await waitFor(() => evaluate(`document.querySelector('.ws-doc-name')?.textContent === '主页测试-${type}.md'`), {process:electron});
+    await popout();
+    const doc = await waitFor(() => documentTarget('主页测试-'+type+'.md'), {process:electron});
     const file = await evaluate(`window.lumen.workspace.list().then(result=>window.DMNotesHome.filesFromTree(result.tree).find(file=>file.name==='主页测试-${type}.md'))`);
     paths.push(file.path);
     assert.equal(file.createdAtSource, 'metadata');
     assert.match(fs.readFileSync(path.join(activeRoot,file.path),'utf8'), new RegExp('主页测试-'+type));
-    await evaluate(`(()=>{const editor=document.querySelector('.ws-editor');editor.value+='\\n正文检索专用 home-body-needle-${type}';editor.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[data-action="notes-home"]').click();})()`);
+    await switchTo(doc);
+    await waitFor(() => evaluate(`Boolean(document.querySelector('.cm-content'))`), {process:electron});
+    await evaluate(`document.querySelector('[data-mode="source"]').click();document.querySelector('.cm-content').focus()`);
+    await send('Input.dispatchKeyEvent', {type:'keyDown',key:'End',code:'End',modifiers:2});
+    await send('Input.insertText', {text:'\n正文检索专用 home-body-needle-'+type+'\n'});
+    await closeDocument('主页测试-'+type+'.md');
     await waitFor(() => evaluate(`Boolean(document.querySelector('.notes-home'))`), {process:electron});
     assert.ok(fs.readFileSync(path.join(activeRoot,file.path),'utf8').includes('home-body-needle-'+type));
   }
@@ -156,14 +176,16 @@ try {
   assert.equal(await evaluate(`document.querySelectorAll('[data-action="home-open"]').length`), 1);
   assert.equal(await evaluate(`document.activeElement === document.querySelector('[data-home-search]') || document.querySelector('[data-home-search]').value === '主页测试 meeting'`), true);
   await evaluate(`document.querySelector('[data-action="home-open"]').click()`);
-  await waitFor(() => evaluate(`document.querySelector('.ws-doc-name')?.textContent==='主页测试-meeting.md'`), {process:electron});
+  await popout();
+  await closeDocument('主页测试-meeting.md');
   await evaluate(`document.querySelector('[data-action="notes-home"]').click()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector('.notes-home'))`), {process:electron});
   await evaluate(`(()=>{const input=document.querySelector('[data-home-search]');input.value='home-body-needle-note';input.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[data-action="home-fulltext"]').click();})()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector('[data-palette-path]'))`), {process:electron});
   assert.equal(await evaluate(`document.querySelector('.ws-palette-list').textContent.includes('home-body-needle-note')`), true);
   await evaluate(`document.querySelector('[data-palette-path]').click()`);
-  await waitFor(() => evaluate(`document.querySelector('.ws-doc-name')?.textContent==='主页测试-note.md'`), {process:electron});
+  await popout();
+  await closeDocument('主页测试-note.md');
   await evaluate(`location.reload()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector('.notes-home')) && !document.querySelector('.ws-editor')`), {process:electron});
   await evaluate(`document.querySelector('[data-action="section"][data-value="tasks"]').click()`);
@@ -195,7 +217,7 @@ try {
   assert.equal(await evaluate(`getComputedStyle(document.querySelector('.notes-home-kinds')).gridTemplateColumns.split(' ').length`),2);
   const narrow=await send('Page.captureScreenshot',{format:'png'});
   fs.writeFileSync(path.join(output,'narrow.png'),Buffer.from(narrow.result.data,'base64'));
-  console.log('PASS notes home: startup, six real-file creation flows, save-before-home, recent sorting, title/full-text search, restart and vault isolation. Screenshots: '+output);
+  console.log('PASS notes home: startup, six real-file creation flows, independent windows and close-before-home save, recent sorting, title/full-text search, restart and vault isolation. Screenshots: '+output);
 } finally {
   try { socket?.close(); } catch {}
   for (const record of children.reverse()) await stop(record);

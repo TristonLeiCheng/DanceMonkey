@@ -4,7 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { Blob } = require("node:buffer");
 const { pathToFileURL } = require("node:url");
-const { clipboard, ClipboardItem, desktopCapturer, nativeImage, screen } = require("electron");
+const { clipboard, ClipboardItem, desktopCapturer, nativeImage, screen, systemPreferences } = require("electron");
 const { getPkbPaths } = require("./pkb");
 
 function stamp() {
@@ -64,11 +64,32 @@ function displayUnderCursor() {
   return screen.getDisplayNearestPoint(point);
 }
 
+function screenPermission() {
+  return process.platform === 'darwin' ? systemPreferences?.getMediaAccessStatus('screen') || 'unknown' : 'granted';
+}
+function permissionError() {
+  const error = new Error('macOS 未允许 DM 录制屏幕。请在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」中允许 DanceMonkey，然后完全退出并重新打开应用。');
+  error.code = 'SCREEN_PERMISSION'; return error;
+}
+async function captureSources(options) {
+  if (['denied', 'restricted'].includes(screenPermission())) throw permissionError();
+  let timer;
+  try {
+    return await Promise.race([
+      desktopCapturer.getSources(options),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('获取屏幕画面超时。请检查屏幕录制权限，或重新启动应用后再试。')), 15000); timer.unref?.(); }),
+    ]);
+  } catch (error) {
+    if (process.platform === 'darwin' && screenPermission() !== 'granted' && screenPermission() !== 'unknown') throw permissionError();
+    throw error;
+  } finally { clearTimeout(timer); }
+}
+
 async function captureDisplayImage(display = displayUnderCursor()) {
   const scale = display.scaleFactor || 1;
   const width = Math.max(1, Math.round(display.size.width * scale));
   const height = Math.max(1, Math.round(display.size.height * scale));
-  const sources = await desktopCapturer.getSources({
+  const sources = await captureSources({
     types: ["screen"],
     thumbnailSize: { width, height },
   });
@@ -167,6 +188,7 @@ async function saveEditedPng(base64OrDataUrl, notesRoot, prefix = "DM_edit") {
 
 module.exports = {
   captureDisplayImage,
+  screenPermission,
   copyImageToClipboard,
   cropImage,
   displayUnderCursor,

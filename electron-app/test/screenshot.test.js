@@ -20,7 +20,7 @@ function deferred() {
 function fixture(t, options = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "dm-screenshot-test-")));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const calls = { writes: [], legacy: [], windows: [] };
+  const calls = { writes: [], legacy: [], windows: [], errors: [] };
   let write = options.write || (async () => {});
   let rootError = null;
   const makeImage = (data) => ({
@@ -62,6 +62,9 @@ function fixture(t, options = {}) {
     bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1080 } };
   const electron = {
     BrowserWindow,
+    systemPreferences: { getMediaAccessStatus: () => options.permission || 'granted' },
+    dialog: { showMessageBox: async details => { calls.errors.push(details); return {response:1}; } },
+    shell: { openExternal: async () => {} },
     clipboard: {
       writeImage: (value) => { calls.legacy.push(value); },
     },
@@ -70,7 +73,7 @@ function fixture(t, options = {}) {
       createFromPath: (file) => makeImage(fs.readFileSync(file)),
     },
     screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => display },
-    desktopCapturer: { getSources: async () => { options.onCapture?.(calls); return [{ display_id: "1", thumbnail: image }]; } },
+    desktopCapturer: { getSources: async () => { await options.onCapture?.(calls); return [{ display_id: "1", thumbnail: image }]; } },
   };
   if (!options.legacy) {
     electron.ClipboardItem = ClipboardItem;
@@ -267,4 +270,20 @@ test("captures hide the desktop pet and restore it without focusing it, includin
     assert.equal(h.petWindow.isVisible(), true);
     assert.equal(h.petWindow.restoredInactive, true, 'restoration must not steal focus');
   }
+});
+
+test('denied screen recording permission is actionable and visible even for shortcut callers', async t => {
+  if (process.platform !== 'darwin') return;
+  const f = fixture(t, {permission:'denied', visibleAppWindows:true});
+  const result = await f.controller.captureQuick();
+  assert.equal(result.success,false); assert.equal(result.code,'SCREEN_PERMISSION');
+  assert.match(result.error,/屏幕.*录制/); assert.equal(f.calls.errors.length,1);
+  assert.deepEqual(Array.from(f.calls.errors[0].buttons),['打开系统设置','关闭']);
+  assert.ok(f.appWindows.every(win=>win.isVisible()));
+});
+test('a stalled screen source times out, reports an error and restores windows', async t => {
+  const f = fixture(t, { onCapture: () => new Promise(()=>{}), visibleAppWindows:true });
+  const result = await f.controller.captureQuick();
+  assert.equal(result.success,false); assert.match(result.error,/超时/);
+  assert.ok(f.appWindows.every(win=>win.isVisible())); assert.equal(f.controller.busy,false);
 });

@@ -20,6 +20,7 @@ const { createQuickAccessService } = require("./quick-access");
 const { createScreenshotController } = require("./screenshot-controller");
 const { createStore } = require("./store");
 const { createWorkspace } = require("./workspace");
+const { createNoteWindows } = require("./note-windows");
 const { createZenTaskStore } = require("./zentask");
 const { createVaultRegistry, registerVaultIpc } = require("./vaults");
 const { registerPkbIpc } = require("./pkb-ipc");
@@ -112,6 +113,16 @@ let legacyConfig;
 let githubNotes;
 let overlay = null;
 let workspaceWindow = null;
+let noteWindows;
+const pendingMarkdownFiles = [];
+function openMarkdownFile(file) {
+  if (!/\.md$/i.test(file)) return;
+  if (!noteWindows) { pendingMarkdownFiles.push(file); return; }
+  try { noteWindows.openLocal(path.resolve(file)); }
+  catch (error) { dialog.showErrorBox('无法打开 Markdown', error.message); }
+}
+app.on('open-file', (event, file) => { event.preventDefault(); openMarkdownFile(file); });
+const editorWindows = () => [overlay, workspaceWindow, ...(noteWindows?.windows() || [])];
 let mode = "collapsed";
 let registeredHotkeys = [];
 const syncAbortControllers = new Map();
@@ -287,9 +298,17 @@ app.whenReady().then(() => {
   githubNotes = registerGitHubSync({
     app, ipcMain, safeStorage, shell, clipboard, dialog, BrowserWindow, fetch: fetchWithSystemProxy,
     root: workspaceStore.root,
-    getWindows: () => [overlay, workspaceWindow],
+    getWindows: editorWindows,
     isFolderSyncBusy: () => syncAbortControllers.size > 0 || Boolean(screenshotController?.busy),
     refreshNotes: () => refreshQuickNotes(),
+  });
+  noteWindows = createNoteWindows({
+    BrowserWindow, ipcMain, dialog, getWorkspace: () => workspaceStore, rendererUrl, icon: appWindowIcon,
+    assertWritable: generation => githubNotes.assertWritable(generation),
+    isBusy: () => githubNotes.busy || Boolean(quitController?.pending),
+    canClose: () => Boolean(quitController?.allowed),
+    trusted: githubNotes.trusted,
+    changed: root => { if (root === workspaceStore.root) { refreshQuickNotes(); notifyWorkspaceChanged(); } },
   });
   registerPkbIpc({
     ipcMain, dialog, BrowserWindow, getRoot: () => workspaceStore.root, githubNotes,
@@ -370,6 +389,10 @@ app.whenReady().then(() => {
     getOverlay: () => overlay,
     getWorkspaceWindow: () => workspaceWindow,
     getPetWindow: () => desktopPet?.window,
+    getDocumentWindows: () => noteWindows?.windows() || [],
+    onFailure: result => {
+      try { fs.writeFileSync(path.join(app.getPath('userData'), 'screenshot-last-error.json'), JSON.stringify({ at: new Date().toISOString(), ...result }), { mode: 0o600 }); } catch {}
+    },
     openWorkspace,
     applyShell,
     isDev,
@@ -518,7 +541,7 @@ app.whenReady().then(() => {
   });
 
   quitController = createAppQuitController({
-    getWindows: () => [overlay, workspaceWindow],
+    getWindows: editorWindows,
     stopBackground: async () => {
       appUpdateController.stop();
       folderSyncScheduler.stop();
@@ -572,7 +595,11 @@ app.whenReady().then(() => {
   });
 
   // 再次启动时唤出既有窗口，而不是让用户以为程序没反应
-  app.on("second-instance", showApplication);
+  app.on("second-instance", (_event, argv) => {
+    const files = argv.filter(arg => /\.md$/i.test(arg) && !arg.startsWith('-'));
+    if (files.length) files.forEach(openMarkdownFile); else showApplication();
+  });
+  [...pendingMarkdownFiles.splice(0), ...process.argv.slice(1).filter(arg => /\.md$/i.test(arg) && !arg.startsWith('-'))].forEach(openMarkdownFile);
 
   // 面板失焦才收起；快捷轨只靠鼠标离开收起，避免一展开就被 blur 打回细条
   overlay.on("blur", () => {
@@ -615,6 +642,12 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("shell:set", (_e, next) => applyShell(next));
   ipcMain.handle("workspace:open", (_e, section) => openWorkspace(section));
+  ipcMain.handle("workspace:project", (_event, id) => {
+    openWorkspace("projects");
+    const send = () => workspaceWindow?.webContents.send("workspace:project", id);
+    if (workspaceWindow?.webContents.isLoading()) workspaceWindow.webContents.once("did-finish-load", send);
+    else send();
+  });
   ipcMain.handle("workspace:list", () => ({
     root: workspaceStore.root,
     tree: workspaceStore.list(),
@@ -622,6 +655,7 @@ app.whenReady().then(() => {
   ipcMain.handle("workspace:read", (_e, relativePath) => workspaceStore.read(relativePath));
   ipcMain.handle("workspace:write", (_e, relativePath, content, generation) => {
     githubNotes.assertWritable(generation);
+    noteWindows.assertAvailable(workspaceStore.root, relativePath);
     const result = workspaceStore.write(relativePath, content);
     refreshQuickNotes();
     return result;
@@ -647,6 +681,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("workspace:rename", (_e, relativePath, name, generation) => {
     githubNotes.assertWritable(generation);
+    noteWindows.assertAvailable(workspaceStore.root, relativePath);
     const result = workspaceStore.rename(relativePath, name);
     zenTaskStore.relocateNotes(relativePath, result);
     refreshQuickNotes();
@@ -654,6 +689,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("workspace:remove", (_e, relativePath, generation) => {
     githubNotes.assertWritable(generation);
+    noteWindows.assertAvailable(workspaceStore.root, relativePath);
     const result = workspaceStore.remove(relativePath);
     refreshQuickNotes();
     return result;

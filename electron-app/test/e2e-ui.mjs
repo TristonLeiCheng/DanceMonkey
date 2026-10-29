@@ -121,6 +121,21 @@ try {
   socket.close();
   await connect(workspace.webSocketDebuggerUrl);
 
+  const documentTargets = async () => (await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json()).filter(item => item.url.endsWith('#document'));
+  const switchTo = async target => { socket.close(); await connect(target.webSocketDebuggerUrl); };
+  const findDocument = async name => waitFor(async () => { await evaluate(`document.querySelector('[data-action="popout-note"]')?.click()`); return (await documentTargets()).find(item => item.title.includes(name)); }, {process:electron});
+  const focusDocument = async name => {
+    const target = await findDocument(name); await switchTo(target);
+    await waitFor(() => evaluate(`Boolean(document.querySelector('.cm-content'))`), {process:electron});
+    return target;
+  };
+  const focusWorkspace = () => switchTo(workspace);
+  const replaceDocument = async text => {
+    await evaluate(`document.querySelector('[data-mode="source"]').click();document.querySelector('.cm-content').focus()`);
+    await send('Input.dispatchKeyEvent', {type:'keyDown',key:'a',code:'KeyA',modifiers:process.platform==='darwin'?4:2});
+    await send('Input.dispatchKeyEvent', {type:'keyUp',key:'a',code:'KeyA',modifiers:process.platform==='darwin'?4:2});
+    await send('Input.insertText', {text});
+  };
   await waitFor(() => evaluate(`location.hash.startsWith("#workspace") && document.readyState === "complete"`), { process: electron });
   await waitFor(() => evaluate(`window.lumen.getAppVersion().then(version => document.querySelector(".ws-brand")?.textContent.includes("v" + version))`), { process: electron });
   assert.equal(await evaluate(`localStorage.getItem("lumen-workspace-opacity") === null && document.querySelector(".ws-opacity")?.value === "82"`), true);
@@ -144,7 +159,7 @@ try {
   await evaluate(`document.querySelector('.ws-dialog-input').value = '会议记录'; document.querySelector('[data-dialog="confirm"]').click()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector('.tree-row[data-path="工作资料/会议记录"]'))`), { process: electron });
   await evaluate(`document.querySelector('[data-action="new-file"]').click(); document.querySelector('.ws-dialog-input').value = '本周计划'; document.querySelector('[data-dialog="confirm"]').click()`);
-  await waitFor(() => evaluate(`document.querySelector('.ws-doc-name')?.textContent === '本周计划.md'`), { process: electron });
+  await findDocument('本周计划.md');
   await evaluate(`document.querySelector('[data-action="select-root"]').click(); document.querySelector('[data-action="new-folder"]').click()`);
   assert.equal(await evaluate(`document.querySelector('.ws-parent-select').value`), "");
   await evaluate(`document.querySelector('[data-dialog="cancel"]').click()`);
@@ -168,14 +183,16 @@ try {
   }
   await evaluate(`document.querySelector('[data-action="maximize"]').click()`);
   await waitFor(() => evaluate(`!document.querySelector(".workspace-root").classList.contains("maximized")`), { process: electron });
-  if (!await evaluate(`Boolean(document.querySelector(".ws-editor"))`)) await evaluate(`window.lumen.workspace.createFile("", "e2e.md").then(() => location.reload())`);
-  await waitFor(() => evaluate(`Boolean(document.querySelector(".ws-editor"))`), { process: electron });
-  await evaluate(`(async()=>{ await window.lumen.zenTask.addProject({name:"UI 发布",status:"Blocked",lifecycleStatus:"In Progress",milestones:[{id:"ui-stage",name:"UI 验收",dueDate:"2020-01-01"}]}); const editor=document.querySelector(".ws-editor"); editor.value="- [ ] 完成 UI 验收\\n- [ ] 返回来源笔记"; editor.dispatchEvent(new Event("input",{bubbles:true})); editor.setSelectionRange(0,editor.value.length); document.querySelector('[data-action="note-to-tasks"]').click(); })()`);
+  await evaluate(`window.lumen.zenTask.addProject({name:"UI 发布",status:"Blocked",lifecycleStatus:"In Progress",milestones:[{id:"ui-stage",name:"UI 验收",dueDate:"2020-01-01"}]})`);
+  await focusDocument('本周计划.md');
+  await replaceDocument('- [ ] 完成 UI 验收\n- [ ] 返回来源笔记');
+  await evaluate(`document.querySelector('[data-tasks]').click()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector(".ws-note-task-dialog"))`), { process: electron });
   assert.equal(await evaluate(`document.querySelectorAll("[data-candidate]").length`), 2);
   await evaluate(`(()=>{ const stage=document.querySelector('[name="milestoneId"]'); stage.value="ui-stage"; stage.dispatchEvent(new Event("change",{bubbles:true})); document.querySelector(".ws-note-task-dialog").requestSubmit(); })()`);
   await waitFor(() => evaluate(`document.body.textContent.includes("已创建 2 项任务")`), { process: electron });
   await evaluate(`document.querySelector("[data-note-task-project]").click()`);
+  await focusWorkspace();
   await waitFor(() => evaluate(`document.body.textContent.includes("完成 UI 验收") && document.body.textContent.includes("里程碑 · UI 验收")`), { process: electron });
   await evaluate(`document.querySelector('[data-module-action="pm-back"]').click()`);
   await waitFor(() => evaluate(`document.body.textContent.includes("Needs attention")`), { process: electron });
@@ -183,18 +200,20 @@ try {
   await evaluate(`document.querySelector('[data-module-action="pm-attention"]').click()`);
   await waitFor(() => evaluate(`document.body.textContent.includes("完成 UI 验收")`), { process: electron });
   await evaluate(`document.querySelector('[data-module-action="pm-open-task-source"]').click()`);
-  await waitFor(() => evaluate(`Boolean(document.querySelector(".ws-editor"))`), { process: electron });
+  await focusDocument("本周计划.md");
   // Exercise the real IPC editor handshake without GitHub credentials or any network sync.
   const githubState = await evaluate(`window.lumen.githubSync.status()`);
   assert.equal(githubState.success, true);
   assert.equal(githubState.auth.connected, false);
   assert.equal(githubState.root.startsWith(fs.realpathSync(root)), true);
-  const syncWithoutBinding = await evaluate(`(async()=>{ const editor=document.querySelector('.ws-editor'); editor.value='GitHub flush test'; editor.dispatchEvent(new Event('input',{bubbles:true})); return window.lumen.githubSync.preview(); })()`);
+  await replaceDocument('GitHub flush test');
+  const syncWithoutBinding = await evaluate(`window.lumen.githubSync.preview()`);
   assert.equal(syncWithoutBinding.success, false);
   assert.match(syncWithoutBinding.error, /绑定/);
   assert.equal(await evaluate(`document.getElementById('root').inert`), false);
-  assert.equal(await evaluate(`document.querySelector('.ws-editor').value`), "GitHub flush test");
-  assert.equal(await evaluate(`document.querySelector('.ws-save-state').textContent`), "已保存");
+  assert.equal(await evaluate(`document.querySelector('.cm-content').textContent`), "GitHub flush test");
+  assert.equal(await evaluate(`document.querySelector('[data-save-state]').textContent`), "已保存");
+  await focusWorkspace();
   // Model downloaded JSON on disk, then run the real editor resume handshake.
   // The unbound preview still prepares/resumes both windows without contacting GitHub.
   await evaluate(`document.querySelector('[data-action="section"][data-value="projects"]').click()`);
@@ -321,11 +340,14 @@ try {
   const otherRoot = vaultList.vaults.find((vault) => vault.root !== originalRoot)?.root;
   assert.ok(otherRoot, "the isolated fixture must register a second vault");
   const notePath = "工作资料/会议记录/本周计划.md";
+  const aDoc = await findDocument('本周计划.md');
   await evaluate(`document.querySelector(${JSON.stringify(`.tree-row[data-path="${notePath}"] .tree-name`)}).click()`);
   await evaluate(`window.lumen.setState({ notes: [{ id: 'vault-a-quick-note', notebookId: 'inbox', title: 'A 库便签', body: '只属于 A 库', updatedAt: Date.now() }], activeNoteId: 'vault-a-quick-note' })`);
-  await waitFor(() => evaluate(`document.querySelector('.ws-doc-name')?.textContent === '本周计划.md' && Boolean(document.querySelector('.tree-row[data-path="Journal"]'))`), { process: electron });
+  await findDocument('本周计划.md');
+  await waitFor(() => evaluate(`Boolean(document.querySelector('.tree-row[data-path="Journal"]'))`), { process: electron });
   const originalExpanded = await evaluate(`localStorage.getItem(window.DMTreeState.storageKey(${JSON.stringify(originalRoot)}))`);
-  await evaluate(`(()=>{ const editor=document.querySelector('.ws-editor'); editor.value='A 库切换前未保存的内容'; editor.dispatchEvent(new Event('input',{bubbles:true})); const select=document.querySelector('.ws-vault-select'); select.value=${JSON.stringify(otherRoot)}; select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
+  await focusDocument('本周计划.md'); await replaceDocument('A 库切换前未保存的内容'); await focusWorkspace();
+  await evaluate(`(()=>{ const select=document.querySelector('.ws-vault-select'); select.value=${JSON.stringify(otherRoot)}; select.dispatchEvent(new Event('change',{bubbles:true})); })()`);
   await waitFor(() => evaluate(`document.querySelector('.ws-vault-path')?.title === ${JSON.stringify(otherRoot)} && !document.getElementById('root').inert`), { process: electron });
   assert.equal(fs.readFileSync(path.join(originalRoot, notePath), "utf8"), "A 库切换前未保存的内容");
   assert.equal(await evaluate(`Boolean(document.querySelector('.ws-editor'))`), false);
@@ -337,7 +359,12 @@ try {
   assert.equal((await evaluate(`window.lumen.getState()`)).notes.length, 0);
   await evaluate(`document.querySelector('.tree-row[data-path="工作资料/会议记录"] .tree-expander').click()`);
   await evaluate(`document.querySelector(${JSON.stringify(`.tree-row[data-path="${notePath}"] .tree-name`)}).click()`);
-  await waitFor(() => evaluate(`document.querySelector('.ws-editor')?.value === 'B 库独立内容'`), { process: electron });
+  await waitFor(() => evaluate(`Boolean(document.querySelector('[data-action="popout-note"]'))`), {process:electron});
+  await evaluate(`document.querySelector('[data-action="popout-note"]').click()`);
+  const bDoc = await waitFor(async () => (await documentTargets()).find(item => item.title.includes('本周计划.md') && item.id !== aDoc.id), {process:electron});
+  await switchTo(bDoc);
+  assert.equal((await evaluate(`window.lumen.note.read()`)).content, 'B 库独立内容');
+  await focusWorkspace();
   await evaluate(`document.querySelector('.tree-row[data-path="工作资料"] .tree-expander').click()`);
   const otherExpanded = await evaluate(`localStorage.getItem(window.DMTreeState.storageKey(${JSON.stringify(otherRoot)}))`);
   await evaluate(`(()=>{const select=document.querySelector('.ws-vault-select'); select.value=${JSON.stringify(originalRoot)}; select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
@@ -349,7 +376,9 @@ try {
   assert.equal(restoredNotes.length, 1);
   assert.equal(restoredNotes[0].body, "只属于 A 库");
   await evaluate(`document.querySelector(${JSON.stringify(`.tree-row[data-path="${notePath}"] .tree-name`)}).click()`);
-  await waitFor(() => evaluate(`document.querySelector('.ws-editor')?.value === 'A 库切换前未保存的内容'`), { process: electron });
+  await switchTo(aDoc);
+  assert.equal((await evaluate(`window.lumen.note.read()`)).content, 'A 库切换前未保存的内容');
+  await focusWorkspace();
   await evaluate(`(()=>{const select=document.querySelector('.ws-vault-select'); select.value=${JSON.stringify(otherRoot)}; select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await waitFor(() => evaluate(`document.querySelector('.ws-vault-path')?.title === ${JSON.stringify(otherRoot)} && !document.getElementById('root').inert`), { process: electron });
   assert.equal(await evaluate(`localStorage.getItem(window.DMTreeState.storageKey(${JSON.stringify(otherRoot)}))`), otherExpanded);
@@ -369,28 +398,34 @@ try {
   await evaluate(`document.querySelector('[data-action="pkb-note"]').click()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector('.ws-pkb-type'))`), { process: electron });
   await evaluate(`(()=>{document.querySelector('.ws-dialog-input').value='PKB 验收';document.querySelector('[data-pkb="create"]').click();})()`);
-  await waitFor(() => evaluate(`document.querySelector('.ws-editor')?.value.includes('PKB 验收')`), { process: electron });
-  const createdText = await evaluate(`document.querySelector('.ws-editor').value`);
+  const pkbDoc = await focusDocument('PKB 验收.md');
+  const created = await evaluate(`window.lumen.note.read()`);
+  const createdText = created.content;
   assert.match(createdText, /id:/);
   assert.match(createdText, /sensitivity:/);
-  await evaluate(`(()=>{const e=document.querySelector('.ws-editor');e.value+='\\n正文唯一检索词 pkb-body-needle';e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-  await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown',{key:'s',ctrlKey:true,bubbles:true}))`);
-  await waitFor(() => evaluate(`document.querySelector('.ws-save-state')?.textContent === '已保存'`), { process: electron });
+  await replaceDocument(createdText + '\n正文唯一检索词 pkb-body-needle');
+  await evaluate(`document.querySelector('[data-save]').click()`);
+  await waitFor(() => evaluate(`document.querySelector('[data-save-state]')?.textContent === '已保存'`), {process:electron});
+  await focusWorkspace();
   await evaluate(`document.querySelector('[data-action="pkb-search"]').click()`);
   await evaluate(`(()=>{const e=document.querySelector('.ws-palette-input');e.value='pkb-body-needle';e.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));})()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector('[data-palette-path]'))`), { process: electron });
   assert.equal(await evaluate(`document.querySelector('.ws-palette-list').textContent.includes('pkb-body-needle')`), true);
   await evaluate(`document.querySelector('[data-palette-path]').click()`);
-  await waitFor(() => evaluate(`!document.querySelector('.ws-palette-backdrop') && document.querySelector('.ws-editor')?.value.includes('pkb-body-needle')`), { process: electron });
+  await waitFor(() => evaluate(`!document.querySelector('.ws-palette-backdrop')`), {process:electron});
+  await switchTo(pkbDoc);
+  assert.ok((await evaluate(`window.lumen.note.read()`)).content.includes('pkb-body-needle'));
+  await focusWorkspace();
   if (process.env.DM_E2E_PKB_SCREENSHOT) {
     const capture = await send("Page.captureScreenshot", { format: "png" });
     fs.writeFileSync(process.env.DM_E2E_PKB_SCREENSHOT, Buffer.from(capture.result.data, "base64"));
   }
   // A single click must terminate the whole Electron application after saving dirty notes.
   const quitRoot = await evaluate(`window.lumen.workspace.list().then(result => result.root)`);
-  const quitPath = await evaluate(`document.querySelector('.ws-current-path').textContent`);
+  const quitPath = created.path;
   assert.equal(await evaluate(`document.querySelector('[data-action="quit-app"]')?.textContent`), "退出");
-  await evaluate(`(() => { const editor=document.querySelector('.ws-editor'); editor.value+='\\n退出前立即保存 e2e-quit-save'; editor.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('[data-action="quit-app"]').click(); return true; })()`);
+  await switchTo(pkbDoc); await replaceDocument(createdText + '\n退出前立即保存 e2e-quit-save'); await focusWorkspace();
+  await evaluate(`document.querySelector('[data-action="quit-app"]').click(); true`);
   await waitFor(() => electron.exited, {timeout:15000});
   assert.equal(electron.code, 0, electron.output);
   assert.equal(fs.readFileSync(path.join(quitRoot, quitPath), "utf8").includes('e2e-quit-save'), true);

@@ -2,11 +2,11 @@
 
 > 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。
 
-## 最新版本 · v3.12.1
+## 最新版本 · v3.15.0
 
-[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.12.1) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.12.1.md)
+[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.15.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.15.0.md)
 
-v3.12.1 补齐此前遗漏的代理改进：Mac / Windows 均支持直连、公司系统默认及固定 IP 手动代理，AI 可独立选择连接方式；保留 v3.12.0 全部宠物、提醒、笔记与其他功能。
+v3.15.0 将笔记升级为本机 Markdown 编辑器：支持独立窗口、实时预览编辑、图片和表格编辑，以及粘贴／拖拽图片自动保存为相对路径；补齐编辑工具栏与截图权限错误提示，保留此前网络连接、宠物、提醒及其他功能。
 
 - **默认宠物提醒**：统一命名为“宠物提醒”，在顶部“默认提醒方式”下拉框直接选择；新建提醒跟随默认，单条提醒可单独指定。
 - **新动画伙伴**：考拉、仓鼠、海豹、经典黄纹短袖写实良子及仿真昆虫；蟑螂随机爬行，蚊子曲线飞行与悬停。

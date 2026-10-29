@@ -1,7 +1,7 @@
 {
   "name": "dance-monkey",
   "productName": "DanceMonkey",
-  "version": "3.12.1",
+  "version": "3.15.0",
   "private": true,
   "description": "DM (DanceMonkey) 桌面磨砂玻璃笔记与待办",
   "main": "electron/main.js",
@@ -26,15 +26,24 @@
     "package:mac:arm64": "node tools/package-mac.mjs arm64",
     "package:mac:x64": "node tools/package-mac.mjs x64",
     "package:release:current": "node tools/package-current-desktop.mjs",
-    "test:e2e:network": "node test/e2e-network.mjs"
+    "test:e2e:network": "node test/e2e-network.mjs",
+    "build:editor": "esbuild src/note-document.mjs --bundle --format=iife --target=chrome120 --minify --outfile=src/note-document.bundle.js",
+    "test:e2e:notes": "node test/e2e-note-editor.mjs"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.10.2",
     "@electron-forge/maker-zip": "^7.10.2",
-    "electron": "^44.4.1"
+    "electron": "^44.4.1",
+    "esbuild": "^0.28.2"
   },
   "dependencies": {
     "@azure/msal-node": "^7.1.1",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "dompurify": "^3.4.15",
     "htmlparser2": "^10.1.0",
     "isomorphic-git": "^1.44.3",

@@ -1,5 +1,5 @@
 const path = require("node:path");
-const { BrowserWindow, screen } = require("electron");
+const { BrowserWindow, screen, dialog, shell } = require("electron");
 const { pathToFileURL } = require("node:url");
 const {
   captureDisplayImage,
@@ -20,6 +20,8 @@ function createScreenshotController({
   getOverlay,
   getWorkspaceWindow,
   getPetWindow,
+  getDocumentWindows = () => [],
+  onFailure = () => {},
   openWorkspace,
   applyShell,
 }) {
@@ -58,7 +60,7 @@ function createScreenshotController({
     const hidden = [];
     const overlay = getOverlay?.();
     const workspace = getWorkspaceWindow?.();
-    for (const win of [overlay, workspace, getPetWindow?.(), resultWindow, choiceWindow, editorWindow]) {
+    for (const win of [overlay, workspace, getPetWindow?.(), ...getDocumentWindows(), resultWindow, choiceWindow, editorWindow]) {
       if (win && !win.isDestroyed() && win.isVisible()) {
         win.hide();
         hidden.push(win);
@@ -227,7 +229,7 @@ function createScreenshotController({
       return { success: true, path: filePath };
     } catch (error) {
       restoreWindows(hidden);
-      return { success: false, error: error?.message || "截屏失败" };
+      return { success: false, error: error?.message || "截屏失败", code: error?.code };
     }
   }
 
@@ -283,7 +285,7 @@ function createScreenshotController({
     } catch (error) {
       restoreWindows(hidden);
       pendingRegion = null;
-      return { success: false, error: error?.message || "框选截屏失败" };
+      return { success: false, error: error?.message || "框选截屏失败", code: error?.code };
     }
   }
 
@@ -309,7 +311,7 @@ function createScreenshotController({
       else if (action === "edit") openEditorWindow(filePath);
       else openChoiceWindow(filePath, "region");
     } catch (error) {
-      console.error("region crop failed", error);
+      await reportFailure({ error: error.message || "截图裁剪失败" });
     }
   }
 
@@ -433,13 +435,28 @@ function createScreenshotController({
     return watermarkMeta();
   }
 
-  let pendingCaptures = 0;
-  const capture = async (operation) => {
+  let pendingCaptures = 0, reportingError = false;
+  async function reportFailure(result) {
+    console.error('[screenshot]', result.error);
+    onFailure(result);
+    if (reportingError || !dialog?.showMessageBox) return;
+    reportingError = true;
     try {
-      getNotesRoot();
-      pendingCaptures += 1;
-    } catch (error) { return { success: false, error: error.message }; }
-    try { return await operation(); } finally { pendingCaptures -= 1; }
+      const permission = result.code === 'SCREEN_PERMISSION';
+      const answer = await dialog.showMessageBox({ type: 'warning', title: '无法截图', message: '截图未完成', detail: result.error,
+        buttons: permission ? ['打开系统设置', '关闭'] : ['关闭'], defaultId: 0, cancelId: permission ? 1 : 0 });
+      if (permission && answer.response === 0) await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    } finally { reportingError = false; }
+  }
+  const capture = async operation => {
+    if (pendingCaptures) return { success: false, error: '正在截图，请稍候。' };
+    pendingCaptures += 1;
+    let result;
+    try { getNotesRoot(); result = await operation(); }
+    catch (error) { result = { success: false, error: error.message, code: error.code }; }
+    finally { pendingCaptures -= 1; }
+    if (!result.success) await reportFailure(result);
+    return result;
   };
 
   return {

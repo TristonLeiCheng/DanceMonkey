@@ -11,6 +11,8 @@ const packagerConfig = {
   executableName: "DanceMonkey",
   appBundleId: "com.dancemonkey.desktop",
   extendInfo: {
+    CFBundleDocumentTypes: [{ CFBundleTypeName: "Markdown document", CFBundleTypeRole: "Editor", LSHandlerRank: "Owner", CFBundleTypeExtensions: ["md"], LSItemContentTypes: ["public.markdown", "net.daringfireball.markdown"] }],
+    UTImportedTypeDeclarations: [{ UTTypeIdentifier: "net.daringfireball.markdown", UTTypeDescription: "Markdown document", UTTypeConformsTo: ["public.plain-text"], UTTypeTagSpecification: { "public.filename-extension": ["md"], "public.mime-type": "text/markdown" } }],
     NSAppleEventsUsageDescription: "开启宠物交互模式后读取 Finder 桌面图标的位置，用于靠近、跳跃和携带图标动画。",
     NSDesktopFolderUsageDescription: "在宠物交互模式中按 E 抱起图标时，获取所选桌面项目的系统图标用于携带动画。",
   },
@@ -44,6 +46,11 @@ const packagerConfig = {
 };
 
 module.exports = {
+  hooks: { generateAssets: async () => {
+    await require("esbuild").build({ entryPoints: [path.join(__dirname, "src/note-document.mjs")],
+      bundle: true, format: "iife", target: "chrome120", minify: true,
+      outfile: path.join(__dirname, "src/note-document.bundle.js") });
+  } },
   packagerConfig,
   makers: [
     { name: "@electron-forge/maker-zip", platforms: ["win32", "darwin"] },

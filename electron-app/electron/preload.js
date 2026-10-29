@@ -23,7 +23,33 @@ ipcRenderer.on("app:quitting", async (_event, payload) => {
   }
 });
 
+let closeNoteHandler = async () => { throw new Error("编辑器尚未就绪"); };
+ipcRenderer.on("note:close-request", async () => {
+  try { await closeNoteHandler(); await Promise.all([...noteWrites]); ipcRenderer.send("note:close-ready", {}); }
+  catch { ipcRenderer.send("note:close-ready", { error: true }); }
+});
+
 contextBridge.exposeInMainWorld("lumen", {
+  note: {
+    importImages: (images, path, root) => writeNotes("note:import-images", images, path, root),
+    image: (src, path, root) => ipcRenderer.invoke("note:image", src, path, root),
+    focusExisting: path => ipcRenderer.invoke("note:focus-existing", path),
+    open: (path, root) => ipcRenderer.invoke("note:open", path, root),
+    choose: () => ipcRenderer.invoke("note:choose"),
+    read: () => ipcRenderer.invoke("note:read"),
+    write: content => writeNotes("note:write", content),
+    saveCopy: content => ipcRenderer.invoke("note:save-copy", content),
+    tasks: {
+      load: () => ipcRenderer.invoke("note:tasks-load"),
+      addTasksBatch: inputs => writeNotes("note:tasks-add", inputs),
+    },
+    onDiskChanged: callback => {
+      const listener = () => callback();
+      ipcRenderer.on("note:disk-changed", listener);
+      return () => ipcRenderer.removeListener("note:disk-changed", listener);
+    },
+    onClose: callback => { closeNoteHandler = callback; },
+  },
   platform: process.platform,
   // 软件渲染下 backdrop-filter 几乎无效，界面需要退回不依赖模糊的实心样式
   softwareRender: process.argv.includes("--lumen-software-render"),
@@ -31,6 +57,12 @@ contextBridge.exposeInMainWorld("lumen", {
   setState: (partial) => writeNotes("store:set", partial),
   setShell: (mode) => ipcRenderer.invoke("shell:set", mode),
   openWorkspace: (section) => ipcRenderer.invoke("workspace:open", section),
+  openProject: id => ipcRenderer.invoke("workspace:project", id),
+  onWorkspaceProject: callback => {
+    const listener = (_event, id) => callback(id);
+    ipcRenderer.on("workspace:project", listener);
+    return () => ipcRenderer.removeListener("workspace:project", listener);
+  },
   vaults: {
     list: () => ipcRenderer.invoke("vaults:list"),
     open: () => ipcRenderer.invoke("vaults:open"),

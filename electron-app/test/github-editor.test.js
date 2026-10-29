@@ -13,7 +13,7 @@ test("editor save records the submitted snapshot, not newer text typed during IP
   const status = {};
   const context = vm.createContext({ clearTimeout, Promise, root: { querySelector: () => status },
     api: { workspace: { write: (target, content) => { calls.push({ target, content }); return new Promise((resolve) => { finish = resolve; }); } } } });
-  vm.runInContext(`let saveTimer = null; let saveInFlight = Promise.resolve(); let activePath = 'note.md'; let content = 'first edit'; let savedContent = 'old'; ${saveFunction}`, context);
+  vm.runInContext(`let noteImageTransfer = null; let markdownEditor = null; let saveTimer = null; let saveInFlight = Promise.resolve(); let activePath = 'note.md'; let content = 'first edit'; let savedContent = 'old'; ${saveFunction}`, context);
   const request = vm.runInContext("saveActive()", context);
   await new Promise(setImmediate);
   vm.runInContext("content = 'newer edit'", context);

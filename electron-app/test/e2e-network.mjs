@@ -84,11 +84,12 @@ async function screenshot(client, name) {
 }
 
 try {
-  const tunnels = [], liveSockets = new Set(); let slow = false;
+  const tunnels = [], liveSockets = new Set(), proxiedPorts = new Set(), deliveries = []; let slow = false;
   const track = server => server.on('connection', socket => { liveSockets.add(socket); socket.once('close', () => liveSockets.delete(socket)); });
   mock = http.createServer(async (req, res) => {
     let raw = ''; for await (const chunk of req) raw += chunk;
     requests.push(JSON.parse(raw));
+    deliveries.push(proxiedPorts.has(req.socket.remotePort) ? 'proxy' : 'direct');
     const respond = () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ choices: [{ message: { content: 'OK' } }] })); };
     if (slow) { const timer = setTimeout(respond, 10000); res.once('close', () => clearTimeout(timer)); }
     else respond();
@@ -100,6 +101,7 @@ try {
     const url = new URL(`http://${req.url}`); assert.equal(Number(url.port), modelPort);
     assert.ok(['model.test', '127.0.0.1'].includes(url.hostname)); tunnels.push(req.url);
     const upstream = net.connect({ host: '127.0.0.1', port: modelPort }, () => {
+      proxiedPorts.add(upstream.localPort);
       socket.write('HTTP/1.1 200 Connection Established\r\n\r\n'); if (head.length) upstream.write(head);
       upstream.pipe(socket); socket.pipe(upstream);
     });
@@ -159,17 +161,18 @@ try {
   await screenshot(client, 'network-mac-fixed-proxy');
   await evaluate(`document.querySelector('[name=networkProxyMode]').value='manual'; document.querySelector('[name=aiNetworkMode]').value='inherit'; document.querySelector('[data-module-action=network-test]').click();`);
   await waitFor(async () => requests.length === 2 && await evaluate('document.querySelector(".ws-settings-ok")?.textContent.includes("手动代理") && !document.querySelector("[data-module-action=network-test]").disabled'), { process: run });
-  assert.equal(requests.length, 2); assert.equal(tunnels.length, 2); assert.equal(JSON.parse(fs.readFileSync(metrics)).length, 0, 'AI inherits the application fixed proxy');
+  assert.equal(requests.length, 2); assert.deepEqual(deliveries, ['proxy', 'proxy']); assert.equal(JSON.parse(fs.readFileSync(metrics)).length, 0, 'AI inherits the application fixed proxy');
   const aiSettings = await evaluate('window.lumen.ai.getSettings()');
   await evaluate(`window.lumen.ai.saveSettings(${JSON.stringify({ ...aiSettings, apiEndpoint: `http://model.test:${modelPort}/v1` })})`);
   await evaluate(`document.querySelector('[name=aiNetworkMode]').value='inherit'; document.querySelector('[name=networkProxyMode]').value='system'; document.querySelector('[data-module-action=network-test]').click();`);
   await waitFor(() => evaluate('document.querySelector(".ws-settings-ok")?.textContent.includes("公司 / 系统默认")'), { process: run });
-  assert.equal(requests.length, 3); assert.equal(tunnels.length, 3); assert.ok(JSON.parse(fs.readFileSync(metrics)).some(url => url.includes('model.test')), 'actual Electron PAC resolver used');
+  assert.equal(requests.length, 3); assert.equal(deliveries[2], 'proxy'); assert.ok(tunnels.includes(`model.test:${modelPort}`)); assert.ok(JSON.parse(fs.readFileSync(metrics)).some(url => url.includes('model.test')), 'actual Electron PAC resolver used');
   await evaluate(`window.lumen.ai.saveSettings(${JSON.stringify({ ...aiSettings, apiEndpoint: `http://127.0.0.1:${modelPort}/v1` })})`);
   const beforeDirect = JSON.parse(fs.readFileSync(metrics)).length;
+  const tunnelsBeforeDirect = tunnels.length;
   await evaluate(`document.querySelector('[name=aiNetworkMode]').value='direct'; document.querySelector('[data-module-action=network-test]').click();`);
   await waitFor(() => evaluate('document.querySelector(".ws-settings-ok")?.textContent.includes("直连")'), { process: run });
-  assert.equal(requests.length, 4); assert.equal(tunnels.length, 3); assert.equal(JSON.parse(fs.readFileSync(metrics)).length, beforeDirect);
+  assert.equal(requests.length, 4); assert.equal(deliveries[3], 'direct'); assert.equal(tunnels.length, tunnelsBeforeDirect); assert.equal(JSON.parse(fs.readFileSync(metrics)).length, beforeDirect);
   slow = true;
   await evaluate('document.querySelector("[data-module-action=network-test]").click()');
   await waitFor(() => requests.length === 5, { process: run });

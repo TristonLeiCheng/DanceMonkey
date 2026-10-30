@@ -124,6 +124,7 @@ function openMarkdownFile(file) {
 app.on('open-file', (event, file) => { event.preventDefault(); openMarkdownFile(file); });
 const editorWindows = () => [overlay, workspaceWindow, ...(noteWindows?.windows() || [])];
 let mode = "collapsed";
+let panelLayout = "notes";
 let registeredHotkeys = [];
 const syncAbortControllers = new Map();
 
@@ -153,10 +154,10 @@ function broadcastSyncProgress(payload) {
 
 function sameQuickNotes(left, right) {
   return JSON.stringify(
-    left.map(({ id, filePath, title, body }) => ({ id, filePath, title, body })),
+    left.map(({ id, filePath, title, body, noteType }) => ({ id, filePath, title, body, noteType })),
   ) ===
     JSON.stringify(
-      right.map(({ id, filePath, title, body }) => ({ id, filePath, title, body })),
+      right.map(({ id, filePath, title, body, noteType }) => ({ id, filePath, title, body, noteType })),
     );
 }
 
@@ -205,7 +206,7 @@ function boundsForMode(next) {
       ? { width: COLLAPSED_MIN_WIDTH, height: 120 }
       : next === "rail"
         ? { width: 56, height: 260 }
-        : { width: 384, height: Math.round(workArea.height * 0.68) };
+        : { width: Math.min(520, workArea.width), height: Math.min(panelLayout === "notes" ? 292 : 560, workArea.height) };
   const visibleWidth = next === "collapsed" ? COLLAPSED_VISIBLE_WIDTH : size.width;
   return {
     x: workArea.x + workArea.width - visibleWidth,
@@ -640,7 +641,10 @@ app.whenReady().then(() => {
     }
     return next;
   });
-  ipcMain.handle("shell:set", (_e, next) => applyShell(next));
+  ipcMain.handle("shell:set", (_e, next, layout) => {
+    if (layout === "notes" || layout === "expanded") panelLayout = layout;
+    applyShell(next);
+  });
   ipcMain.handle("workspace:open", (_e, section) => openWorkspace(section));
   ipcMain.handle("workspace:project", (_event, id) => {
     openWorkspace("projects");
@@ -653,6 +657,11 @@ app.whenReady().then(() => {
     tree: workspaceStore.list(),
   }));
   ipcMain.handle("workspace:read", (_e, relativePath) => workspaceStore.read(relativePath));
+  ipcMain.handle('workspace:inspect', (event, relativePath, content, root) => {
+    if (!githubNotes.trusted(event)) throw new Error('无效的文档信息请求');
+    if (root !== workspaceStore.root) throw new Error('笔记库已变化，请重新打开笔记。');
+    return workspaceStore.inspect(relativePath, content);
+  });
   ipcMain.handle("workspace:write", (_e, relativePath, content, generation) => {
     githubNotes.assertWritable(generation);
     noteWindows.assertAvailable(workspaceStore.root, relativePath);
@@ -686,6 +695,11 @@ app.whenReady().then(() => {
     zenTaskStore.relocateNotes(relativePath, result);
     refreshQuickNotes();
     return result;
+  });
+  ipcMain.handle("workspace:setAppearance", (_e, relativePath, appearance, root, generation) => {
+    githubNotes.assertWritable(generation);
+    if (root !== workspaceStore.root) throw new Error("笔记库已变化，请重新设置外观。");
+    return workspaceStore.setAppearance(relativePath, appearance);
   });
   ipcMain.handle("workspace:remove", (_e, relativePath, generation) => {
     githubNotes.assertWritable(generation);

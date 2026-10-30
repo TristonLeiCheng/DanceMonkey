@@ -54,6 +54,7 @@
   if (!Number.isFinite(backgroundOpacity)) backgroundOpacity = 82;
   backgroundOpacity = Math.max(35, Math.min(100, Math.round(backgroundOpacity)));
   let editorWidth = Number(localStorage.getItem("lumen-workspace-editor-width")) || 50;
+  let sidebarWidth = window.DMTreeState.restoreWidth(localStorage);
   let appVersion = "";
   let maximized = false;
   let saveTimer = null;
@@ -214,6 +215,7 @@
             createdAt: entry.createdAt || entry.updatedAt,
             size: new TextEncoder().encode(entry.content || "").length,
             title: entry.title,
+            appearance: entry.appearance,
             children: [],
           };
           nodes.set(entry.path, node);
@@ -291,6 +293,12 @@
         applyProxy: async () => ({ success: false, error: "浏览器预览无法写入系统代理" }),
       },
       workspace: {
+        inspect: async (path, text) => {
+          const files = entries.filter(item => item.type === 'file' && (item.path === path || window.DMNotesHome.isPersonal(item))).map(item => ({ ...item, content: item.path === path ? text : item.content }));
+          const file = entries.find(item => item.path === path);
+          if (!file) throw new Error('笔记已不存在');
+          return { path, root: '浏览器预览/LumenVault', ...file, ...window.DMNoteDetails.model.buildRelations(files, path), omitted: 0, unreadable: 0 };
+        },
         list: async () => ({ root: "浏览器预览/LumenVault", tree: buildTree() }),
         read: async (path) => entries.find((item) => item.path === path)?.content || "",
         write: async (path, value) => {
@@ -326,6 +334,13 @@
           entries.push({ type: "folder", path });
           save();
           return path;
+        },
+        setAppearance: async (path, value) => {
+          const entry = entries.find(item => item.path === path);
+          if (!entry) throw new Error("笔记或文件夹已不存在，请刷新后重试");
+          entry.appearance = window.DMNoteAppearance.normalize(value);
+          save();
+          return entry.appearance;
         },
         rename: async (oldPath, name) => {
           const item = entries.find((entry) => entry.path === oldPath);
@@ -525,10 +540,11 @@
 
   function renderMarkdown(value) {
     const source = String(value || "");
-    const metadata = source.match(/^---\r?\n((?:[\s\S]*?))\r?\n---(?:\r?\n|$)/);
-    const frontmatter = metadata && /^\w[\w-]*:\s/m.test(metadata[1]) ? metadata : null;
-    const body = frontmatter ? source.slice(frontmatter[0].length) : source;
-    const header = frontmatter ? `<details class="ws-note-metadata"><summary>笔记元数据</summary><pre>${esc(frontmatter[1])}</pre></details>` : "";
+    const parts = window.DMNoteDetails.model.splitMetadata(source);
+    let frontmatter = false;
+    if (parts.exists) { try { window.DMNoteDetails.model.validateMetadata(parts.yaml); frontmatter = true; } catch {} }
+    const body = frontmatter ? parts.body : source;
+    const header = frontmatter ? `<details class="ws-note-metadata"><summary>笔记元数据</summary><pre>${esc(parts.yaml)}</pre></details>` : "";
     if (!window.marked || !window.DOMPurify) return `${header}<pre>${esc(body)}</pre>`;
     return header + window.DOMPurify.sanitize(
       window.marked.parse(body, { gfm: true, breaks: false }),
@@ -545,6 +561,7 @@
       newFolder: '<path d="M21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5l2 3h3M19 4v6M16 7h6"/>',
       refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/>',
       edit: '<path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-4-4L5 15l-1 5Z"/>',
+      palette: '<path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3.7c-.8-.5-.5-1.8.5-1.8H17a4 4 0 0 0 4-4A9 9 0 0 0 12 3Z"/><path d="M7 10h.01M10 6.5h.01M15 7h.01M17.5 11h.01"/>',
       trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/>',
       vault: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 13h8"/>',
     };
@@ -555,14 +572,16 @@
     return nodes
       .map((node) => {
         const open = expanded.has(node.path);
+        const appearance = window.DMNoteAppearance.get(node);
         const row = `<div class="tree-row ${node.path === selectedPath ? "active" : ""} ${node.path === activePath ? "current-note" : ""}"
-          data-type="${node.type}" data-path="${attr(node.path)}" style="padding-left:${5 + depth * 16}px">
+          data-type="${node.type}" data-path="${attr(node.path)}" style="padding-left:${5 + depth * 16}px;${window.DMNoteAppearance.style(node)}">
           ${node.type === "folder"
             ? `<button class="tree-expander ${open ? "expanded" : "collapsed"}" data-action="tree-toggle" aria-label="${open ? "折叠" : "展开"}文件夹 ${attr(node.name)}" aria-expanded="${open}" title="${open ? "折叠文件夹" : "展开文件夹"}">${treeIcon("chevron")}</button>`
             : '<span class="tree-expander-placeholder" aria-hidden="true"></span>'}
-          <span class="tree-icon">${treeIcon(node.type)}</span>
+          <button class="tree-icon" data-action="appearance" title="设置颜色和表情" aria-label="设置 ${attr(node.name)} 的颜色和表情">${appearance.emoji ? esc(appearance.emoji) : treeIcon(node.type)}</button>
           <button class="tree-name" data-action="tree-open" title="${attr(node.path)}">${esc(node.name)}</button>
           <span class="tree-actions">
+            <button class="tree-action" data-action="appearance" title="颜色和表情" aria-label="设置 ${attr(node.name)} 的颜色和表情">${treeIcon("palette")}</button>
             <button class="tree-action" data-action="rename" title="重命名" aria-label="重命名 ${attr(node.name)}">${treeIcon("edit")}</button>
             <button class="tree-action danger" data-action="delete" title="删除" aria-label="删除 ${attr(node.name)}">${treeIcon("trash")}</button>
           </span>
@@ -574,14 +593,16 @@
       .join("");
   }
 
-  let markdownEditor, noteImageTransfer;
+  let markdownEditor, noteImageTransfer, noteDetails;
   function renderShell() {
     if (noteImageTransfer?.busy) { void noteImageTransfer.flush().then(renderShell); return; }
     noteImageTransfer?.destroy(); noteImageTransfer = null;
+    noteDetails?.destroy(); noteDetails = null;
     markdownEditor?.text(); markdownEditor?.destroy(); markdownEditor = null;
     const lightTheme = LIGHT_THEMES.has(theme) ? "light" : "";
     root.className = `workspace-root effect-${effect} theme-${theme} ${lightTheme} ${maximized ? "maximized" : ""}`;
     root.style.setProperty("--editor-width", `${editorWidth}%`);
+    root.style.setProperty("--sidebar-width", `${sidebarWidth}px`);
     root.style.setProperty("--ws-opacity", String(backgroundOpacity / 100));
     const isNotes = section === "notes";
     const title =
@@ -670,12 +691,13 @@
             </div>
           </details>
         </aside>
-        <div class="ws-resizer" role="separator" aria-label="调整文件树宽度" tabindex="0"></div>
+        <div class="ws-resizer" role="separator" aria-label="调整文件树宽度" aria-orientation="vertical" aria-valuemin="160" aria-valuemax="420" aria-valuenow="${sidebarWidth}" tabindex="0"></div>
         <section class="ws-main">
           ${
             activePath
-              ? `<div class="ws-docbar">
-                  <div class="ws-doc-name">${esc(activePath.split("/").pop())}</div>
+              ? `<div class="ws-docbar" style="${appearanceStyle(activePath)}">
+                  <button class="ws-note-appearance-button" data-action="note-appearance" title="设置颜色和表情" aria-label="设置当前笔记的颜色和表情" style="${appearanceStyle(activePath)}">${esc(window.DMNoteAppearance.get(flatten(tree).find(node => node.path === activePath)).emoji) || treeIcon('file')}</button>
+                  <div class="ws-doc-name" style="${appearanceStyle(activePath)}">${esc(activePath.split("/").pop())}</div>
                   <span class="ws-save-state">${content === savedContent ? "已保存" : "待保存"}</span>
                   <button class="ws-mode" data-action="note-to-tasks" title="选中文字生成候选任务；未选中时读取整篇笔记">生成项目任务</button>
                   <button class="ws-mode" data-action="popout-note">弹出窗口 ↗</button>
@@ -687,11 +709,11 @@
                   </div>
                 </div>
                 ${window.DMMarkdownTools.toolbar(viewMode === "preview")}
-                <div class="ws-editor-area view-${viewMode}">
+                <div class="note-workarea"><div class="ws-editor-area view-${viewMode}" style="${appearanceStyle(activePath)}">
                   ${viewMode === "live" ? '<div class="note-editor ws-live-editor"></div>' : `<textarea class="ws-editor" spellcheck="false" aria-label="Markdown 编辑器">${esc(content)}</textarea>`}
                   <div class="ws-editor-resizer" role="separator" aria-label="调整编辑与预览宽度" tabindex="0"></div>
                   <article class="ws-preview">${renderMarkdown(content)}</article>
-                </div>`
+                </div>${window.DMNoteDetails.markup()}</div>`
               : window.DMNotesHome.render({ tree, vaultRoot, query: homeQuery, sort: homeSort, fullText: Boolean(api.pkb) })
           }
         </section>`
@@ -837,6 +859,7 @@
       if (action === "select-root") { selectedPath = ""; renderShell(); return; }
       if (action === "new-root-file") { openDialog("file", "", "", ""); return; }
       if (action === "new-root-folder") { openDialog("folder", "", "", ""); return; }
+      if (action === "note-appearance") { openAppearance(activePath); return; }
 
       if (action === "effect") {
         effect = control.dataset.value;
@@ -865,7 +888,7 @@
         renderShell();
       }
 
-      if (["tree-open", "tree-toggle", "rename", "delete"].includes(action)) {
+      if (["tree-open", "tree-toggle", "rename", "delete", "appearance"].includes(action)) {
         const row = control.closest(".tree-row");
         const path = row.dataset.path;
         const type = row.dataset.type;
@@ -874,10 +897,11 @@
           toggleFolder(path);
           renderShell();
         } else if (action === "tree-open") {
-          await openFile(path);
+          try { await openFile(path); } catch (error) { alert(error.message || '无法打开笔记，请先保存当前内容'); }
         }
         if (action === "rename") openDialog("rename", path, type);
         if (action === "delete") openDialog("delete", path, type);
+        if (action === "appearance") openAppearance(path);
       }
     };
 
@@ -931,6 +955,7 @@
         onSave: () => { void saveActive().catch(error => alert(error.message)); },
         onChange: text => {
           content = text;
+          noteDetails?.onTextChanged();
           root.querySelector('.ws-count').textContent = `${content.length} 字符`;
           root.querySelector('.ws-save-state').textContent = '待保存';
           clearTimeout(saveTimer); saveTimer = setTimeout(() => { void saveActive().catch(error => { const status = root.querySelector('.ws-save-state'); if(status) status.textContent = error.message; }); }, 650);
@@ -941,6 +966,7 @@
     if (editor) {
       editor.oninput = () => {
         content = editor.value;
+        noteDetails?.onTextChanged();
         root.querySelector(".ws-preview").innerHTML = renderMarkdown(content);
         if (api.note) window.DMNoteImages.hydrateImages(root.querySelector(".ws-preview"), src => api.note.image(src, activePath, vaultRoot));
         root.querySelector(".ws-count").textContent = `${content.length} 字符`;
@@ -961,6 +987,27 @@
           editor.dispatchEvent(new Event("input"));
         }
       };
+    }
+
+    const detailsHost = root.querySelector('.note-workarea');
+    if (detailsHost && activePath) {
+      const path = activePath, origin = vaultRoot;
+      noteDetails = window.DMNoteDetails.create({ host: detailsHost, path, root: origin, getText: () => content,
+        replaceText: text => {
+          content = text;
+          if (markdownEditor) markdownEditor.replace(text);
+          if (editor) editor.value = text;
+          root.querySelector('.ws-preview').innerHTML = renderMarkdown(text);
+          root.querySelector('.ws-count').textContent = `${text.length} 字符`;
+        },
+        inspect: text => api.workspace.inspect(path, text, origin), save: saveActive, openNote: openFile,
+        onDraft: () => {
+          const status = root.querySelector('.ws-save-state');
+          if (status) status.textContent = noteDetails?.hasDraft() ? '元数据待保存' : content === savedContent ? '已保存' : '待保存';
+          clearTimeout(saveTimer);
+          if (!syncPaused && !vaultSwitching && noteDetails?.hasDraft()) saveTimer = setTimeout(() => { void saveActive().catch(error => { if (status?.isConnected) status.textContent = error.message; }); }, 650);
+        },
+      });
     }
 
     const imageHost = root.querySelector('.ws-editor-area');
@@ -987,15 +1034,21 @@
     const resizer = root.querySelector(".ws-resizer");
     const sidebar = root.querySelector(".ws-sidebar");
     if (resizer && sidebar) {
+      const resizeSidebar = (value, persist = false) => {
+        sidebarWidth = persist ? window.DMTreeState.saveWidth(localStorage, value) : window.DMTreeState.clampWidth(value);
+        root.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+        resizer.setAttribute('aria-valuenow', String(sidebarWidth));
+      };
       resizer.onmousedown = (event) => {
         event.preventDefault();
         resizer.classList.add("dragging");
         const startX = event.clientX;
         const startWidth = sidebar.getBoundingClientRect().width;
         const move = (moveEvent) => {
-          sidebar.style.width = `${Math.max(160, Math.min(420, startWidth + moveEvent.clientX - startX))}px`;
+          resizeSidebar(startWidth + moveEvent.clientX - startX);
         };
         const up = () => {
+          resizeSidebar(sidebarWidth, true);
           resizer.classList.remove("dragging");
           window.removeEventListener("mousemove", move);
           window.removeEventListener("mouseup", up);
@@ -1007,7 +1060,7 @@
         if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
         event.preventDefault();
         const width = sidebar.getBoundingClientRect().width + (event.key === "ArrowRight" ? 16 : -16);
-        sidebar.style.width = `${Math.max(160, Math.min(420, width))}px`;
+        resizeSidebar(width, true);
       };
     }
 
@@ -1122,6 +1175,7 @@
     clearTimeout(saveTimer);
     const request = saveInFlight.catch(() => {}).then(async () => {
       await noteImageTransfer?.flush();
+      noteDetails?.flush();
       if (!activePath || content === savedContent) return;
       const target = activePath;
       const snapshot = content;
@@ -1362,6 +1416,130 @@
     };
   }
 
+  function appearanceStyle(path) {
+    return window.DMNoteAppearance.style(flatten(tree).find(node => node.path === path));
+  }
+
+  function openAppearance(path) {
+    if (syncPaused || vaultSwitching) return;
+    const node = flatten(tree).find(item => item.path === path);
+    if (!node) return;
+    closeDialog();
+    closePalette();
+    const origin = vaultRoot;
+    const draft = window.DMNoteAppearance.get(node);
+    const colorField = (field, label, palette) => `<fieldset><legend>${label}</legend><div class="ws-appearance-colors">
+      <button type="button" data-appearance-color="" data-color-field="${field}" aria-label="默认${label}" title="默认${label}">↺</button>
+      ${palette.map(([color, name]) => `<button type="button" data-appearance-color="${color}" data-color-field="${field}" style="--swatch:${color}" aria-label="${label}：${name}" title="${name}"></button>`).join('')}
+      </div><label class="ws-appearance-custom-color">自定义<input type="color" data-color-input="${field}" aria-label="自定义${label}" value="${draft[field] || (field === 'color' ? '#639ce0' : '#e6effb')}"></label></fieldset>`;
+    dialog = { kind: 'appearance', returnFocus: document.activeElement };
+    root.insertAdjacentHTML('beforeend', `<div class="ws-dialog-backdrop ws-appearance-backdrop">
+      <form class="ws-dialog ws-appearance-dialog" role="dialog" aria-modal="true" aria-labelledby="appearance-title">
+        <strong id="appearance-title">${node.type === 'folder' ? '文件夹' : '笔记'}颜色和表情</strong>
+        <div class="ws-appearance-preview"><span data-appearance-preview-icon aria-hidden="true"></span><span>${esc(node.name)}</span></div>
+        <fieldset><legend>外观模板</legend><div class="ws-appearance-templates">${window.DMNoteAppearance.templates.map(item => `<button type="button" data-appearance-template="${item.id}" style="${window.DMNoteAppearance.style({ appearance: item })}"><span aria-hidden="true">${item.emoji}</span>${item.label}</button>`).join('')}</div></fieldset>
+        <div class="ws-appearance-color-pair">${colorField('color', '文字颜色', window.DMNoteAppearance.colors)}${colorField('backgroundColor', '背景颜色', window.DMNoteAppearance.backgrounds)}</div>
+        <fieldset><legend>Emoji 表情 <span class="ws-appearance-emoji-count">${window.DMNoteAppearance.emojis.length} 个可选</span></legend>
+          <div class="ws-appearance-emoji-tools"><select aria-label="表情分类"><option value="all">全部表情</option>${window.DMNoteAppearance.emojiGroups.map(group => `<option value="${group.id}" ${group.id === 'common' ? 'selected' : ''}>${group.label}</option>`).join('')}</select><input type="search" aria-label="搜索表情" placeholder="搜索表情，如 猫、旅行、coffee" autocomplete="off"></div>
+          <div class="ws-appearance-emojis" role="group" aria-label="表情选择"></div><div class="ws-appearance-emoji-status" role="status"></div>
+          <label class="ws-appearance-custom-emoji">自定义表情<input type="text" aria-label="自定义 emoji" placeholder="输入或粘贴一个 emoji，如 🦋" value="${attr(draft.emoji)}" autocomplete="off"></label></fieldset>
+        <p class="ws-appearance-error" role="alert"></p>
+        <div class="ws-dialog-actions"><button type="button" class="ws-btn ws-appearance-reset" data-appearance-reset>恢复默认</button><button type="button" class="ws-btn" data-appearance-cancel>取消</button><button type="submit" class="ws-btn primary">保存</button></div>
+      </form></div>`);
+    const backdrop = root.querySelector('.ws-appearance-backdrop');
+    const form = backdrop.querySelector('form');
+    const emojiInput = form.querySelector('input[type="text"]');
+    const error = form.querySelector('[role="alert"]');
+    let saving = false;
+    const renderEmojis = () => {
+      const query = form.querySelector('input[type="search"]').value;
+      const items = window.DMNoteAppearance.searchEmojis(query, form.querySelector('select').value);
+      form.querySelector('.ws-appearance-emojis').innerHTML = `<button type="button" data-appearance-emoji="" aria-label="默认图标" title="默认图标" aria-pressed="${!draft.emoji}">↺</button>` +
+        items.map(({emoji, label}) => `<button type="button" data-appearance-emoji="${emoji}" aria-label="${attr(label)} ${emoji}" title="${attr(label)}" aria-pressed="${draft.emoji === emoji}">${emoji}</button>`).join('');
+      form.querySelector('.ws-appearance-emoji-status').textContent = items.length ? `${items.length} 个表情${query.trim() ? ' · 搜索全部分类' : ''}` : '没有匹配的表情，也可以在下方粘贴自定义 emoji';
+      form.querySelector('.ws-appearance-emojis').scrollTop = 0;
+    };
+    const syncInputs = () => {
+      emojiInput.value = draft.emoji;
+      form.querySelectorAll('[data-color-input]').forEach(input => {
+        const field = input.dataset.colorInput;
+        input.value = draft[field] || (field === 'color' ? '#639ce0' : '#e6effb');
+      });
+    };
+    const preview = () => {
+      const sample = form.querySelector('.ws-appearance-preview');
+      sample.style.setProperty('--note-accent', draft.color || 'var(--ws-text)');
+      sample.style.setProperty('--note-bg', draft.backgroundColor || 'var(--ws-panel)');
+      const icon = sample.querySelector('[data-appearance-preview-icon]');
+      if (draft.emoji) icon.textContent = draft.emoji;
+      else icon.innerHTML = treeIcon(node.type);
+      form.querySelectorAll('[data-appearance-color]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.appearanceColor === draft[button.dataset.colorField])));
+      form.querySelectorAll('[data-appearance-emoji]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.appearanceEmoji === draft.emoji)));
+      form.querySelectorAll('[data-appearance-template]').forEach(button => {
+        const item = window.DMNoteAppearance.templates.find(item => item.id === button.dataset.appearanceTemplate);
+        button.setAttribute('aria-pressed', String(item.color === draft.color && item.backgroundColor === draft.backgroundColor && item.emoji === draft.emoji));
+      });
+      error.textContent = '';
+    };
+    const cancel = () => { if (!saving) closeDialog(); };
+    backdrop.onclick = event => {
+      event.stopPropagation();
+      if (saving) return;
+      if (event.target === backdrop || event.target.closest('[data-appearance-cancel]')) { cancel(); return; }
+      const color = event.target.closest('[data-appearance-color]');
+      const emoji = event.target.closest('[data-appearance-emoji]');
+      const template = event.target.closest('[data-appearance-template]');
+      if (color) draft[color.dataset.colorField] = color.dataset.appearanceColor;
+      if (emoji) draft.emoji = emoji.dataset.appearanceEmoji;
+      if (template) Object.assign(draft, window.DMNoteAppearance.normalize(window.DMNoteAppearance.templates.find(item => item.id === template.dataset.appearanceTemplate)));
+      if (event.target.closest('[data-appearance-reset]')) {
+        draft.color = ''; draft.backgroundColor = ''; draft.emoji = '';
+      }
+      if (color || emoji || template || event.target.closest('[data-appearance-reset]')) { syncInputs(); preview(); }
+    };
+    emojiInput.oninput = () => { draft.emoji = emojiInput.value.trim(); preview(); };
+    form.querySelectorAll('[data-color-input]').forEach(input => {
+      input.oninput = () => { draft[input.dataset.colorInput] = input.value; preview(); };
+    });
+    form.querySelector('input[type="search"]').oninput = renderEmojis;
+    form.querySelector('input[type="search"]').onkeydown = event => { if (event.key === 'Enter') event.preventDefault(); };
+    form.querySelector('select').onchange = renderEmojis;
+    backdrop.onkeydown = event => {
+      if (event.key === 'Escape') { event.stopPropagation(); cancel(); }
+      if (event.key !== 'Tab') return;
+      const controls = [...form.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled)')];
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    form.onsubmit = async event => {
+      event.preventDefault();
+      if (saving || syncPaused || vaultSwitching || origin !== vaultRoot) return;
+      try {
+        const appearance = window.DMNoteAppearance.normalize(draft);
+        saving = true;
+        form.querySelectorAll('button,input,select').forEach(control => { control.disabled = true; });
+        await saveActive();
+        if (syncPaused || vaultSwitching || origin !== vaultRoot || !backdrop.isConnected) return;
+        await api.workspace.setAppearance(path, appearance, origin);
+        if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
+        closeDialog();
+        await refreshTree(path);
+        const row = [...root.querySelectorAll('.tree-row')].find(item => item.dataset.path === path);
+        row?.querySelector('[data-action="appearance"]')?.focus();
+      } catch (failure) {
+        error.textContent = failure?.message || '外观设置保存失败，请重试';
+      } finally {
+        saving = false;
+        form.querySelectorAll('button,input,select').forEach(control => { control.disabled = false; });
+      }
+    };
+    renderEmojis();
+    preview();
+    form.querySelector('[data-appearance-color][aria-pressed="true"]')?.focus();
+    if (!form.contains(document.activeElement)) emojiInput.focus();
+  }
+
   function openDialog(kind, target = "", targetType = "", parent = selectedFolder()) {
     dialog = { kind, target, targetType, parent };
     const isDelete = kind === "delete";
@@ -1410,8 +1588,10 @@
   }
 
   function closeDialog() {
+    const returnFocus = dialog?.returnFocus;
     root.querySelector(".ws-dialog-backdrop")?.remove();
     dialog = null;
+    if (returnFocus?.isConnected) returnFocus.focus();
   }
 
   async function confirmDialog() {
@@ -1532,7 +1712,9 @@
     }
   });
 
-  window.addEventListener("beforeunload", () => {
+  window.addEventListener("beforeunload", event => {
+    try { noteDetails?.flush(); }
+    catch { event.preventDefault(); event.returnValue = ''; return; }
     if (activePath && content !== savedContent) {
       // Electron IPC 无法阻塞 beforeunload，日常编辑已由 650ms 自动保存覆盖。
       void api.workspace.write(activePath, content);

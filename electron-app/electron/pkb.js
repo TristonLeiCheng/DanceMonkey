@@ -347,7 +347,12 @@ function hasLegacyQuickNotes(root) {
     if (!fs.statSync(dir).isDirectory()) return false;
     return fs
       .readdirSync(dir, { withFileTypes: true })
-      .some((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".md"));
+      .some((entry) => {
+        if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) return true;
+        if (!entry.isDirectory() || !['随手记', '会议要点', '临时想法'].includes(entry.name)) return false;
+        return fs.readdirSync(path.join(dir, entry.name), { withFileTypes: true })
+          .some(child => child.isFile() && child.name.toLowerCase().endsWith('.md'));
+      });
   } catch {
     return false;
   }

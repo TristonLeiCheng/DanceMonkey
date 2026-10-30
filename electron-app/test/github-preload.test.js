@@ -43,6 +43,20 @@ test("preload editor prepare acknowledgement waits for all in-flight note IPC wr
   assert.equal(harness.calls.find(([channel]) => channel === "workspace:write")[3], 4);
 });
 
+test("appearance writes carry their vault and generation and participate in editor preparation", async () => {
+  const h = preload('workspace:setAppearance');
+  h.api.githubSync.onEditor(async () => {});
+  const writing = h.api.workspace.setAppearance('计划.md', { emoji: '⭐' }, '/A');
+  await new Promise(setImmediate);
+  const preparing = h.listeners.get('githubSync:editor')({}, { id: 'appearance', phase: 'prepare', generation: 4 });
+  await new Promise(setImmediate);
+  assert.equal(h.sent.length, 0);
+  const call = h.calls.find(([channel]) => channel === 'workspace:setAppearance');
+  assert.equal(call[3], '/A'); assert.equal(call[4], 4);
+  h.finishWrite(); await Promise.all([writing, preparing]);
+  assert.equal(h.sent[0][1].id, 'appearance');
+});
+
 test("vault switches are not tracked as writes but task mutations are", async () => {
   const switching = preload("vaults:select");
   switching.api.githubSync.onEditor(async () => {});

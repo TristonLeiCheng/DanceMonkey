@@ -61,3 +61,16 @@ test("vault tree works when preference storage is unavailable", () => {
   assert.deepEqual([...treeState.restoreForVault(storage, "/vault-a", tree)], ["Projects", "Archive"]);
   assert.doesNotThrow(() => treeState.saveForVault(storage, "/vault-a", new Set()));
 });
+
+test('sidebar width survives a new session, clamps bounds and tolerates unavailable storage', () => {
+  const storage = memoryStorage();
+  assert.equal(treeState.restoreWidth(storage), 226);
+  assert.equal(treeState.saveWidth(storage, 347.4), 347);
+  assert.equal(treeState.restoreWidth(storage), 347);
+  assert.equal(treeState.saveWidth(storage, 999), 420);
+  assert.equal(treeState.saveWidth(storage, 120), 160);
+  for (const value of ['bad', 'Infinity', '-1', '0', '']) assert.equal(treeState.restoreWidth(memoryStorage({ 'lumen-workspace-sidebar-width': value })), 226);
+  const blocked = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+  assert.equal(treeState.restoreWidth(blocked), 226);
+  assert.equal(treeState.saveWidth(blocked, 300), 300);
+});

@@ -2,6 +2,7 @@
   const INBOX = "inbox";
   const TODOS = "todos";
   const isElectron = Boolean(window.lumen);
+  const quickNoteTypes = window.DMQuickNoteTypes;
 
   const icons = {
     note: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M7 3.75h7.2L19.25 8.8V20.25H7A1.25 1.25 0 0 1 5.75 19V5A1.25 1.25 0 0 1 7 3.75Z" stroke="currentColor" stroke-width="1.4"/><path d="M14 3.8V8.8h5.1" stroke="currentColor" stroke-width="1.4"/><path d="M8.5 12.5h7M8.5 16h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
@@ -23,6 +24,10 @@
     workspace: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4.5" y="4.5" width="6.5" height="6.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><rect x="13" y="4.5" width="6.5" height="6.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><rect x="4.5" y="13" width="6.5" height="6.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/><rect x="13" y="13" width="6.5" height="6.5" rx="1.2" stroke="currentColor" stroke-width="1.4"/></svg>',
   };
 
+  function defaultQuickNoteTitle(date = new Date(), type = 'quick') {
+    return quickNoteTypes.title(type, date);
+  }
+
   function createDefaultState() {
     const now = Date.now();
     return {
@@ -38,8 +43,9 @@
         {
           id: "welcome",
           notebookId: INBOX,
-          title: "欢迎使用 DM",
-          body: "从屏幕右缘唤出快捷轨，记下此刻的想法。\n\nCtrl+Enter 保存并收起，Esc 收起但保留草稿。内容会自动写入本地。",
+          noteType: 'quick',
+          title: defaultQuickNoteTitle(new Date(now)),
+          body: "",
           createdAt: now,
           updatedAt: now,
         },
@@ -65,6 +71,8 @@
     } catch {
       state = createDefaultState();
     }
+    // Upgrade only the old browser demo records; production types come from folders.
+    state.notes = state.notes.map(note => ({ ...note, noteType: note.noteType || ({ '会议要点': 'meeting', '临时想法': 'idea' }[note.title]) || 'quick' }));
     const stateListeners = new Set();
     const shellListeners = new Set();
     const save = () => localStorage.setItem(key, JSON.stringify(state));
@@ -282,6 +290,9 @@
     let syncPaused = false;
     let pendingNoteSave = Promise.resolve();
     let noteSaveError = null;
+    let noteActionBusy = false;
+    let lastPanelLayout = null;
+    let quickNoteType = 'quick';
     let zenTasks = [];
     let zenProjects = [];
     let quickLinks = [];
@@ -355,6 +366,10 @@
         if (next.revision < state.revision) return false;
       }
       state = next;
+      if (Array.isArray(next.notes)) {
+        const selected = next.notes.find(note => note.id === next.activeNoteId);
+        quickNoteType = selected ? quickNoteTypes.forNote(selected).id : quickNoteTypes.get(next.activeQuickNoteType).id;
+      }
       return true;
     }
 
@@ -370,11 +385,7 @@
       root.dataset.quitting = "true";
       root.inert = true;
       if (phase === "prepare") {
-        await pendingNoteSave.catch(() => {});
-        if (noteSaveError) {
-          adopt(await api.setState({ notes: state.notes, activeNoteId: state.activeNoteId }));
-          noteSaveError = null;
-        }
+        await flushNoteEdits();
       }
     });
     api.githubSync?.onEditor(async ({ phase }) => {
@@ -407,6 +418,7 @@
     api.onShellMode((next) => {
       mode = next;
       render();
+      if (next === 'panel' && tab === 'notes' && !sheet) focusLater('.body-input');
     });
     api.onToggleQuick(() => void openPanel("notes", "none"));
     api.onFocusTitle(() => focusLater(".title-input"));
@@ -423,13 +435,98 @@
       if (messages && follow) messages.scrollTop = messages.scrollHeight;
     });
 
-    function focusLater(selector) {
-      requestAnimationFrame(() => root.querySelector(selector)?.focus());
+    function focusLater(selector, select = false) {
+      requestAnimationFrame(() => {
+        const input = root.querySelector(selector);
+        input?.focus();
+        if (select) input?.select();
+      });
     }
 
     async function persist(partial) {
       adopt(await api.setState(partial));
       render();
+    }
+
+    function quickIcon(name) {
+      const url = new URL(`assets/icons/phosphor/${name}.svg`, document.baseURI).href;
+      return `<span class="quick-toolbar-icon" style="--quick-toolbar-icon:url('${url}')" aria-hidden="true"></span>`;
+    }
+
+    function refreshNoteSaveStatus() {
+      const status = root.querySelector('[data-note-save-state]');
+      if (!status) return;
+      status.dataset.state = noteSaveError ? 'error' : skipRender ? 'saving' : 'saved';
+      status.textContent = noteSaveError ? '保存失败，点击重试' : skipRender ? '保存中…' : state.activeNoteId ? '已保存' : '就绪';
+      status.title = noteSaveError?.message || '';
+      status.disabled = !noteSaveError;
+    }
+
+    function saveNoteDraft(notes, id) {
+      const title = root.querySelector('.title-input');
+      state = { ...state, notes, activeNoteId: id };
+      noteSaveError = null;
+      skipRender = true;
+      refreshNoteSaveStatus();
+      const request = pendingNoteSave.catch(() => {}).then(() => api.setState({ notes, activeNoteId: id })).then((next) => {
+        if (pendingNoteSave !== request) return;
+        adopt(next);
+        const savedNote = state.notes.find((note) => note.id === id);
+        if (savedNote && root.querySelector('.title-input') === title && title) title.value = savedNote.title;
+        noteSaveError = null;
+        skipRender = false;
+        refreshNoteSaveStatus();
+      });
+      pendingNoteSave = request;
+      void request.catch((error) => {
+        if (pendingNoteSave !== request) return;
+        noteSaveError = error;
+        skipRender = false;
+        refreshNoteSaveStatus();
+      });
+      return request;
+    }
+
+    async function flushNoteEdits() {
+      while (true) {
+        const pending = pendingNoteSave;
+        await pending.catch(() => {});
+        if (pending !== pendingNoteSave) continue;
+        if (noteSaveError) { await saveNoteDraft(state.notes, state.activeNoteId); continue; }
+        return;
+      }
+    }
+
+    async function runNoteAction(action) {
+      if (noteActionBusy || syncPaused) return;
+      noteActionBusy = true;
+      try { await flushNoteEdits(); await action(); }
+      catch (error) { noteSaveError = error; refreshNoteSaveStatus(); }
+      finally { noteActionBusy = false; }
+    }
+
+    async function addQuickNote(typeId) {
+      const type = quickNoteTypes.get(typeId);
+      const now = Date.now();
+      const note = { id: newId(), notebookId: INBOX, noteType: type.id, title: defaultQuickNoteTitle(new Date(now), type.id), body: '', createdAt: now, updatedAt: now };
+      await persist({ activeNotebookId: INBOX, activeNoteId: note.id, activeQuickNoteType: type.id, notes: [note, ...state.notes] });
+      focusLater('.body-input');
+    }
+
+    function createQuickNote() {
+      return runNoteAction(() => addQuickNote(quickNoteType));
+    }
+
+    function selectQuickNoteType(typeId) {
+      return runNoteAction(async () => {
+        const type = quickNoteTypes.get(typeId);
+        const note = state.notes.filter(note => note.notebookId === INBOX && quickNoteTypes.forNote(note).id === type.id)
+          .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        if (note) {
+          await persist({ activeNotebookId: INBOX, activeNoteId: note.id, activeQuickNoteType: type.id });
+          focusLater('.body-input');
+        } else await addQuickNote(type.id);
+      });
     }
 
     async function openPanel(nextTab, kind) {
@@ -442,6 +539,7 @@
       if (kind === "todo" || nextTab === "todos") await loadZenTasks();
       else render();
       if (kind === "todo") focusLater(".zen-input");
+      else if (nextTab === 'notes') focusLater('.body-input');
     }
 
     async function openLinksSheet() {
@@ -500,19 +598,27 @@
       if (syncPaused) { e.preventDefault(); return; }
       if (e.isComposing || e.keyCode === 229) return;
       if (e.key === "Escape") {
+        const menu = root.querySelector('.quick-menu[open]');
+        if (menu) { menu.open = false; menu.querySelector('summary').focus(); return; }
         if (sheet) {
           sheet = null;
           render();
           return;
         }
-        if (mode === "panel" && !state?.pinned) collapse();
+        if (mode === "panel" && (!state?.pinned || tab === 'notes')) collapse();
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && mode === "panel") {
         e.preventDefault();
         sheet = "search";
         render();
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && mode === "panel" && !state?.pinned) collapse();
+      if ((e.ctrlKey || e.metaKey) && mode === "panel" && tab === "notes" && !sheet) {
+        if (e.key === 'Enter') { e.preventDefault(); void runNoteAction(collapse); }
+        if (e.key.toLowerCase() === 'n') { e.preventDefault(); void createQuickNote(); }
+        if (e.key.toLowerCase() === 's') { e.preventDefault(); void runNoteAction(() => {}); }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && mode === 'panel' && !state?.pinned) {
+        collapse();
+      }
     });
 
     function renderBooksSheet() {
@@ -748,11 +854,19 @@
       const followMessages = !previousMessages || previousMessages.scrollHeight - previousScroll - previousMessages.clientHeight < 64;
       document.documentElement.dataset.theme = state.theme;
 
-      const notebook = state.notebooks.find((n) => n.id === state.activeNotebookId);
       const notes = state.notes
         .filter((n) => n.notebookId === state.activeNotebookId)
         .sort((a, b) => b.updatedAt - a.updatedAt);
       const activeNote = notes.find((n) => n.id === state.activeNoteId) || notes[0];
+      const compact = tab === 'notes' && !sheet;
+      const layout = compact ? 'notes' : 'expanded';
+      const openingPanel = mode === 'panel' && root.dataset.shellMode !== 'panel';
+      root.dataset.shellMode = mode;
+      root.dataset.panelLayout = layout;
+      if (mode === 'panel' && lastPanelLayout !== layout) {
+        lastPanelLayout = layout;
+        void api.setShell('panel', layout);
+      }
 
       let html = "";
       if (mode === "collapsed") {
@@ -769,38 +883,32 @@
           <button type="button" class="rail-btn" data-act="open-search" title="搜索" aria-label="搜索">${icons.search}<span class="tooltip">搜索</span></button>
         </div>`;
       } else {
-        const noteItems = notes
-          .map(
-            (note) => `<button class="note-item ${activeNote && activeNote.id === note.id ? "active" : ""}" data-act="select-note" data-id="${note.id}">
-              <strong>${escapeHtml(note.title || "未命名便签")}</strong>
-              <span>${formatTime(note.updatedAt)}</span>
-            </button>`,
-          )
+        const noteItems = quickNoteTypes.types
+          .map(type => `<button class="note-item ${quickNoteType === type.id ? 'active' : ''}" data-act="select-note-type" data-id="${type.id}" title="${type.label}" ${quickNoteType === type.id ? 'aria-current="true"' : ''}>${type.label}</button>`)
           .join("");
 
-        html = `<div class="panel-shell"><section class="panel">
+        html = `<div class="panel-shell ${openingPanel ? 'is-opening' : ''}"><section class="panel ${compact ? 'quick-note-card' : ''}" aria-label="快捷面板">
           <header class="panel-header">
-            <div class="brand">${escapeHtml(notebook?.name || "DM")}<small>DanceMonkey</small></div>
-            <button class="icon-btn ${sheet === "books" ? "on" : ""}" data-act="open-books" title="笔记本">${icons.books}</button>
-            <button class="icon-btn ${sheet === "links" ? "on" : ""}" data-act="open-links" title="快速访问">${icons.link}</button>
-            <button class="icon-btn ${sheet === "search" ? "on" : ""}" data-act="open-search" title="搜索">${icons.search}</button>
-            <button class="icon-btn" data-act="open-workspace" data-section="settings" title="软件设置">${icons.settings}</button>
-            <button class="icon-btn" data-act="open-workspace" data-section="${tab === "ai" ? "ai" : tab === "todos" ? "tasks" : "notes"}" title="${tab === "ai" ? "打开完整 AI 问答" : tab === "todos" ? "打开完整任务" : "打开完整笔记"}">${icons.expand}</button>
-            <button class="icon-btn ${state.pinned ? "on" : ""}" data-act="pin" title="钉住">${icons.pin}</button>
-            <button class="icon-btn" data-act="theme" title="主题">${state.theme === "dark" ? icons.sun : icons.moon}</button>
-            <button class="icon-btn" data-act="collapse" title="收起">${icons.close}</button>
-            ${isElectron ? `<button class="icon-btn quit" data-act="quit" title="退出软件" aria-label="退出软件">${icons.power}</button>` : ""}
+            <div class="brand">${tab === 'notes' ? '快速笔记' : tab === 'todos' ? '快速任务' : 'AI 问答'}</div>
+            <button class="icon-btn ${tab === 'notes' && !sheet ? 'on' : ''}" data-act="tab-notes" title="笔记" aria-label="笔记" aria-pressed="${tab === 'notes' && !sheet}">${quickIcon('note-pencil')}</button>
+            <button class="icon-btn ${tab === 'todos' && !sheet ? 'on' : ''}" data-act="tab-todos" title="任务" aria-label="任务" aria-pressed="${tab === 'todos' && !sheet}">${quickIcon('check-square')}</button>
+            <button class="icon-btn ${tab === 'ai' && !sheet ? 'on' : ''}" data-act="tab-ai" title="AI 问答" aria-label="AI 问答" aria-pressed="${tab === 'ai' && !sheet}">${quickIcon('sparkle')}</button>
+            <button class="icon-btn" data-act="open-search" title="搜索 · ${api.platform === 'darwin' ? '⌘' : 'Ctrl'}+K" aria-label="搜索">${quickIcon('magnifying-glass')}</button>
+            <span class="quick-toolbar-divider" aria-hidden="true"></span>
+            <button class="icon-btn ${state.pinned ? 'on' : ''}" data-act="pin" title="${state.pinned ? '取消钉住' : '钉住'}" aria-label="钉住" aria-pressed="${state.pinned}">${quickIcon('push-pin')}</button>
+            <details class="quick-menu">
+              <summary class="icon-btn" title="更多操作" aria-label="更多操作">${quickIcon('dots-three')}</summary>
+              <div class="quick-menu-items" aria-label="更多操作">
+                <button data-act="open-workspace" data-section="${tab === 'ai' ? 'ai' : tab === 'todos' ? 'tasks' : 'notes'}">${icons.expand}打开完整${tab === 'ai' ? ' AI 问答' : tab === 'todos' ? '任务' : '笔记'}</button>
+                <button data-act="open-books" aria-label="笔记本">${icons.books}笔记本</button>
+                <button data-act="open-links" aria-label="快速访问">${icons.link}快速访问</button>
+                <button data-act="open-workspace" data-section="settings" aria-label="软件设置">${icons.settings}软件设置</button>
+                <button data-act="theme" aria-label="切换主题">${state.theme === 'dark' ? icons.sun : icons.moon}切换为${state.theme === 'dark' ? '浅色' : '深色'}</button>
+                ${isElectron ? `<button class="quit" data-act="quit" aria-label="退出软件">${icons.power}退出软件</button>` : ''}
+              </div>
+            </details>
+            <button class="icon-btn" data-act="collapse" title="收起 · Esc" aria-label="收起">${quickIcon('x')}</button>
           </header>
-          ${
-            sheet
-              ? ""
-              : `<div class="tabs">
-                   <button class="tab ${tab === "ai" ? "active" : ""}" data-act="tab-ai">AI</button>
-                   <button class="tab ${tab === "notes" ? "active" : ""}" data-act="tab-notes">笔记</button>
-                   <button class="tab ${tab === "todos" ? "active" : ""}" data-act="tab-todos">任务</button>
-                   ${tab !== "ai" ? `<button class="icon-btn" style="margin-left:auto" data-act="new" title="新建">${icons.plus}</button>` : ""}
-                 </div>`
-          }
           <div class="panel-body ${!sheet && (tab === "notes" || tab === "todos") ? "quick-entry-body" : ""}">
             ${
               sheet === "books"
@@ -812,19 +920,24 @@
                   : sheet === "ai-settings"
                     ? renderAiSettings()
                   : tab === "notes"
-                    ? `<aside class="note-col">${noteItems}</aside>
-                       <div class="editor">${
+                    ? `<div class="editor">${
                          activeNote
-                           ? `<input class="title-input" data-id="${activeNote.id}" value="${escapeAttr(activeNote.title)}" placeholder="标题" />
-                              <textarea class="body-input" data-id="${activeNote.id}" placeholder="写下此刻…">${escapeHtml(activeNote.body)}</textarea>`
-                           : `<p class="empty">这个本子还没有笔记。</p>`
+                           ? `<input class="title-input" data-id="${escapeAttr(activeNote.id)}" value="${escapeAttr(activeNote.title)}" placeholder="标题（可稍后填写）" aria-label="笔记标题" />
+                              <textarea class="body-input" data-id="${escapeAttr(activeNote.id)}" placeholder="${quickNoteTypes.get(quickNoteType).placeholder}" aria-label="笔记正文">${escapeHtml(activeNote.body)}</textarea>`
+                           : `<div class="quick-note-empty"><p>写下此刻的想法</p><button class="quick-done" data-act="new">${quickIcon('plus')}新建笔记</button><small>${api.platform === 'darwin' ? '⌘' : 'Ctrl'}+N 新建</small></div>`
                        }</div>`
                     : tab === "todos"
                       ? renderZenTodos()
                       : renderAiChat()
             }
           </div>
-          <footer class="panel-footer">
+          ${compact ? `<footer class="quick-note-status">
+            <span role="status" aria-live="polite"><button class="quick-save-state" data-note-save-state data-act="retry-note-save" disabled>已保存</button></span>
+            <button class="quick-done" data-act="complete-note" title="保存并收起 · ${api.platform === 'darwin' ? '⌘' : 'Ctrl'}+Enter">完成 <kbd>${api.platform === 'darwin' ? '⌘↵' : 'Ctrl+↵'}</kbd></button>
+          </footer><div class="quick-note-strip">
+            <nav class="quick-note-tabs" aria-label="笔记类型">${noteItems}</nav>
+            <button class="quick-note-new" data-act="new" title="新建笔记 · ${api.platform === 'darwin' ? '⌘' : 'Ctrl'}+N" aria-label="新建笔记">${quickIcon('plus')}</button>
+          </div>` : `<footer class="panel-footer">
             <span>${
               sheet === "books"
                 ? `${state.notebooks.length} 个笔记本`
@@ -847,7 +960,7 @@
                     ? `<button class="footer-open" data-act="open-workspace" data-section="tasks">完整 Zen Task ${icons.expand}</button>`
                     : `<button class="footer-open" data-act="open-workspace" data-section="notes">完整笔记 ${icons.expand}</button>`
             }
-          </footer>
+          </footer>`}
         </section></div>`;
       }
 
@@ -855,6 +968,8 @@
       root.innerHTML = html;
       options.onMode?.(mode);
       bind();
+      refreshNoteSaveStatus();
+      root.querySelector('.note-item.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       const nextMessages = root.querySelector(".ai-messages");
       if (nextMessages) nextMessages.scrollTop = followMessages ? nextMessages.scrollHeight : previousScroll;
     }
@@ -873,6 +988,8 @@
       }
 
       root.onclick = (e) => {
+        const menu = root.querySelector('.quick-menu[open]');
+        if (menu && !e.target.closest('summary')) menu.open = false;
         const btn = e.target.closest("[data-act]");
         if (!btn) return;
         const act = btn.dataset.act;
@@ -922,10 +1039,13 @@
         }
         if (act === "collapse") collapse();
         if (act === "tab-notes") {
+          sheet = null;
           tab = "notes";
           render();
+          focusLater('.body-input');
         }
         if (act === "tab-todos") {
+          sheet = null;
           tab = "todos";
           void loadZenTasks();
         }
@@ -951,23 +1071,12 @@
             focusLater(".ai-input");
           }
         }
-        if (act === "new" && tab === "notes") {
-          const note = {
-            id: newId(),
-            notebookId: INBOX,
-            title: "",
-            body: "",
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          };
-          void persist({
-            activeNotebookId: INBOX,
-            activeNoteId: note.id,
-            notes: [note, ...state.notes],
-          }).then(() => focusLater(".title-input"));
-        }
+        if (act === "new" && tab === "notes") void createQuickNote();
+        if (act === "complete-note") void runNoteAction(collapse);
+        if (act === "retry-note-save") void runNoteAction(() => {});
         if (act === "new" && tab === "todos") focusLater(".zen-input");
-        if (act === "select-note") void persist({ activeNoteId: id });
+        if (act === "select-note") void runNoteAction(async () => { await persist({ activeNoteId: id }); focusLater(".body-input"); });
+        if (act === 'select-note-type') void selectQuickNoteType(id);
         if (act === "toggle-zen") {
           void api.zenTask
             .toggleTask(id)
@@ -1063,18 +1172,7 @@
           const notes = state.notes.map((n) =>
             n.id === id ? { ...n, title: title.value, body: body.value, updatedAt: Date.now() } : n,
           );
-          state = { ...state, notes, activeNoteId: id };
-          skipRender = true;
-          pendingNoteSave = api.setState({ notes, activeNoteId: id }).then((next) => {
-            adopt(next);
-            noteSaveError = null;
-            skipRender = false;
-          });
-          void pendingNoteSave.catch((error) => {
-            noteSaveError = error;
-            skipRender = false;
-            zenError = error?.message || "便签保存失败，请重试";
-          });
+          void saveNoteDraft(notes, id);
         };
         title.oninput = update;
         body.oninput = update;
@@ -1331,7 +1429,7 @@
     }
 
     api.getState().then((s) => {
-      state = s;
+      adopt(s);
       render();
     });
 
@@ -1340,6 +1438,7 @@
         mode = next;
         sheet = null;
         render();
+        if (next === 'panel' && tab === 'notes') focusLater('.body-input');
       },
     };
   }

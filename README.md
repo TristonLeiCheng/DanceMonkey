@@ -2,11 +2,11 @@
 
 > 当前主线是 [Electron 3.x](electron-app/README.md)，支持 Windows 和 macOS。
 
-## 最新版本 · v3.15.0
+## 最新版本 · v3.16.1
 
-[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.15.0) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.15.0.md)
+[下载安装包](https://github.com/TristonLeiCheng/DanceMonkey/releases/tag/v3.16.1) · [使用说明](electron-app/README.md) · [更新记录](docs/releases/v3.16.1.md)
 
-v3.15.0 将笔记升级为本机 Markdown 编辑器：支持独立窗口、实时预览编辑、图片和表格编辑，以及粘贴／拖拽图片自动保存为相对路径；补齐编辑工具栏与截图权限错误提示，保留此前网络连接、宠物、提醒及其他功能。
+v3.16.1 将快速笔记改为紧凑扁平卡片，提供「随手记／会议要点／临时想法」三个固定类型和独立文件夹，修复连续输入重复新建与保存覆盖。新增笔记外观、YAML 元数据编辑、双链和文件树宽度记忆，保留此前 Markdown 编辑器、图片导入、网络连接、宠物、提醒及其他功能。
 
 - **默认宠物提醒**：统一命名为“宠物提醒”，在顶部“默认提醒方式”下拉框直接选择；新建提醒跟随默认，单条提醒可单独指定。
 - **新动画伙伴**：考拉、仓鼠、海豹、经典黄纹短袖写实良子及仿真昆虫；蟑螂随机爬行，蚊子曲线飞行与悬停。

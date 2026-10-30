@@ -93,7 +93,7 @@ test('returning home flushes typing during navigation before clearing the editor
     } }, applyTree: () => {}, renderShell: () => { renders++; },
     location: { hash: '#workspace' }, history: { replaceState() {} },
   });
-  vm.runInContext(`let markdownEditor=null,noteImageTransfer=null,syncPaused=false,vaultSwitching=false,noteNavigation=0,vaultRoot='/vault',activePath='draft.md',content='first draft',savedContent='old',selectedPath='draft.md',homeQuery='',section='notes',modulesInstance=null,modulesReady=false,saveTimer=null,saveInFlight=Promise.resolve(); ${save} ${navigate}`, context);
+  vm.runInContext(`let noteDetails=null,markdownEditor=null,noteImageTransfer=null,syncPaused=false,vaultSwitching=false,noteNavigation=0,vaultRoot='/vault',activePath='draft.md',content='first draft',savedContent='old',selectedPath='draft.md',homeQuery='',section='notes',modulesInstance=null,modulesReady=false,saveTimer=null,saveInFlight=Promise.resolve(); ${save} ${navigate}`, context);
   await vm.runInContext("setSection('notes')", context);
   assert.deepEqual(writes, [{ file: 'draft.md', text: 'first draft' }, { file: 'draft.md', text: 'typed during navigation' }]);
   assert.equal(vm.runInContext('activePath', context), null); assert.equal(renders, 1);

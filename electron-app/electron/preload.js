@@ -31,6 +31,8 @@ ipcRenderer.on("note:close-request", async () => {
 
 contextBridge.exposeInMainWorld("lumen", {
   note: {
+    inspect: content => ipcRenderer.invoke('note:inspect', content),
+    openLinked: path => ipcRenderer.invoke('note:open-linked', path),
     importImages: (images, path, root) => writeNotes("note:import-images", images, path, root),
     image: (src, path, root) => ipcRenderer.invoke("note:image", src, path, root),
     focusExisting: path => ipcRenderer.invoke("note:focus-existing", path),
@@ -55,7 +57,7 @@ contextBridge.exposeInMainWorld("lumen", {
   softwareRender: process.argv.includes("--lumen-software-render"),
   getState: () => ipcRenderer.invoke("store:get"),
   setState: (partial) => writeNotes("store:set", partial),
-  setShell: (mode) => ipcRenderer.invoke("shell:set", mode),
+  setShell: (mode, layout) => ipcRenderer.invoke("shell:set", mode, layout),
   openWorkspace: (section) => ipcRenderer.invoke("workspace:open", section),
   openProject: id => ipcRenderer.invoke("workspace:project", id),
   onWorkspaceProject: callback => {
@@ -75,12 +77,14 @@ contextBridge.exposeInMainWorld("lumen", {
     search: (root, query) => ipcRenderer.invoke("pkb:search", { root, query }),
   },
   workspace: {
+    inspect: (path, content, root) => ipcRenderer.invoke('workspace:inspect', path, content, root),
     list: () => ipcRenderer.invoke("workspace:list"),
     read: (path) => ipcRenderer.invoke("workspace:read", path),
     write: (path, content) => writeNotes("workspace:write", path, content),
     createFile: (parent, name) => writeNotes("workspace:createFile", parent, name),
     createNote: (input) => writeNotes("workspace:createNote", input),
     createFolder: (parent, name) => writeNotes("workspace:createFolder", parent, name),
+    setAppearance: (path, appearance, root) => writeNotes("workspace:setAppearance", path, appearance, root),
     rename: (path, name) => writeNotes("workspace:rename", path, name),
     remove: (path) => writeNotes("workspace:remove", path),
   },

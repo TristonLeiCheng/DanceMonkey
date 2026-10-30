@@ -28,7 +28,7 @@ function harness(api) {
 test("Markdown preview separates metadata without interpreting it as HTML", () => {
   const fn = source.slice(source.indexOf("  function renderMarkdown("), source.indexOf("  function treeIcon("));
   const context = vm.createContext({
-    window: { marked: { parse: (value) => `<article>${value}</article>` }, DOMPurify: { sanitize: (value) => value } },
+    window: { DMNoteDetails: { model: require('../src/note-details-model') }, marked: { parse: (value) => `<article>${value}</article>` }, DOMPurify: { sanitize: (value) => value } },
     esc: (value) => String(value).replaceAll("<", "&lt;"),
   });
   vm.runInContext(fn, context);

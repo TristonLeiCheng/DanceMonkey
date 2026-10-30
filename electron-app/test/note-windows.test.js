@@ -39,6 +39,9 @@ test('separate documents deduplicate canonical paths and stay pinned across vaul
   h['note:open']({}, './same.md'); assert.equal(f.manager.windows().length, 1); assert.equal(a.focused, true);
   f.switch(); h['note:open']({}, 'same.md'); const b = f.manager.windows()[1];
   assert.equal(f.manager.windows().length, 2);
+  f.A.setAppearance('same.md', { color: '#639ce0', emoji: '⭐' });
+  assert.equal(h['note:read'](f.event(a)).appearance.emoji, '⭐');
+  assert.equal(h['note:read'](f.event(b)).appearance.emoji, '');
   h['note:write'](f.event(a), '# changed A', 5);
   assert.equal(f.A.read('same.md'), '# changed A'); assert.equal(f.B.read('same.md'), '# B');
   assert.equal(h['note:read'](f.event(b)).content, '# B');
@@ -60,6 +63,22 @@ test('external edits, deletion and symlinks cannot be overwritten; explicit relo
     fs.symlinkSync(path.join(f.B.root, 'same.md'), path.join(f.A.root, 'same.md'));
     assert.throws(() => h['note:write'](event, 'escaped', 5), /移动或删除/);
   }
+});
+
+test('document inspection and link navigation stay pinned to the original vault and never reset disk conflict detection', async t => {
+  const f = fixture(t), h = f.handlers;
+  f.A.write('Linked.md', '[[same]]'); f.B.write('Linked.md', '# unrelated');
+  h['note:open']({}, 'same.md'); const a = f.manager.windows()[0], event = f.event(a);
+  f.switch();
+  const result = await h['note:inspect'](event, '[[Linked]]');
+  assert.equal(result.root, f.A.root); assert.equal(result.incoming[0].path, 'Linked.md');
+  h['note:open-linked'](event, 'Linked.md');
+  assert.equal(h['note:read'](f.event(f.manager.windows()[1])).content, '[[same]]');
+  f.A.write('same.md', 'external');
+  await h['note:inspect'](event, 'local draft');
+  assert.throws(() => h['note:write'](event, 'should not overwrite', 5), /其他程序/);
+  assert.throws(() => h['note:open-linked'](event, '../escape.md'));
+  assert.throws(() => h['note:inspect']({ ...event, senderFrame: {} }), /无效/);
 });
 test('native close waits for successful flush, rejects another window and keeps failed drafts', async t => {
   const f = fixture(t); f.handlers['note:open']({}, 'same.md'); const win = f.manager.windows()[0];

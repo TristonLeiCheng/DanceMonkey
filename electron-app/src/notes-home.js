@@ -1,4 +1,5 @@
 (function (scope) {
+  const appearance = typeof module !== 'undefined' && module.exports ? require('./note-appearance') : scope.DMNoteAppearance;
   const kinds = [
     { type: 'blank', label: '空白笔记', hint: '从一个想法开始', folder: 'Inbox', mark: '+', sections: [] },
     { type: 'note', label: '知识笔记', hint: '整理概念与学习心得', folder: 'Notes', mark: '知', sections: ['核心观点', '详细记录', '参考资料'] },
@@ -52,8 +53,8 @@
   function renderResults({ tree, query = '', sort = 'updatedAt' }) {
     const files = select(filesFromTree(tree), query, sort);
     return `<div class="notes-home-result-count" role="status">${query.trim() ? `找到 ${files.length} 篇笔记` : `按${sort === 'createdAt' ? '创建' : '更新时间'}排序`}${files.length > 20 ? ' · 显示前 20 篇，请搜索缩小范围' : ''}</div>
-      ${files.length ? `<div class="notes-home-list">${files.slice(0, 20).map(file => `<button type="button" class="notes-home-note" data-action="home-open" data-path="${esc(file.path)}">
-        <span class="notes-home-note-icon" aria-hidden="true">↗</span><span class="notes-home-note-info"><strong>${esc(file.title || file.name.replace(/\.md$/i, ''))}</strong><small>${esc(file.path)}</small></span>
+      ${files.length ? `<div class="notes-home-list">${files.slice(0, 20).map(file => `<button type="button" class="notes-home-note" data-action="home-open" data-path="${esc(file.path)}" style="${appearance.style(file)}">
+        <span class="notes-home-note-icon" aria-hidden="true">${esc(appearance.get(file).emoji) || '↗'}</span><span class="notes-home-note-info"><strong>${esc(file.title || file.name.replace(/\.md$/i, ''))}</strong><small>${esc(file.path)}</small></span>
         <time datetime="${file[sort] ? new Date(file[sort]).toISOString() : ''}">${formatDate(file[sort])}</time></button>`).join('')}</div>` : `<div class="notes-home-empty"><strong>${query.trim() ? '没有找到相关笔记' : '从第一篇笔记开始'}</strong><p>${query.trim() ? '试试标题或路径中的其他关键词，也可以搜索正文。' : '点击上方卡片创建笔记，你的记录会出现在这里。'}</p></div>`}`;
   }
   function render({ tree, vaultRoot, query = '', sort = 'updatedAt', fullText = false, now = new Date() }) {

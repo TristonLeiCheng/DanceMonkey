@@ -18,7 +18,7 @@ function createNoteWindows({ BrowserWindow, ipcMain, dialog, getWorkspace, rende
   function snapshot(record) {
     const content = record.workspace.read(record.path);
     record.disk = content;
-    return { path: record.path, root: record.workspace.root, content };
+    return { path: record.path, root: record.workspace.root, content, appearance: record.workspace.getAppearance(record.path) };
   }
   function open(workspace, relativePath) {
     if (isBusy()) throw new Error('正在同步或退出，请稍后打开笔记。');
@@ -128,6 +128,11 @@ function createNoteWindows({ BrowserWindow, ipcMain, dialog, getWorkspace, rende
     for (const file of result.filePaths) openLocal(file);
   });
   ipcMain.handle('note:read', event => snapshot(recordFor(event)));
+  ipcMain.handle('note:inspect', (event, content) => {
+    const record = recordFor(event);
+    return record.workspace.inspect(record.path, content);
+  });
+  ipcMain.handle('note:open-linked', (event, relativePath) => open(recordFor(event).workspace, relativePath));
   ipcMain.handle('note:write', (event, content, generation) => {
     assertWritable(generation);
     const record = recordFor(event);

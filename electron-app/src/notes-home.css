@@ -30,9 +30,11 @@
 .notes-home-search input::placeholder { color: var(--ws-muted); }
 .notes-home :is(button,input):focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 3px; }
 .notes-home-result-count { font-size: 11px; color: var(--ws-muted); padding: 8px 0; }
-.notes-home-note { display: flex; width: 100%; align-items: center; gap: 12px; padding: 13px 8px; border: none; border-bottom: 1px solid var(--ws-line); background: transparent; text-align: left; color: var(--ws-text); cursor: pointer; }
-.notes-home-note:hover { background: var(--ws-hover); }
-.notes-home-note-icon { color: var(--ws-accent); padding: 6px; }
+.notes-home-note { display: flex; width: 100%; align-items: center; gap: 12px; padding: 13px 8px; border: none; border-bottom: 1px solid var(--ws-line); background: var(--note-bg, transparent); text-align: left; color: var(--note-accent, var(--ws-text)); cursor: pointer; border-radius: 6px; }
+.notes-home-note:hover { background: var(--note-bg, var(--ws-hover)); box-shadow: inset 0 0 0 1px var(--ws-line); }
+.notes-home-note[style*="--note-bg"] :is(small,time) { color: var(--note-accent, var(--ws-text)); opacity: .75; }
+.notes-home-note-icon { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 7px; color: var(--note-accent, var(--ws-accent)); background: color-mix(in srgb, var(--note-accent, transparent) 14%, transparent); font-size: 18px; }
+.notes-home-note-info strong { color: var(--note-accent, inherit); }
 .notes-home-note-info { display: grid; gap: 5px; flex: 1; min-width: 0; }
 .notes-home-note-info strong { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .notes-home-note-info small { font-size: 11px; color: var(--ws-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

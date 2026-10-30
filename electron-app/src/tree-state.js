@@ -55,7 +55,21 @@
     return paths;
   }
 
-  const api = { folderPaths, restore, remap, storageKey, saveForVault, restoreForVault };
+  const widthKey = 'lumen-workspace-sidebar-width';
+  function clampWidth(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? Math.max(160, Math.min(420, Math.round(number))) : 226;
+  }
+  function restoreWidth(storage) {
+    try { return clampWidth(storage.getItem(widthKey)); } catch { return 226; }
+  }
+  function saveWidth(storage, value) {
+    const width = clampWidth(value);
+    try { storage.setItem(widthKey, String(width)); } catch {}
+    return width;
+  }
+
+  const api = { folderPaths, restore, remap, storageKey, saveForVault, restoreForVault, clampWidth, restoreWidth, saveWidth };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof window !== "undefined") window.DMTreeState = api;
 })();

@@ -15,15 +15,7 @@
     ["reminders", "定时提醒"],
     ["settings", "设置"],
   ];
-  const THEMES = [
-    ["dark", "深色"],
-    ["light", "浅色"],
-    ["frost-yellow", "淡黄磨砂"],
-    ["frost-green", "淡绿磨砂"],
-    ["slate", "雾蓝"],
-    ["lavender", "淡紫"],
-  ];
-  const LIGHT_THEMES = new Set(["light", "frost-yellow", "frost-green", "lavender"]);
+  const appearance = window.DMWorkspaceAppearance.create({ root });
 
   function sectionFromHash() {
     const part = location.hash.replace(/^#workspace\/?/, "").split("/")[0];
@@ -46,13 +38,6 @@
   let expanded = new Set();
   let expandedRestored = false;
   let viewMode = localStorage.getItem("lumen-workspace-view") || "live";
-  let effect = localStorage.getItem("lumen-workspace-effect") || "glass";
-  let theme = localStorage.getItem("lumen-workspace-theme") || "dark";
-  if (!THEMES.some(([value]) => value === theme)) theme = "dark";
-  const storedBackgroundOpacity = localStorage.getItem("lumen-workspace-opacity");
-  let backgroundOpacity = storedBackgroundOpacity === null ? 82 : Number(storedBackgroundOpacity);
-  if (!Number.isFinite(backgroundOpacity)) backgroundOpacity = 82;
-  backgroundOpacity = Math.max(35, Math.min(100, Math.round(backgroundOpacity)));
   let editorWidth = Number(localStorage.getItem("lumen-workspace-editor-width")) || 50;
   let sidebarWidth = window.DMTreeState.restoreWidth(localStorage);
   let appVersion = "";
@@ -599,11 +584,10 @@
     noteImageTransfer?.destroy(); noteImageTransfer = null;
     noteDetails?.destroy(); noteDetails = null;
     markdownEditor?.text(); markdownEditor?.destroy(); markdownEditor = null;
-    const lightTheme = LIGHT_THEMES.has(theme) ? "light" : "";
-    root.className = `workspace-root effect-${effect} theme-${theme} ${lightTheme} ${maximized ? "maximized" : ""}`;
+    root.className = `workspace-root ${maximized ? "maximized" : ""}`;
+    appearance.apply();
     root.style.setProperty("--editor-width", `${editorWidth}%`);
     root.style.setProperty("--sidebar-width", `${sidebarWidth}px`);
-    root.style.setProperty("--ws-opacity", String(backgroundOpacity / 100));
     const isNotes = section === "notes";
     const title =
       section === "reminders" ? "定时提醒" :
@@ -628,11 +612,8 @@
         <div class="ws-brand">DM <span>DanceMonkey${appVersion ? ` v${esc(appVersion)}` : ""}</span></div>
         <div class="ws-current-path">${esc(title)}</div>
         <div class="ws-title-actions">
-          <button class="ws-effect ${effect === "glass" ? "active" : ""}" data-action="effect" data-value="glass">玻璃</button>
-          <button class="ws-effect ${effect === "solid" ? "active" : ""}" data-action="effect" data-value="solid">纯色</button>
-          <button class="ws-effect ${effect === "paper" ? "active" : ""}" data-action="effect" data-value="paper">纸张</button>
-          <label class="ws-theme-label"><span class="visually-hidden">工作区主题</span><select class="ws-theme-select" aria-label="工作区主题">${THEMES.map(([value, label]) => `<option value="${value}" ${theme === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
-          <label class="ws-opacity-label" title="调整工作区背景不透明度"><span>透明度</span><input class="ws-opacity" type="range" min="35" max="100" step="1" value="${backgroundOpacity}" aria-label="工作区背景不透明度" aria-valuetext="${backgroundOpacity}%"><output>${backgroundOpacity}%</output></label>
+          <span data-quick-sync-slot>${modulesInstance?.renderQuickSync?.() || ''}</span>
+          <button class="ws-header-icon" data-action="appearance-settings" title="外观设置" aria-label="外观设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--ws-bg)"/><circle cx="15" cy="17" r="3" fill="var(--ws-bg)"/></svg></button>
         </div>
         <div data-app-update-slot="title" class="ws-update-slot">${updateUI.renderButton()}</div>
         <div class="ws-window-actions">
@@ -774,6 +755,11 @@
     }
   }
 
+  async function openSettingsTab(tab) {
+    modulesInstance?.setSettingsTab(tab);
+    if (section !== 'settings') await setSection('settings');
+  }
+
   async function setSection(next, { preserveNote = false } = {}) {
     if (syncPaused || vaultSwitching) return;
     const navigation = ++noteNavigation;
@@ -841,7 +827,7 @@
       const action = control.dataset.action;
       if (syncPaused || vaultSwitching) return;
 
-      if (action === "app-update-check" || action === "app-update-apply") {
+      if (["app-update-check", "app-update-apply", 'app-update-logs'].includes(action)) {
         await updateUI.handleAction(action);
         return;
       }
@@ -860,11 +846,15 @@
       if (action === "new-root-file") { openDialog("file", "", "", ""); return; }
       if (action === "new-root-folder") { openDialog("folder", "", "", ""); return; }
       if (action === "note-appearance") { openAppearance(activePath); return; }
-
-      if (action === "effect") {
-        effect = control.dataset.value;
-        localStorage.setItem("lumen-workspace-effect", effect);
-        renderShell();
+      if (action === 'appearance-settings') { await openSettingsTab('appearance'); return; }
+      if (action === 'quick-note-sync') {
+        try {
+          await saveActive();
+          modulesInstance?.prepareSync();
+          const result = await modulesInstance?.quickSync();
+          if (result?.openSettings) await openSettingsTab('sync');
+        } catch (error) { alert(error?.message || '笔记同步失败，请重试。'); }
+        return;
       }
       if (action === "section") {
         void setSection(control.dataset.value).catch(error => alert(error?.message || "页面切换失败，请重试。"));
@@ -922,31 +912,7 @@
       };
     }
 
-    const themeSelect = root.querySelector(".ws-theme-select");
-    if (themeSelect) {
-      themeSelect.onchange = () => {
-        theme = themeSelect.value;
-        if (theme === "frost-yellow" || theme === "frost-green") {
-          effect = "glass";
-          localStorage.setItem("lumen-workspace-effect", effect);
-        }
-        localStorage.setItem("lumen-workspace-theme", theme);
-        renderShell();
-      };
-    }
-
-    const opacityInput = root.querySelector(".ws-opacity");
-    if (opacityInput) {
-      opacityInput.oninput = () => {
-        backgroundOpacity = Number(opacityInput.value);
-        root.style.setProperty("--ws-opacity", String(backgroundOpacity / 100));
-        opacityInput.setAttribute("aria-valuetext", `${backgroundOpacity}%`);
-        opacityInput.parentElement.querySelector("output").textContent = `${backgroundOpacity}%`;
-      };
-      opacityInput.onchange = () => {
-        localStorage.setItem("lumen-workspace-opacity", String(backgroundOpacity));
-      };
-    }
+    appearance.bind(root);
 
     const host = root.querySelector('.ws-live-editor');
     if (host && window.DMMarkdownEditor) {
@@ -1771,6 +1737,7 @@
       attr,
       rerender: () => renderShell(),
       updateUI,
+      appearance,
       openNote: async (path) => {
         await openFile(path);
         const result = await api.workspace.list();
@@ -1780,6 +1747,7 @@
       },
     });
     modulesReady = Boolean(modulesInstance);
+    await modulesInstance?.loadQuickSync?.().catch(() => {});
     await loadVaults();
     applyTree(await api.workspace.list());
     if (section !== "notes" && modulesInstance) await modulesInstance.loadAll();

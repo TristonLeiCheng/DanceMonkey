@@ -3,6 +3,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { Readable, Transform } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 const { fetchWithSystemProxy } = require("./system-proxy");
 
 const USER_AGENT = "DanceMonkey-Updater/1.0";
@@ -76,18 +78,70 @@ async function readText(source) {
   return fs.readFileSync(filePath, "utf8");
 }
 
-async function copySourceToFile(source, destinationPath, onProgress) {
+async function copySourceToFile(source, destinationPath, onProgress, {
+  fetch = fetchWithSystemProxy, maxAttempts = 3, retryDelayMs = 1000,
+  headersTimeoutMs = 30000, idleTimeoutMs = 120000,
+} = {}) {
   fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
   if (isHttpUrl(source)) {
-    const response = await fetchWithSystemProxy(source, {
-      headers: { "User-Agent": USER_AGENT },
-    });
-    if (!response.ok) throw new Error(`下载升级包失败（HTTP ${response.status}）。`);
-    const total = Number(response.headers.get("content-length") || 0);
-    const arrayBuffer = await response.arrayBuffer();
-    fs.writeFileSync(destinationPath, Buffer.from(arrayBuffer));
-    onProgress?.(total ? `已下载 ${(arrayBuffer.byteLength / 1024 / 1024).toFixed(1)} MB` : "升级包下载完成");
-    return;
+    // A failed GET can be downloaded again on the same configured network route.
+    // Only a complete response is moved into place; partial ZIPs never reach extraction.
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const partial = `${destinationPath}.${crypto.randomUUID()}.part`;
+      const controller = new AbortController();
+      let timer, timedOut = false;
+      const armTimeout = milliseconds => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { timedOut = true; controller.abort(); }, milliseconds);
+      };
+      try {
+        armTimeout(headersTimeoutMs);
+        const response = await fetch(source, {
+          headers: { 'User-Agent': USER_AGENT, 'Accept-Encoding': 'identity' }, signal: controller.signal,
+        });
+        if (!response.ok) {
+          await response.body?.cancel();
+          throw Object.assign(new Error(`下载升级包失败（HTTP ${response.status}）。`), {
+            retryable: [408, 429].includes(response.status) || response.status >= 500,
+          });
+        }
+        if (!response.body) throw Object.assign(new Error('升级包响应为空。'), { retryable: true });
+        const total = response.headers.get('content-encoding') ? 0 : Number(response.headers.get('content-length') || 0);
+        let received = 0, lastProgress = 0;
+        armTimeout(idleTimeoutMs);
+        const progress = new Transform({ transform(chunk, encoding, callback) {
+          received += chunk.length;
+          armTimeout(idleTimeoutMs);
+          const now = Date.now();
+          if (now - lastProgress >= 500) {
+            lastProgress = now;
+            const size = `${(received / 1024 / 1024).toFixed(1)} MB`;
+            onProgress?.(total > 0 ? `正在下载更新包… ${Math.min(99, Math.floor(received / total * 100))}%（${size} / ${(total / 1024 / 1024).toFixed(1)} MB）` : `正在下载更新包… ${size}`);
+          }
+          callback(null, chunk);
+        } });
+        await pipeline(Readable.from(response.body), progress, fs.createWriteStream(partial, { flags: 'wx', mode: 0o600 }), { signal: controller.signal });
+        if (!received || (total > 0 && received !== total)) {
+          throw Object.assign(new Error('升级包下载不完整。'), { retryable: true });
+        }
+        fs.renameSync(partial, destinationPath);
+        onProgress?.(`更新包下载完成（${(received / 1024 / 1024).toFixed(1)} MB）`);
+        return;
+      } catch (error) {
+        fs.rmSync(partial, { force: true });
+        const codes = [error.code, error.cause?.code];
+        const retryable = error.retryable ?? (timedOut || codes.some(code => [
+          'DM_NETWORK_CONNECTION', 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND',
+          'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT',
+        ].includes(code)));
+        if (!retryable || attempt === maxAttempts) {
+          error.updateStage = 'download';
+          throw error;
+        }
+        onProgress?.(`下载中断，正在重试（${attempt + 1}/${maxAttempts}）…`);
+      } finally { clearTimeout(timer); controller.abort(); }
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs * attempt));
+    }
   }
   const filePath = resolveFilePath(source);
   if (!fs.existsSync(filePath)) throw new Error(`未找到升级包文件：${filePath}`);
@@ -97,7 +151,11 @@ async function copySourceToFile(source, destinationPath, onProgress) {
 
 function validateSha256(filePath, expectedHash) {
   const hash = crypto.createHash("sha256");
-  hash.update(fs.readFileSync(filePath));
+  const fd = fs.openSync(filePath, 'r'), buffer = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    let size;
+    while ((size = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) hash.update(buffer.subarray(0, size));
+  } finally { fs.closeSync(fd); }
   const actual = hash.digest("hex").toUpperCase();
   const expected = String(expectedHash || "")
     .replace(/-/g, "")

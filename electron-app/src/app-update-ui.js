@@ -15,7 +15,8 @@
     function renderSettings() {
       return `<p class="ws-settings-desc">当前版本${state.currentVersion ? ` v${esc(state.currentVersion)}` : ""}。${state.supported ? "自动检查更新，准备好后可点击右上角“更新并重启”。" : "当前系统暂不支持应用内更新。"}</p>
         ${state.supported ? `<div class="ws-settings-actions"><button class="module-primary" type="button" data-action="app-update-${ready() ? "apply" : "check"}" ${busy() ? "disabled" : ""}>${state.phase === "installing" ? "正在安装…" : ready() ? "安装更新" : busy() ? "检查中…" : "检查更新"}</button></div>` : ""}
-        <p class="ws-settings-update-status" role="status" aria-live="polite">${esc(localError || state.message)}</p>`;
+        <p class="ws-settings-update-status" role="status" aria-live="polite">${esc(localError || state.message)}</p>
+        ${api.appUpdate?.openLogs && (localError || state.phase === 'error') ? '<button class="module-secondary" type="button" data-action="app-update-logs">打开更新日志</button>' : ''}`;
     }
     // Only touch update slots so background events preserve editors and settings drafts.
     function refresh() {
@@ -36,6 +37,11 @@
       return loading;
     }
     async function handleAction(action) {
+      if (action === 'app-update-logs' && api.appUpdate?.openLogs) {
+        try { if (!(await api.appUpdate.openLogs())?.success) throw new Error(); }
+        catch { localError = '无法打开更新日志，请稍后重试。'; refresh(); }
+        return true;
+      }
       if (!["app-update-check", "app-update-apply"].includes(action)) return false;
       if (busy() || !state.supported) return true;
       localBusy = true;

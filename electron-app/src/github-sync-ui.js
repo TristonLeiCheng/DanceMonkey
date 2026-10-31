@@ -1,5 +1,5 @@
 (() => {
-  function create(api, { esc, attr, beforeRender }) {
+  function create(api, { esc, attr, beforeRender, onChange }) {
     let state = { auth: {}, sync: {}, root: "" };
     let draft = {};
     let repositories = [];
@@ -12,6 +12,7 @@
     function setPreview(value) { preview = value; choices = new Map(); comparison = null; }
     let device = null;
     let busy = false;
+    let quickBusy = false;
     let message = "";
     let error = "";
     let timer = null;
@@ -31,6 +32,7 @@
       if (advanced) advancedOpen = advanced.open;
     }
     function update() {
+      onChange?.();
       const card = document.querySelector(".ws-github-sync");
       if (!card) return;
       const scrollTop = card.querySelector(".github-preview")?.scrollTop || 0;
@@ -62,6 +64,7 @@
       const binding = state.sync.binding || {};
       draft = { clientId: state.auth.clientId || "", appSlug: state.auth.appSlug || "",
         owner: binding.owner || "", repo: binding.repo || "", branch: binding.branch || "", ...draft };
+      onChange?.();
     }
     async function loadRepositories() {
       if (!api.githubSync.repositories || !state.auth.connected) return;
@@ -288,7 +291,31 @@
       }
       return true;
     }
-    return { load, render, handleAction, pause, capture };
+    function renderQuickButton() {
+      const running = busy || quickBusy || state.sync?.busy;
+      const configured = Boolean(state.auth.connected && state.sync.binding);
+      const label = running ? '正在同步笔记…' : error ? `笔记同步失败：${error}` : message || (configured ? '立即同步笔记' : '设置笔记同步');
+      const recent = state.sync.lastSync ? ` · 最近同步 ${new Date(state.sync.lastSync).toLocaleString()}` : '';
+      return `<button type="button" class="ws-header-icon ws-quick-sync ${running ? 'is-syncing' : ''} ${error ? 'has-error' : ''}" data-action="quick-note-sync" aria-label="${attr(label)}" title="${attr(label + recent)}" ${running ? 'disabled aria-busy="true"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 2M4 16l2 2a7 7 0 0 0 12-1"/></svg><span class="ws-sync-dot ${configured ? 'connected' : ''}" aria-hidden="true"></span></button>`;
+    }
+    async function quickSync() {
+      if (quickBusy || busy) return { busy: true };
+      quickBusy = true;
+      capture(); beforeRender?.(); onChange?.();
+      try {
+        if (!api.githubSync) return { openSettings: true };
+        error = ''; message = '';
+        await load();
+        if (error || !state.auth.connected || !state.sync.binding) return { openSettings: true };
+        if (state.sync.busy) return { busy: true };
+        await handleAction('github-preview');
+        if (error || !preview || preview.conflicts?.length) return { openSettings: true };
+        await handleAction('github-sync');
+        return { openSettings: Boolean(error) };
+      } catch (cause) { error = cause.message || '笔记同步失败，请重试。'; return { openSettings: true }; }
+      finally { quickBusy = false; update(); }
+    }
+    return { load, render, handleAction, pause, capture, quickSync, renderQuickButton };
   }
   window.DMGitHubSyncUI = { create };
 })();

@@ -7,6 +7,7 @@ const { createAppUpdateService: createReleaseClient, compareVersions, copySource
 const execute = promisify(execFile);
 const BUNDLE_ID = "com.dancemonkey.desktop";
 const { assertPetUpdateCompatible } = require('./pet-package');
+const { recordUpdateFailure } = require('./app-update-diagnostics');
 
 function bundleFromExecutable(executable) {
   const match = /^(.*\.app)\/Contents\/MacOS\/[^/]+$/.exec(path.resolve(executable));
@@ -58,6 +59,24 @@ function findAppBundle(root) {
   return apps[0];
 }
 
+function removeAppleDoubleSidecars(root) {
+  // ZIPs produced by macOS can leave ._ sidecars beside framework symlinks.
+  // Those archive metadata files are not signed bundle contents; codesign --strict
+  // rejects them at the root of an embedded framework. Never follow links or
+  // remove ordinary dotfiles: require the AppleDouble magic and format version.
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const file = path.join(root, entry.name);
+    if (entry.isDirectory()) removeAppleDoubleSidecars(file);
+    else if (entry.isFile() && entry.name.startsWith('._')) {
+      const fd = fs.openSync(file, 'r'), header = Buffer.alloc(26);
+      let size;
+      try { size = fs.readSync(fd, header, 0, header.length, 0); }
+      finally { fs.closeSync(fd); }
+      if (size === 26 && header.readUInt32BE(0) === 0x00051607 && header.readUInt32BE(4) === 0x00020000) fs.unlinkSync(file);
+    }
+  }
+}
+
 async function readBundleInfo(appPath, runFile = execute) {
   const { stdout } = await runFile("/usr/bin/plutil", ["-convert", "json", "-o", "-", path.join(appPath, "Contents", "Info.plist")]);
   return JSON.parse(stdout);
@@ -84,7 +103,8 @@ async function validateMacPayload(appPath, { version, arch, installedApp, runFil
   }
   const { stdout } = await runFile("/usr/bin/lipo", ["-archs", executablePath]);
   if (!String(stdout).trim().split(/\s+/).includes(arch === "x64" ? "x86_64" : "arm64")) throw new Error("更新包不支持当前 Mac 架构。");
-  await runFile("/usr/bin/codesign", ["--verify", "--deep", "--strict", appPath]);
+  try { await runFile("/usr/bin/codesign", ["--verify", "--deep", "--strict", appPath]); }
+  catch (error) { error.code = 'DM_UPDATE_SIGNATURE'; throw error; }
   if (installedApp) {
     const installedInfo = await readBundleInfo(installedApp, runFile);
     if (installedInfo.CFBundleExecutable !== executable) throw new Error("更新包入口与已安装应用不一致。");
@@ -106,9 +126,12 @@ staging=$6
 new_pid=''
 moved_old=0
 installed_new=0
-exec >> "$staging/apply-update.log" 2>&1
+log=\${7:-"$staging/apply-update.log"}
+exec >> "$log" 2>&1
+echo "Waiting for the previous application to exit"
 rollback() {
   status=$?
+  echo "Update failed (status $status); restoring the previous application"
   trap - EXIT HUP INT TERM
   if [ "$status" -eq 0 ]; then status=1; fi
   if [ -n "$new_pid" ]; then
@@ -138,7 +161,7 @@ rollback() {
 trap rollback EXIT HUP INT TERM
 count=0
 while kill -0 "$current_pid" 2>/dev/null; do
-  if [ "$count" -ge ${exitTimeoutSeconds} ]; then exit 1; fi
+  if [ "$count" -ge ${exitTimeoutSeconds} ]; then echo "Previous application did not exit in time"; exit 1; fi
   sleep 1
   count=$((count + 1))
 done
@@ -147,17 +170,19 @@ moved_old=1
 if [ -e "$install" ] || [ -L "$install" ]; then exit 1; fi
 /bin/mv "$work/next.app" "$install"
 installed_new=1
+echo "Replacement installed; waiting for startup confirmation"
 # Launch the bundle's executable so we can stop it and restore the old app if startup fails.
 cd "$(/usr/bin/dirname "$install")"
-"$install/Contents/MacOS/$executable" >/dev/null 2>&1 &
+"$install/Contents/MacOS/$executable" &
 new_pid=$!
 count=0
 while [ ! -f "$work/ready" ]; do
-  if ! kill -0 "$new_pid" 2>/dev/null || [ "$count" -ge ${startupTimeoutSeconds} ]; then exit 1; fi
+  if ! kill -0 "$new_pid" 2>/dev/null || [ "$count" -ge ${startupTimeoutSeconds} ]; then echo "Replacement did not confirm startup"; exit 1; fi
   sleep 1
   count=$((count + 1))
 done
 trap - EXIT HUP INT TERM
+echo "Update startup confirmed"
 /bin/rm -f "$pending"
 /bin/rm -rf "$work"
 /bin/rm -rf "$staging"
@@ -185,17 +210,24 @@ function createMacAppUpdateService({ getCurrentVersion, getExecutablePath = () =
     if (!check.isUpdateAvailable) return { ...check, launchInfo: null };
     const stagingRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dm-mac-update-"));
     fs.chmodSync(stagingRoot, 0o700);
+    let stage = 'download';
     try {
       const packagePath = path.join(stagingRoot, "package.zip");
       onProgress?.("正在下载更新包…");
       await copySourceToFile(check.manifest.packageUrl, packagePath, onProgress);
+      stage = 'checksum';
       if (check.manifest.sha256) validateSha256(packagePath, check.manifest.sha256);
-      onProgress?.("正在解压并校验更新…");
+      stage = 'extract';
+      onProgress?.("正在解压更新包…");
       const extractRoot = path.join(stagingRoot, "payload");
       fs.mkdirSync(extractRoot);
       // bsdtar refuses .. and symlink-directory traversal without the unsafe -P option.
       await runFile("/usr/bin/tar", ["-xf", packagePath, "-C", extractRoot, "--no-same-owner", "--no-same-permissions"]);
       const sourceApp = findAppBundle(extractRoot);
+      assertBundleLinks(sourceApp);
+      removeAppleDoubleSidecars(sourceApp);
+      stage = 'payload';
+      onProgress?.('正在校验应用版本、架构和签名…');
       const payload = await validateMacPayload(sourceApp, { version: check.latestVersionText, arch, installedApp, runFile });
       assertPetUpdateCompatible(sourceApp, (getPetSettings() || options).petAnimal);
       const scriptPath = path.join(stagingRoot, "apply-update.sh");
@@ -203,7 +235,9 @@ function createMacAppUpdateService({ getCurrentVersion, getExecutablePath = () =
       prepared = { sourceApp, installedApp, stagingRoot, scriptPath, executable: payload.executable, version: check.latestVersionText };
       return { ...check, launchInfo: prepared };
     } catch (error) {
-      fs.rmSync(stagingRoot, { recursive: true, force: true });
+      recordUpdateFailure(getUserDataDirectory(), stage, error, check.latestVersionText);
+      try { fs.rmSync(stagingRoot, { recursive: true, force: true }); }
+      catch (cleanupError) { console.warn('Unable to remove failed update payload', cleanupError.code); }
       throw error;
     }
   }
@@ -213,15 +247,21 @@ function createMacAppUpdateService({ getCurrentVersion, getExecutablePath = () =
     assertWritableInstall(prepared.installedApp);
     const work = fs.mkdtempSync(path.join(path.dirname(prepared.installedApp), ".DanceMonkey-update-"));
     fs.chmodSync(work, 0o700);
+    let stage = 'copy';
     try {
       const next = path.join(work, "next.app");
       await runFile("/usr/bin/ditto", [prepared.sourceApp, next]);
       await validateMacPayload(next, { version: prepared.version, arch, installedApp: prepared.installedApp, runFile });
       assertPetUpdateCompatible(next, getPetSettings()?.petAnimal);
       fs.mkdirSync(getUserDataDirectory(), { recursive: true });
+      const logs = path.join(getUserDataDirectory(), 'update-logs');
+      fs.mkdirSync(logs, { recursive: true, mode: 0o700 });
+      const applyLog = path.join(logs, 'apply-update.log');
+      fs.writeFileSync(applyLog, '', { mode: 0o600 });
       fs.writeFileSync(pendingFile(), JSON.stringify({ installedApp: prepared.installedApp, version: prepared.version, work }), { mode: 0o600 });
+      stage = 'launch';
       await new Promise((resolve, reject) => {
-        const child = spawnUpdater("/bin/sh", [prepared.scriptPath, prepared.installedApp, work, prepared.executable, String(process.pid), pendingFile(), prepared.stagingRoot], {
+        const child = spawnUpdater("/bin/sh", [prepared.scriptPath, prepared.installedApp, work, prepared.executable, String(process.pid), pendingFile(), prepared.stagingRoot, applyLog], {
           detached: true, stdio: "ignore", cwd: prepared.stagingRoot,
         });
         child.once("error", reject);
@@ -230,7 +270,7 @@ function createMacAppUpdateService({ getCurrentVersion, getExecutablePath = () =
     } catch (error) {
       fs.rmSync(work, { recursive: true, force: true });
       fs.rmSync(pendingFile(), { force: true });
-      throw error;
+      throw recordUpdateFailure(getUserDataDirectory(), stage, error, prepared.version);
     }
   }
 
@@ -240,15 +280,17 @@ function createMacAppUpdateService({ getCurrentVersion, getExecutablePath = () =
     try {
       const pending = JSON.parse(fs.readFileSync(file, "utf8"));
       const appPath = installApp();
-      if (pending.installedApp !== appPath || pending.version !== getCurrentVersion()) return;
+      // macOS resolves aliases such as /var -> /private/var in process.execPath.
+      // Compare physical bundles, otherwise a healthy replacement is rolled back.
+      if (fs.realpathSync(pending.installedApp) !== fs.realpathSync(appPath) || pending.version !== getCurrentVersion()) return;
       const work = path.resolve(pending.work);
-      if (path.dirname(work) !== path.dirname(appPath) || !path.basename(work).startsWith(".DanceMonkey-update-") || fs.lstatSync(work).isSymbolicLink()) return;
+      if (fs.realpathSync(path.dirname(work)) !== fs.realpathSync(path.dirname(appPath)) || !path.basename(work).startsWith(".DanceMonkey-update-") || fs.lstatSync(work).isSymbolicLink()) return;
       fs.writeFileSync(path.join(work, "ready"), "ready", { flag: "wx", mode: 0o600 });
-    } catch (error) { console.warn("Unable to confirm Mac update startup", error); }
+    } catch (error) { recordUpdateFailure(getUserDataDirectory(), 'startup', error, getCurrentVersion()); console.warn("Unable to confirm Mac update startup", error); }
   }
 
   return { checkAndPrepare, launchUpdaterAndRestart, confirmStartup, getCurrentVersion,
     getInstallDirectory: () => path.dirname(installApp()) };
 }
 
-module.exports = { createMacAppUpdateService, bundleFromExecutable, findAppBundle, validateMacPayload, buildMacUpdaterScript };
+module.exports = { createMacAppUpdateService, bundleFromExecutable, findAppBundle, validateMacPayload, buildMacUpdaterScript, removeAppleDoubleSidecars };

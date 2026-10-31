@@ -80,6 +80,28 @@ test("failed launch retains ready update for retry and never quits", async () =>
   assert.equal((await controller.apply()).success, true); assert.equal(counts().quits, 1);
 });
 
+test('expired staged files allow a fresh download rather than an endless install retry', async () => {
+  const { controller, counts } = setup({ service: { launchUpdaterAndRestart: async () => {
+    throw Object.assign(new Error('missing /private/staging'), { code: 'ENOENT' });
+  } } });
+  await controller.check();
+  assert.equal((await controller.apply()).success, false);
+  assert.equal(controller.getState().phase, 'error');
+  assert.doesNotMatch(controller.getState().message, /private/);
+  await controller.check();
+  assert.equal(counts().checks, 2);
+  assert.equal(counts().quits, 0);
+});
+
+test('extraction errors expose the failing stage without private command output', async () => {
+  const { controller } = setup({ service: { checkAndPrepare: async () => {
+    throw Object.assign(new Error('tar /private/package.zip'), { updateStage: 'extract' });
+  } } });
+  const result = await controller.check();
+  assert.match(result.error, /解压失败/);
+  assert.doesNotMatch(JSON.stringify(result), /private|package.zip/);
+});
+
 test("apply requires staging, respects active operations and deduplicates clicks", async () => {
   let allowed = false, finish;
   const { controller, counts } = setup({ controller: { canApply: () => allowed }, service: {

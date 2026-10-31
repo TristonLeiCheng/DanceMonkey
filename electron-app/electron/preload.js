@@ -215,6 +215,7 @@ contextBridge.exposeInMainWorld("lumen", {
     info: () => ipcRenderer.invoke("appUpdate:info"),
     check: () => ipcRenderer.invoke("appUpdate:check"),
     apply: () => ipcRenderer.invoke("appUpdate:apply"),
+    openLogs: () => ipcRenderer.invoke('appUpdate:openLogs'),
     onState: (cb) => {
       const listener = (_event, payload) => cb(payload);
       ipcRenderer.on("appUpdate:state", listener);

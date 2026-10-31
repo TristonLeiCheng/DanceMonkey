@@ -17,6 +17,38 @@ function setup(api = {}) {
   return { ui: window.DMGitHubSyncUI.create(api, { esc: escape, attr: escape }), timers };
 }
 
+test('quick icon routes unconfigured and conflicting notes to settings without syncing', async () => {
+  for (const configured of [false, true]) {
+    let syncs = 0, previews = 0;
+    const { ui } = setup({ githubSync: {
+      status: async () => ({ success: true, auth: { connected: configured }, sync: { binding: configured ? { owner: 'test', repo: 'notes' } : null } }),
+      preview: async () => { previews++; return { success: true, id: 'conflicted', conflicts: ['note.md'] }; },
+      sync: async () => { syncs++; return { success: true }; },
+    } });
+    assert.equal((await ui.quickSync()).openSettings, true);
+    assert.equal(previews, configured ? 1 : 0);
+    assert.equal(syncs, 0);
+  }
+});
+
+test('quick sync previews, uses the existing confirmed sync API and deduplicates repeated clicks', async () => {
+  let finish, previews = 0, syncs = 0;
+  const { ui } = setup({ githubSync: {
+    status: async () => ({ success: true, auth: { connected: true }, sync: { binding: { owner: 'test', repo: 'notes' } } }),
+    preview: async () => { previews++; return new Promise(resolve => { finish = resolve; }); },
+    sync: async input => { syncs++; assert.equal(input.previewId, 'quick'); return { success: true, cancelled: true }; },
+  } });
+  const pending = ui.quickSync();
+  while (!finish) await Promise.resolve();
+  assert.match(ui.renderQuickButton(), /disabled aria-busy="true"/);
+  assert.equal((await ui.quickSync()).busy, true);
+  finish({ success: true, id: 'quick', uploads: ['note.md'], conflicts: [] });
+  assert.equal((await pending).openSettings, false);
+  assert.equal(previews, 1); assert.equal(syncs, 1);
+  assert.match(ui.renderQuickButton(), /已取消/);
+  assert.doesNotMatch(ui.renderQuickButton(), /disabled/);
+});
+
 test("unconfigured build explains the prerequisite instead of pretending to authorize", async () => {
   let requests = 0;
   const { ui } = setup({ githubSync: {

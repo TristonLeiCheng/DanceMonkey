@@ -912,6 +912,12 @@ app.whenReady().then(() => {
   ipcMain.handle("appUpdate:info", () => appUpdateController.getState());
   ipcMain.handle("appUpdate:check", () => appUpdateController.check());
   ipcMain.handle("appUpdate:apply", () => appUpdateController.apply());
+  ipcMain.handle('appUpdate:openLogs', async () => {
+    const directory = path.join(app.getPath('userData'), 'update-logs');
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const error = await shell.openPath(directory);
+    return { success: !error };
+  });
 
   function registerHotkey(accelerator, handler) {
     try {

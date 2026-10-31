@@ -282,13 +282,13 @@ try {
   await evaluate(`document.querySelector('[data-details-tab="metadata"]').click()`);
   const metadataCapture = await send('Page.captureScreenshot',{format:'png'});
   fs.writeFileSync(path.join(detailsOutput,'details-metadata.png'),Buffer.from(metadataCapture.result.data,'base64'));
-  await evaluate(`(()=>{const theme=document.querySelector('.ws-theme-select');theme.value='light';theme.dispatchEvent(new Event('change'));})()`);
+  await evaluate(`(()=>{localStorage.setItem('lumen-workspace-theme','light');window.dispatchEvent(new StorageEvent('storage',{key:'lumen-workspace-theme',storageArea:localStorage}));})()`);
   const lightDetailsCapture = await send('Page.captureScreenshot',{format:'png'});
   fs.writeFileSync(path.join(detailsOutput,'details-metadata-light.png'),Buffer.from(lightDetailsCapture.result.data,'base64'));
   await send('Emulation.setDeviceMetricsOverride',{width:820,height:900,deviceScaleFactor:1,mobile:false});
   assert.equal(await evaluate(`(()=>{const panel=document.querySelector('.note-details-panel');const host=document.querySelector('.note-workarea');return panel.getBoundingClientRect().right<=host.getBoundingClientRect().right && panel.querySelector('.note-details-content').scrollWidth<=panel.querySelector('.note-details-content').clientWidth;})()`),true);
   await send('Emulation.clearDeviceMetricsOverride');
-  await evaluate(`(()=>{const theme=document.querySelector('.ws-theme-select');theme.value='dark';theme.dispatchEvent(new Event('change'));})()`);
+  await evaluate(`(()=>{localStorage.setItem('lumen-workspace-theme','dark');window.dispatchEvent(new StorageEvent('storage',{key:'lumen-workspace-theme',storageArea:localStorage}));})()`);
   await evaluate(`document.querySelector('[data-details-tab="links"]').click();document.querySelector('[data-details-path="关联笔记.md"]').click()`);
   await waitFor(() => evaluate(`document.querySelector('.ws-doc-name')?.textContent==='关联笔记.md'`), {process:electron});
   assert.equal(await evaluate(`document.querySelector('.ws-note-metadata')?.textContent.includes('标签')`), true);
@@ -367,7 +367,7 @@ try {
   const output = process.env.DM_HOME_SCREENSHOT_DIR || path.join(os.tmpdir(),'dm-home-preview');
   fs.mkdirSync(output,{recursive:true});
   for(const theme of ['dark','light']) {
-    await evaluate(`(()=>{const select=document.querySelector('.ws-theme-select');select.value='${theme}';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await evaluate(`(()=>{localStorage.setItem('lumen-workspace-theme','${theme}');window.dispatchEvent(new StorageEvent('storage',{key:'lumen-workspace-theme',storageArea:localStorage}));})()`);
     await evaluate(`new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
     await checkSidebar();
     const capture=await send('Page.captureScreenshot',{format:'png'});

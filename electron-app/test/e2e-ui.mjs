@@ -138,8 +138,13 @@ try {
   };
   await waitFor(() => evaluate(`location.hash.startsWith("#workspace") && document.readyState === "complete"`), { process: electron });
   await waitFor(() => evaluate(`window.lumen.getAppVersion().then(version => document.querySelector(".ws-brand")?.textContent.includes("v" + version))`), { process: electron });
-  assert.equal(await evaluate(`localStorage.getItem("lumen-workspace-opacity") === null && document.querySelector(".ws-opacity")?.value === "82"`), true);
-  assert.equal(await evaluate(`document.querySelectorAll(".ws-theme-select option").length >= 6`), true);
+  assert.equal(await evaluate(`localStorage.getItem("lumen-workspace-opacity") === null && !document.querySelector(".ws-title-actions .ws-opacity")`), true);
+  assert.equal(await evaluate(`Boolean(document.querySelector("[data-action=quick-note-sync]")) && !document.querySelector(".ws-title-actions .ws-theme-select")`), true);
+  await evaluate(`document.querySelector('[data-action="quick-note-sync"]').click()`);
+  await waitFor(() => evaluate(`document.querySelector('[data-settings-tab="sync"]')?.getAttribute('aria-selected') === 'true'`), { process: electron });
+  assert.equal(await evaluate(`document.querySelector('[data-module-action="github-preview"]').disabled`), true);
+  await evaluate(`document.querySelector('[data-action="section"][data-value="notes"]').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('.ws-tree'))`), { process: electron });
   assert.equal(await evaluate(`(()=>{const button=document.querySelector('.tree-expander'); return button?.tagName === 'BUTTON' && button.getAttribute('aria-expanded') === 'true' && button.getAttribute('aria-label').includes('折叠文件夹')})()`), true);
   await evaluate(`document.querySelector('.tree-expander').click()`);
   assert.equal(await evaluate(`JSON.parse(localStorage.getItem(window.DMTreeState.storageKey(document.querySelector('.ws-vault-path').title))).length === 0 && document.querySelector('.tree-expander').getAttribute('aria-expanded') === 'false'`), true);
@@ -167,8 +172,13 @@ try {
     const capture = await send("Page.captureScreenshot", { format: "png" });
     fs.writeFileSync(process.env.DM_E2E_NOTES_SCREENSHOT, Buffer.from(capture.result.data, "base64"));
   }
-  await evaluate(`(()=>{ const select=document.querySelector(".ws-theme-select"); select.value="frost-green"; select.dispatchEvent(new Event("change",{bubbles:true})); const opacity=document.querySelector(".ws-opacity"); opacity.value="67"; opacity.dispatchEvent(new Event("input",{bubbles:true})); opacity.dispatchEvent(new Event("change",{bubbles:true})); })()`);
+  await evaluate(`document.querySelector('[data-action="appearance-settings"]').click()`);
+  await waitFor(() => evaluate(`document.querySelector('[data-settings-tab="appearance"]')?.getAttribute('aria-selected') === 'true'`), { process: electron });
+  assert.equal(await evaluate(`document.querySelectorAll('[data-appearance-theme]').length`), 8);
+  await evaluate(`(()=>{ document.querySelector('[data-appearance-theme="frost-green"]').click(); const opacity=document.querySelector(".ws-opacity"); opacity.value="67"; opacity.dispatchEvent(new Event("input",{bubbles:true})); })()`);
   assert.equal(await evaluate(`localStorage.getItem("lumen-workspace-theme") === "frost-green" && localStorage.getItem("lumen-workspace-opacity") === "67"`), true);
+  await evaluate(`document.querySelector('[data-appearance-accent="#4778c7"]').click(); const font=document.querySelector('[aria-label="笔记正文字号"]');font.value='18';font.dispatchEvent(new Event('change',{bubbles:true}));`);
+  assert.equal(await evaluate(`localStorage.getItem('lumen-workspace-accent')==='#4778c7' && localStorage.getItem('lumen-workspace-font-size')==='18' && getComputedStyle(document.querySelector('.workspace-frame')).getPropertyValue('--ws-accent').trim()==='#4778c7'`), true);
   if (process.env.DM_E2E_NOTES_LIGHT_SCREENSHOT) {
     const capture = await send("Page.captureScreenshot", { format: "png" });
     fs.writeFileSync(process.env.DM_E2E_NOTES_LIGHT_SCREENSHOT, Buffer.from(capture.result.data, "base64"));
@@ -177,7 +187,7 @@ try {
   await waitFor(() => evaluate(`document.querySelector(".workspace-root").classList.contains("maximized")`), { process: electron });
   assert.equal(await evaluate(`getComputedStyle(document.querySelector(".workspace-root")).padding === "0px"`), true);
   for (const effect of ["solid", "paper"]) {
-    await evaluate(`document.querySelector('[data-action="effect"][data-value="${effect}"]').click()`);
+    await evaluate(`document.querySelector('[data-appearance-effect="${effect}"]').click()`);
     const surfaceColors = await evaluate(`(()=>({root:getComputedStyle(document.querySelector(".workspace-root")).backgroundColor,frame:getComputedStyle(document.querySelector(".workspace-frame")).backgroundColor}))()`);
     assert.equal(surfaceColors.root, surfaceColors.frame, `${effect} maximized surfaces differ: ${JSON.stringify(surfaceColors)}`);
   }
@@ -244,8 +254,9 @@ try {
   await waitFor(() => evaluate(`document.body.textContent.includes('GitHub 笔记同步')`), { process: electron });
   assert.equal(await evaluate(`Boolean(document.querySelector('[data-app-update-slot="settings"]')) && !document.querySelector('[name="updateManifestUrl"], [name="updateGitHubRepo"], [name="updateAssetKeyword"]')`), true);
   assert.equal(await evaluate(`!document.querySelector('[data-app-update-slot="settings"]').textContent.match(/安装目录|更新目录|GitHub|URL|UNC/)`), true);
+  await evaluate(`document.querySelector('[data-settings-tab="shortcuts"]').click()`);
   // Settings tabs retain the same DOM drafts, support keyboard navigation and save hidden fields.
-  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-settings-tab]'), tab => tab.dataset.settingsTab)`), ['shortcuts', 'pet', 'sync', 'network', 'about']);
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-settings-tab]'), tab => tab.dataset.settingsTab)`), ['appearance', 'shortcuts', 'pet', 'sync', 'network', 'about']);
   assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-settings-panel]')).filter(panel => getComputedStyle(panel).display !== 'none').map(panel => panel.dataset.settingsPanel)`), ['shortcuts']);
   await evaluate(`(() => {
     window.__settingsDraft = document.querySelector('[name="globalChatHotkey"]');
@@ -258,7 +269,7 @@ try {
   await evaluate(`document.querySelector('[data-settings-tab="pet"]').dispatchEvent(new KeyboardEvent('keydown', {key:'End', bubbles:true}))`);
   assert.equal(await evaluate(`document.activeElement.dataset.settingsTab === 'about' && document.querySelector('[data-settings-actions]').hidden && getComputedStyle(document.querySelector('[data-settings-panel="about"]')).display !== 'none'`), true);
   await evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key:'Home', bubbles:true})); document.activeElement.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}))`);
-  assert.equal(await evaluate(`document.activeElement.dataset.settingsTab`), 'pet');
+  assert.equal(await evaluate(`document.activeElement.dataset.settingsTab`), 'shortcuts');
   await evaluate(`document.querySelector('[data-settings-tab="sync"]').click(); window.__githubDraft = document.querySelector('[data-github-field="clientId"]'); window.__githubOriginal = window.__githubDraft.value; window.__githubDraft.value='unsaved-tab-draft'; document.querySelector('[data-settings-tab="shortcuts"]').click()`);
   assert.equal(await evaluate(`document.querySelector('[name="globalChatHotkey"]') === window.__settingsDraft && window.__settingsDraft.value === 'Ctrl+Alt+K' && document.querySelector('[name="petDisplaySize"]').value === '128' && document.querySelector('[data-github-field="clientId"]') === window.__githubDraft && window.__githubDraft.value === 'unsaved-tab-draft'`), true);
   await evaluate(`document.querySelector('[data-module-action="settings-save"]').click()`);

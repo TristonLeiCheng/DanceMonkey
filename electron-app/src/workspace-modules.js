@@ -55,9 +55,11 @@
     let settingsMessage = "";
     let settingsError = "";
     let settingsTab = "shortcuts";
+    let selectSettingsTab = id => { if (settingsTabs.some(tab => tab.id === id)) settingsTab = id; };
     let networkTesting = false, networkTestId = null, networkTestCancelled = false;
     let petPicker = null;
     const settingsTabs = [
+      { id: 'appearance', label: '外观', description: '选择主题、强调色与背景材质，调整专属阅读体验。' },
       { id: "shortcuts", label: "快捷键", description: "设置唤出面板与截图的全局快捷键。" },
       { id: "pet", label: "桌面宠物", description: "选择宠物外形，调整互动、任务提醒与唤醒行为。" },
       { id: "sync", label: "笔记同步", description: "连接 GitHub，配置笔记、任务与项目的多设备同步。" },
@@ -84,6 +86,10 @@
 
     const githubUI = window.DMGitHubSyncUI?.create(api, {
       esc, attr, beforeRender: () => { appSettings = readSettingsForm(); },
+      onChange: () => {
+        const slot = document.querySelector('[data-quick-sync-slot]');
+        if (slot) slot.innerHTML = githubUI.renderQuickButton();
+      },
     });
     const personaManager = window.DMPersonaManager?.create(api, {
       esc, attr, rerender,
@@ -606,6 +612,7 @@
           ${settingsTabs.map((tab) => `<button type="button" class="ws-settings-tab" role="tab" id="settings-tab-${tab.id}" aria-controls="settings-panel-${tab.id}" aria-selected="${settingsTab === tab.id}" tabindex="${settingsTab === tab.id ? 0 : -1}" data-settings-tab="${tab.id}">${tab.label}</button>`).join("")}
         </div>
         <form class="ws-settings-form" data-form="app-settings" onsubmit="return false;">
+          <section class="ws-settings-card ws-personalize-card" ${panel('appearance')}>${helpers.appearance?.render() || ''}</section>
           <section class="ws-settings-card" ${panel("pet")}>
             <h2>桌面宠物</h2>
             <p class="ws-settings-desc">单击互动，双击打开主界面，拖动调整位置，右键使用快捷功能。在下方选择宠物外形，保存后立即生效，也可从托盘开启。</p>
@@ -1530,6 +1537,7 @@
         const description = scope.querySelector("[data-settings-description]");
         if (description) description.textContent = current.description;
       };
+      selectSettingsTab = select;
       for (const [index, tab] of tabs.entries()) {
         tab.onclick = (event) => { event.preventDefault(); event.stopPropagation(); select(tab.dataset.settingsTab); };
         tab.onkeydown = (event) => {
@@ -1631,7 +1639,10 @@
       await Promise.all([loadZen(), githubUI?.load()]);
     }
 
-    return { pauseGitHub: () => githubUI?.pause(), disposePreviews: () => { petPicker?.destroy(); petPicker = null; }, prepareSync, reloadSyncedTasks: loadZen, reloadVault, loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id) };
+    return { pauseGitHub: () => githubUI?.pause(),
+      setSettingsTab: id => selectSettingsTab(id), loadQuickSync: () => githubUI?.load(),
+      renderQuickSync: () => githubUI?.renderQuickButton() || '', quickSync: () => githubUI?.quickSync(),
+      disposePreviews: () => { petPicker?.destroy(); petPicker = null; }, prepareSync, reloadSyncedTasks: loadZen, reloadVault, loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id) };
   }
 
   window.DMWorkspaceModules = { create };

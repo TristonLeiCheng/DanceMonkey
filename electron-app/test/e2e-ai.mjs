@@ -195,7 +195,7 @@ try {
   await screenshot(workspace, "chat");
   await send("Emulation.setDeviceMetricsOverride", { width: 820, height: 640, deviceScaleFactor: 1, mobile: false });
   for (const theme of ["dark", "light"]) {
-    await evaluate(`(()=>{const select=document.querySelector('.ws-theme-select'); select.value=${JSON.stringify(theme)}; select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await evaluate(`(()=>{localStorage.setItem('lumen-workspace-theme',${JSON.stringify(theme)});window.dispatchEvent(new StorageEvent('storage',{key:'lumen-workspace-theme',storageArea:localStorage}));})()`);
     await sleep(100);
     const overflow = await evaluate(`(()=>{const selectors=['html','body','.workspace-root','.ws-ai-page','.ws-ai-composer','.ws-ai-messages']; return selectors.map(selector=>{const node=document.querySelector(selector);return {selector,width:node?.clientWidth,scroll:node?.scrollWidth};}).filter(item=>item.scroll>item.width+2)})()`);
     assert.deepEqual(overflow, [], `${theme} narrow layout has horizontal overflow: ${JSON.stringify(overflow)}`);

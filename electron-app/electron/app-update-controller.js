@@ -1,4 +1,5 @@
 // Keep staged files and update sources in the main process. Renderers only see status.
+const { publicUpdateError } = require('./app-update-diagnostics');
 function createAppUpdateController({ service, getSettings, supported = true, automatic = true,
   broadcast = () => {}, quit = () => {}, canApply = () => true, logError = console.warn,
   timers = { setTimeout, clearTimeout, setInterval, clearInterval },
@@ -10,8 +11,6 @@ function createAppUpdateController({ service, getSettings, supported = true, aut
   let startupTimer = null;
   let interval = null;
   const getState = () => ({ ...state });
-  const publicError = (error, fallback) => error?.code === "DM_MAC_UPDATE_INSTALL_LOCATION"
-    ? "请将应用移到可写的应用程序文件夹后重试。" : error?.code === 'DM_PET_UPDATE_UNAVAILABLE' ? error.message : fallback;
   function publish(patch) {
     state = { ...state, ...patch };
     broadcast(getState());
@@ -36,7 +35,7 @@ function createAppUpdateController({ service, getSettings, supported = true, aut
         }) };
       } catch (error) {
         logError("Application update check failed", error);
-        const message = publicError(error, "检查或下载更新失败，请稍后重试。");
+        const message = publicUpdateError(error, "检查更新失败，请检查网络后重试。");
         return { success: false, error: message, ...publish({ phase: "error", message }) };
       } finally { checking = null; }
     });
@@ -54,7 +53,10 @@ function createAppUpdateController({ service, getSettings, supported = true, aut
         return { success: true };
       } catch (error) {
         logError("Application update launch failed", error);
-        publish({ phase: "ready", message: publicError(error, "启动更新失败，请点击安装重试。") });
+        // A cleaned temporary download cannot be installed again: allow a fresh check.
+        if (error.code === 'ENOENT') staged = null;
+        publish({ phase: staged ? "ready" : "error", message: publicUpdateError(error,
+          staged ? "启动更新失败，请点击安装重试。" : "更新临时文件已失效，请重新检查更新。") });
         applying = null;
         return { success: false, error: state.message };
       }

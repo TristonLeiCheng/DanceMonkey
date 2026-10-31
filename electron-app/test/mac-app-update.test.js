@@ -6,7 +6,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { execFileSync, spawn } = require("node:child_process");
 const { once } = require("node:events");
-const { createMacAppUpdateService, bundleFromExecutable, findAppBundle, validateMacPayload, buildMacUpdaterScript } = require("../electron/mac-app-update");
+const { createMacAppUpdateService, bundleFromExecutable, findAppBundle, validateMacPayload, buildMacUpdaterScript, removeAppleDoubleSidecars } = require("../electron/mac-app-update");
 const macTest = (name, fn) => test(name, { skip: process.platform !== "darwin" }, fn);
 let compilerRoot, binary;
 
@@ -113,7 +113,34 @@ macTest("invalid hash fails staging before extracting or replacing the installed
   const f = fixture(t);
   const service = createMacAppUpdateService({ ...f.options, releaseClient: { checkForUpdateFromGitHub: async () => ({ isUpdateAvailable: true, latestVersionText: "3.6.0", manifest: { packageUrl: f.zip, sha256: "00" } }) } });
   await assert.rejects(service.checkAndPrepare(), /SHA256/);
+  const detail = JSON.parse(fs.readFileSync(path.join(f.userData, 'update-logs', 'last-error.json')));
+  assert.equal(detail.stage, 'checksum');
   assert.equal(version(f.installed), "3.5.0");
+});
+
+macTest('extraction and signature failures keep actionable diagnostics after temporary payload cleanup', async t => {
+  for (const stage of ['extract', 'payload']) {
+    const f = fixture(t);
+    if (stage === 'extract') fs.writeFileSync(f.zip, 'not a ZIP');
+    else {
+      fs.appendFileSync(path.join(f.source, 'Contents/Resources/app.asar'), 'tampered');
+      fs.rmSync(f.zip);
+      execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', f.source, f.zip]);
+    }
+    const { publicUpdateError } = require('../electron/app-update-diagnostics');
+    await assert.rejects(createMacAppUpdateService(f.options).checkAndPrepare(), error => {
+      assert.equal(error.updateStage, stage);
+      assert.match(publicUpdateError(error, 'fallback'), stage === 'extract' ? /解压失败/ : /签名校验失败/);
+      return true;
+    });
+    const log = path.join(f.userData, 'update-logs/last-error.json');
+    const detail = JSON.parse(fs.readFileSync(log));
+    assert.equal(detail.stage, stage);
+    assert.ok(detail.stderr);
+    assert.equal(fs.statSync(log).mode & 0o777, 0o600);
+    assert.equal(version(f.installed), '3.5.0');
+    assert.equal(fs.readFileSync(f.dataFile, 'utf8'), 'keep my notes');
+  }
 });
 
 macTest("different signing team cannot replace a Developer ID installation", async (t) => {
@@ -132,6 +159,22 @@ macTest("bundle discovery ignores metadata and rejects ambiguous apps", (t) => {
   assert.equal(findAppBundle(path.join(f.root, "release")), f.source);
   fs.mkdirSync(path.join(f.root, "release", "Other.app"));
   assert.throws(() => findAppBundle(path.join(f.root, "release")), /一个 Mac 应用/);
+});
+
+test('archive metadata cleanup removes only AppleDouble files and never follows a directory symlink', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dm-appledouble-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const bundle = path.join(root, 'app'), outside = path.join(root, 'outside');
+  fs.mkdirSync(bundle); fs.mkdirSync(outside);
+  const metadata = Buffer.alloc(26); metadata.writeUInt32BE(0x00051607); metadata.writeUInt32BE(0x00020000, 4);
+  fs.writeFileSync(path.join(bundle, '._Framework'), metadata);
+  fs.writeFileSync(path.join(bundle, '._ordinary'), 'signed ordinary resource');
+  fs.writeFileSync(path.join(bundle, 'ordinary'), metadata);
+  fs.writeFileSync(path.join(outside, '._keep'), metadata);
+  fs.symlinkSync(outside, path.join(bundle, 'linked'), 'dir');
+  removeAppleDoubleSidecars(bundle);
+  assert.deepEqual(fs.readdirSync(bundle).sort(), ['._ordinary', 'linked', 'ordinary']);
+  assert.equal(fs.existsSync(path.join(outside, '._keep')), true);
 });
 
 async function installerFixture(t, { failStartup = false, timeout = false, keepCurrentAlive = false } = {}) {
@@ -210,6 +253,18 @@ macTest("startup acknowledgement requires the expected version and a sibling upd
   fs.writeFileSync(pending, JSON.stringify({ installedApp: f.installed, version: "3.5.0", work: outside }));
   createMacAppUpdateService(f.options).confirmStartup();
   assert.equal(fs.existsSync(path.join(outside, "ready")), false);
+});
+
+macTest('startup confirms the same physical application reached through a macOS path alias', t => {
+  const f = fixture(t);
+  const alias = path.join(f.root, 'Applications-alias');
+  fs.symlinkSync(path.dirname(f.installed), alias);
+  const work = fs.mkdtempSync(path.join(alias, '.DanceMonkey-update-'));
+  fs.writeFileSync(path.join(f.userData, 'mac-update-pending.json'), JSON.stringify({
+    installedApp: path.join(alias, 'DanceMonkey.app'), version: '3.5.0', work,
+  }));
+  createMacAppUpdateService(f.options).confirmStartup();
+  assert.equal(fs.readFileSync(path.join(work, 'ready'), 'utf8'), 'ready');
 });
 
 macTest('signed update missing the saved pet is rejected without touching application or preferences', async t=>{

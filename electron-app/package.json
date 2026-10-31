@@ -1,7 +1,7 @@
 {
   "name": "dance-monkey",
   "productName": "DanceMonkey",
-  "version": "3.16.1",
+  "version": "3.16.2",
   "private": true,
   "description": "DM (DanceMonkey) 桌面磨砂玻璃笔记与待办",
   "main": "electron/main.js",
@@ -27,6 +27,7 @@
     "package:mac:x64": "node tools/package-mac.mjs x64",
     "package:release:current": "node tools/package-current-desktop.mjs",
     "test:e2e:network": "node test/e2e-network.mjs",
+    "test:e2e:update:mac": "electron test/e2e-mac-update.cjs",
     "build:editor": "esbuild src/note-document.mjs --bundle --format=iife --target=chrome120 --minify --outfile=src/note-document.bundle.js",
     "test:e2e:notes": "node test/e2e-note-editor.mjs"
   },

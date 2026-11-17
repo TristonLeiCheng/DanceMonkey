@@ -9,6 +9,23 @@ test('appearance restores legacy values, bounds numeric preferences and rejects 
   assert.deepEqual(normalize({ theme: 'invalid', effect: 'invalid', opacity: 'bad', accent: 'red;display:none', fontSize: 900 }), { ...defaults, fontSize: 20 });
 });
 
+test('rose theme is treated as light so popup windows do not use white text on a pink surface', () => {
+  const classes = new Set(['workspace-root']);
+  classes.remove = key => classes.delete(key);
+  classes.toggle = (key, enabled) => enabled ? classes.add(key) : classes.delete(key);
+  const styles = new Map();
+  const values = new Map([['lumen-workspace-theme', 'rose'], ['lumen-workspace-effect', 'glass'], ['lumen-workspace-opacity', '82'],
+    ['lumen-workspace-accent', '#aabbcc'], ['lumen-workspace-font-size', '16']]);
+  create({ root: { classList: classes, style: { setProperty: (key, value) => styles.set(key, value) } },
+    storage: { getItem: key => values.get(key) ?? null }, media: { matches: false, addEventListener: () => {} } });
+  assert.equal(classes.has('theme-rose'), true);
+  assert.equal(classes.has('light'), true);
+  assert.equal(classes.has('has-custom-accent'), true);
+  assert.equal(styles.get('--ws-custom-accent'), '#aabbcc');
+  assert.equal(styles.get('--ws-opacity'), '0.82');
+  assert.equal(styles.get('--ws-reading-size'), '16px');
+});
+
 test('system appearance responds to OS changes while preserving the saved system preference', () => {
   const classes = new Set(['workspace-root', 'maximized']);
   classes.remove = key => classes.delete(key);

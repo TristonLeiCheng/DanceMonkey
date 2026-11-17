@@ -71,9 +71,11 @@ async function start() {
   }
   try {
     note = await api.note.read(); saved = note.content;
-    const theme = localStorage.getItem('lumen-workspace-theme') || 'light';
-    const light = ['light', 'frost-yellow', 'frost-green', 'lavender'].includes(theme);
-    root.className = `workspace-root note-document theme-${esc(theme)} ${light ? 'light' : ''}`;
+    root.className = 'workspace-root note-document';
+    // Mirror the main workspace appearance system (theme, effect, accent, font size,
+    // opacity). Document windows must stay opaque, so pin opacity to 1 after applying it.
+    window.DMWorkspaceAppearance.create({ root });
+    root.style.setProperty('--ws-opacity', '1');
     root.innerHTML = `<main class="note-frame">
       <header class="note-toolbar"><div class="note-identity" style="${window.DMNoteAppearance.style(note)}"><span class="note-mark" aria-hidden="true">${esc(window.DMNoteAppearance.get(note).emoji) || 'MD'}</span><div><h1>${esc(note.path.split(/[\\/]/).pop())}</h1></div></div>
         <nav class="note-modes" aria-label="编辑模式">${[['live', '实时预览'], ['source', '源码'], ['split', '分栏'], ['preview', '阅读']].map(([key, label]) => `<button type="button" data-mode="${key}" aria-pressed="${mode === key}">${label}</button>`).join('')}</nav>

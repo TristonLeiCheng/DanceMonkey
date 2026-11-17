@@ -4,7 +4,7 @@
 .note-identity { display: flex; align-items: center; gap: 12px; min-width: 150px; flex: 1; overflow: hidden; background: var(--note-bg, transparent); border-radius: 6px; }
 .note-identity > div { min-width: 0; }
 .note-mark { padding: 6px; font-size: 16px; font-weight: 700; color: var(--note-accent, var(--ws-accent)); background: color-mix(in srgb, var(--note-accent, var(--ws-accent)) 14%, transparent); border-radius: 5px; }
-.note-identity h1 { color: var(--note-accent, inherit); }
+.note-identity h1 { color: var(--ws-text); }
 .note-identity h1 { font-size: 14px; font-weight: 600; margin: 0 0 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .note-identity p { color: var(--ws-muted); margin: 0; font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .note-modes { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--ws-line); border-radius: 8px; }

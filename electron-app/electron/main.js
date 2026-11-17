@@ -12,7 +12,8 @@ const { createAppQuitController } = require("./app-quit");
 const { installDesktopIntegration } = require("./desktop-integration");
 const { createAppUpdateController } = require("./app-update-controller");
 const { createAppSettings, toAccelerator } = require("./app-settings");
-const { createFolderSyncService, defaultProfile } = require("./folder-sync");
+const { defaultProfile } = require("./folder-sync");
+const { createBackgroundFolderSync } = require("./folder-sync-background");
 const { createFolderSyncScheduler, normalizeProfiles } = require("./folder-sync-scheduler");
 const { createLegacyConfig } = require("./legacy-config");
 const { createPlatformAdapter } = require("./platform");
@@ -306,7 +307,7 @@ app.whenReady().then(() => {
   noteWindows = createNoteWindows({
     BrowserWindow, ipcMain, dialog, getWorkspace: () => workspaceStore, rendererUrl, icon: appWindowIcon,
     assertWritable: generation => githubNotes.assertWritable(generation),
-    isBusy: () => githubNotes.busy || Boolean(quitController?.pending),
+    isBusy: () => githubNotes.editorBusy || Boolean(quitController?.pending),
     canClose: () => Boolean(quitController?.allowed),
     trusted: githubNotes.trusted,
     changed: root => { if (root === workspaceStore.root) { refreshQuickNotes(); notifyWorkspaceChanged(); } },
@@ -352,12 +353,13 @@ app.whenReady().then(() => {
     documents: app.getPath("documents"),
     downloads: app.getPath("downloads"),
   });
-  folderSyncService = createFolderSyncService(app.getPath("appData"));
+  folderSyncService = createBackgroundFolderSync(app.getPath("appData"));
   folderSyncScheduler = createFolderSyncScheduler({
     getProfiles: listSyncProfiles,
     saveProfiles: saveSyncProfiles,
     runProfile: async (profile) => {
       if (githubNotes.busy) throw new Error("GitHub 笔记同步期间暂停文件夹同步。");
+      if (syncAbortControllers.has(profile.id)) throw new Error("该任务正在后台同步中。");
       const controller = new AbortController();
       syncAbortControllers.set(profile.id, controller);
       try {

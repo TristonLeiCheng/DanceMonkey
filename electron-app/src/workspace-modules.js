@@ -213,7 +213,7 @@
             void loadSync().then(() => {
               const selected = syncProfiles.find((item) => item.id === syncSelectedId);
               if (selected) syncDraft = { ...selected };
-              rerender();
+              if (document.querySelector('form[data-form="folder-sync"]')) rerender();
             });
             return;
           }
@@ -1239,14 +1239,14 @@
         const draft = readSyncForm();
         if (!draft.id) {
           syncError = "请先保存任务再同步";
-          rerender();
+          if (document.querySelector('form[data-form="folder-sync"]')) rerender();
           return true;
         }
         try {
           syncBusy = true;
           syncError = "";
-          syncStatus = "正在同步…";
-          rerender();
+          syncStatus = "正在后台同步，可继续使用其他功能…";
+          if (document.querySelector('form[data-form="folder-sync"]')) rerender();
           const result = await api.folderSync.run(draft.id);
           syncBusy = false;
           if (result.profiles) syncProfiles = result.profiles;
@@ -1261,12 +1261,12 @@
             syncError = "";
           }
           if (api.folderSync.log) syncLog = await api.folderSync.log(draft.id);
-          rerender();
+          if (document.querySelector('form[data-form="folder-sync"]')) rerender();
         } catch (cause) {
           syncBusy = false;
           syncError = cause?.message || "同步失败";
           syncStatus = "同步中断";
-          rerender();
+          if (document.querySelector('form[data-form="folder-sync"]')) rerender();
         }
         return true;
       }

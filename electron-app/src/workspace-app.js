@@ -36,6 +36,7 @@
   let vaults = [];
   let vaultSwitching = false;
   let expanded = new Set();
+  const treeScrollByVault = new Map();
   let expandedRestored = false;
   let viewMode = localStorage.getItem("lumen-workspace-view") || "live";
   let editorWidth = Number(localStorage.getItem("lumen-workspace-editor-width")) || 50;
@@ -46,6 +47,7 @@
   let saveInFlight = Promise.resolve();
   let syncPaused = false;
   let syncDraftBlocked = false;
+  let syncEditorPosition = null;
   let dialog = null;
   let paletteOpen = false;
   let paletteQuery = "";
@@ -581,6 +583,8 @@
   let markdownEditor, noteImageTransfer, noteDetails;
   function renderShell() {
     if (noteImageTransfer?.busy) { void noteImageTransfer.flush().then(renderShell); return; }
+    const previousTree = root.querySelector('.ws-tree');
+    if (previousTree) treeScrollByVault.set(previousTree.dataset.vaultRoot, { top: previousTree.scrollTop, left: previousTree.scrollLeft });
     noteImageTransfer?.destroy(); noteImageTransfer = null;
     noteDetails?.destroy(); noteDetails = null;
     markdownEditor?.text(); markdownEditor?.destroy(); markdownEditor = null;
@@ -641,13 +645,13 @@
             <button class="ws-tool" data-action="new-folder" title="在所选位置新建文件夹" aria-label="新建文件夹">${treeIcon("newFolder")}</button>
             <button class="ws-tool" data-action="refresh" title="刷新目录树" aria-label="刷新目录树">${treeIcon("refresh")}</button>
           </div>
-          <div class="ws-tree" aria-label="笔记文件目录">
+          <div class="ws-tree" data-vault-root="${attr(vaultRoot)}" aria-label="笔记文件目录">
             <div class="tree-root-row ${selectedPath === "" ? "active" : ""}">
               <button class="tree-root-name" data-action="select-root" title="选择根目录，新内容将创建在这里">${treeIcon("vault")}<span>根目录</span></button>
               <button class="tree-action" data-action="new-root-file" title="在根目录新建笔记" aria-label="在根目录新建笔记">${treeIcon("newFile")}</button>
               <button class="tree-action" data-action="new-root-folder" title="在根目录新建文件夹" aria-label="在根目录新建文件夹">${treeIcon("newFolder")}</button>
             </div>
-            ${renderTreeNodes(tree)}
+            <div data-tree-nodes>${renderTreeNodes(tree)}</div>
             ${tree.length ? "" : '<div class="ws-tree-empty">笔记库还是空的<br>点击上方图标新建笔记或文件夹</div>'}
           </div>
           <details class="ws-vault-options">
@@ -750,6 +754,9 @@
       </footer>
     </main>${!isNotes && modulesReady ? modulesInstance.renderModal() : ""}`;
     bindShell();
+    const currentTree = root.querySelector('.ws-tree');
+    const position = treeScrollByVault.get(vaultRoot);
+    if (currentTree && position) { currentTree.scrollTop = position.top; currentTree.scrollLeft = position.left; }
     if (!isNotes && modulesReady) {
       modulesInstance.bindSearch(root);
     }
@@ -850,7 +857,6 @@
       if (action === 'quick-note-sync') {
         try {
           await saveActive();
-          modulesInstance?.prepareSync();
           const result = await modulesInstance?.quickSync();
           if (result?.openSettings) await openSettingsTab('sync');
         } catch (error) { alert(error?.message || '笔记同步失败，请重试。'); }
@@ -884,8 +890,19 @@
         const type = row.dataset.type;
         selectedPath = path;
         if (action === "tree-toggle" || (action === "tree-open" && type === "folder")) {
+          const container = row.closest('.ws-tree');
+          const scrollTop = container.scrollTop, scrollLeft = container.scrollLeft;
+          const restoreFocus = row.contains(document.activeElement);
           toggleFolder(path);
-          renderShell();
+          // Only replace tree rows: the editor, scroll container and its layout survive.
+          container.querySelector('[data-tree-nodes]').innerHTML = renderTreeNodes(tree);
+          container.querySelector('.tree-root-row')?.classList.toggle('active', selectedPath === '');
+          if (restoreFocus) {
+            const nextRow = [...container.querySelectorAll('.tree-row')].find(item => item.dataset.path === path);
+            nextRow?.querySelector(`[data-action="${action}"]`)?.focus({ preventScroll: true });
+          }
+          container.scrollTop = scrollTop; container.scrollLeft = scrollLeft;
+          treeScrollByVault.set(vaultRoot, { top: container.scrollTop, left: container.scrollLeft });
         } else if (action === "tree-open") {
           try { await openFile(path); } catch (error) { alert(error.message || '无法打开笔记，请先保存当前内容'); }
         }
@@ -1187,12 +1204,24 @@
     if (phase === "prepare") await saveActive();
   });
 
-  api.githubSync?.onEditor(async ({ phase }) => {
+  api.githubSync?.onEditor(async ({ phase, background }) => {
+    if (phase === "flush") { await saveActive(); return; }
     if (phase === "prepare") {
+      const view = markdownEditor?.view;
+      const textarea = root.querySelector('.ws-editor');
+      syncEditorPosition = background && activePath ? {
+        path: activePath, focused: view?.hasFocus || document.activeElement === textarea,
+        anchor: view?.state.selection.main.anchor ?? textarea?.selectionStart ?? 0,
+        head: view?.state.selection.main.head ?? textarea?.selectionEnd ?? 0,
+        scrollTop: view?.scrollDOM.scrollTop ?? textarea?.scrollTop ?? 0,
+      } : null;
       syncPaused = true;
       root.inert = true;
       syncDraftBlocked = false;
       try {
+        if (background && (dialog || paletteOpen || root.querySelector('[role="dialog"]'))) {
+          throw new Error("当前有未完成的编辑，请关闭后再次同步。");
+        }
         if (root.querySelector(".ws-note-task-dialog [data-candidate]")) {
           throw new Error("请先完成或关闭从笔记生成任务的窗口。");
         }
@@ -1225,6 +1254,19 @@
         syncDraftBlocked = false;
         syncPaused = false;
         root.inert = root.dataset?.quitting === "true" || vaultSwitching;
+        const position = syncEditorPosition;
+        syncEditorPosition = null;
+        if (position?.path === activePath && position.focused) {
+          const view = markdownEditor?.view;
+          const textarea = root.querySelector('.ws-editor');
+          if (view) {
+            view.dispatch({ selection: { anchor: Math.min(position.anchor, view.state.doc.length), head: Math.min(position.head, view.state.doc.length) } });
+            view.focus(); view.scrollDOM.scrollTop = position.scrollTop;
+          } else if (textarea) {
+            textarea.setSelectionRange(position.anchor, position.head);
+            textarea.focus(); textarea.scrollTop = position.scrollTop;
+          }
+        }
       }
     }
   });

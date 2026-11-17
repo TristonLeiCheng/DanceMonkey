@@ -215,6 +215,10 @@
 .ws-header-icon:hover { background: var(--ws-hover); color: var(--ws-text); }
 .ws-header-icon:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 1px; }
 .ws-header-icon:disabled { cursor: progress; }
+[data-quick-sync-slot] { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.ws-sync-status { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ws-muted); }
+.ws-sync-status:empty { display: none; }
+@media (max-width: 800px) { .ws-sync-status { max-width: 90px; } }
 .ws-sync-dot { position: absolute; right: 3px; bottom: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--ws-muted); }
 .ws-sync-dot.connected { background: #58a77b; }
 .ws-quick-sync.has-error .ws-sync-dot { background: var(--ws-danger); }

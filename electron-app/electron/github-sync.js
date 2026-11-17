@@ -96,7 +96,7 @@ function atomicJson(file, value) {
   }
 }
 
-function createGitHubSync({ root, directory, git = defaultGit, http, getToken }) {
+function createGitHubSync({ root, directory, git = defaultGit, http, getToken, withLocalCommit = operation => operation() }) {
   fs.mkdirSync(root, { recursive: true });
   fs.mkdirSync(directory, { recursive: true });
   root = fs.realpathSync(root);
@@ -463,7 +463,19 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
   }
 
   function applyFiles(pending, data, expected) {
-    if (!same(scanLocal().files, expected)) throw new Error("本地笔记在同步期间发生变化，请重新预览；已保留本地内容及同步备份。");
+    const current = scanLocal().files;
+    const guarded = new Set(pending.changes);
+    if (pending.changes.some(file => ["Journal/task-module.json", "Journal/zentask-projects.json"].includes(file))) {
+      guarded.add("Journal/task-module.json"); guarded.add("Journal/zentask-projects.json");
+    }
+    if ([...guarded].some(file => current[file] !== expected[file])) {
+      throw new Error("待下载的笔记在同步期间发生变化，请重新预览；已保留本地内容及同步备份。");
+    }
+    validatePaths([...new Set([...Object.keys(current), ...Object.keys(pending.target)])]);
+    const applied = { ...current };
+    for (const file of pending.changes) {
+      if (pending.target[file]) applied[file] = pending.target[file]; else delete applied[file];
+    }
     for (const file of pending.changes) safeTarget(file);
     try {
       // 不跨 await，避免应用自己的保存插入一批文件更新之间。
@@ -480,16 +492,17 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
     } catch {
       throw new Error("远端可能已更新，但本地写入未完成。已保留备份和恢复记录，请修复目录权限后重新预览。");
     }
+    return applied;
   }
 
-  async function sync({ previewId } = {}) {
+  async function sync({ previewId, background = false } = {}) {
     return exclusive(async () => {
       const p = prepared;
       if (!p || p.id !== previewId) throw new Error("预览已失效，请重新预览差异。");
       prepared = null;
       if (p.conflicts.length) throw new Error("存在冲突，请先在界面选择处理方式。");
       const sourceLocal = p.sourceLocal || p.local;
-      if (!same(scanLocal().files, sourceLocal.files)) throw new Error("本地笔记已变化，请重新预览。");
+      if (!background && !same(scanLocal().files, sourceLocal.files)) throw new Error("本地笔记已变化，请重新预览。");
       const remote = await readRemote();
       if (remote.head !== p.remote.head) throw new Error("远端已变化，请重新预览，不会覆盖其他电脑的提交。");
       const merged = validateMerged(p.local, remote, p);
@@ -498,12 +511,12 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
       const changes = [...p.downloads, ...p.deletions.filter((item) => item.side === "local").map((item) => item.path)];
       const outgoing = [...p.uploads, ...p.deletions.filter((item) => item.side === "remote").map((item) => item.path)];
       if (!changes.length && !outgoing.length) {
-        if (!same(scanLocal().files, target)) throw new Error("本地笔记已变化，请重新预览。");
+        const localChanges = !same(scanLocal().files, target);
         const next = { ...state, base: target, lastSync: new Date().toISOString(), commit: remote.head };
         atomicJson(stateFile, next);
         state = next;
         if (fs.existsSync(pendingFile)) fs.unlinkSync(pendingFile);
-        return { lastSync: state.lastSync, uploaded: 0, downloaded: 0, deleted: 0 };
+        return { lastSync: state.lastSync, uploaded: 0, downloaded: 0, deleted: 0, localChanges };
       }
       const backup = path.join(directory, "backups", crypto.randomUUID());
       // 保存整份同步范围快照，包括即将上传和删除的笔记。
@@ -524,20 +537,24 @@ function createGitHubSync({ root, directory, git = defaultGit, http, getToken })
         head = await git.writeCommit({ ...options, commit: { tree, parent: remote.head ? [remote.head] : [],
           author, committer: author, message: "Sync notes with DanceMonkey\n" } });
         await git.writeRef({ ...options, ref: `refs/heads/${state.binding.branch}`, value: head, force: true });
-        if (!same(scanLocal().files, sourceLocal.files)) throw new Error("本地笔记已变化，未上传，请重新预览。");
+        // Upload the captured snapshot; edits made meanwhile stay local for the next sync.
         try {
           const result = await git.push({ ...await connection(), remote: "origin", ref: state.binding.branch, remoteRef: state.binding.branch, force: false });
           if (result.error || result.ok === false) throw new Error("push-rejected");
         } catch { throw new Error("上传未确认成功（可能是远端并发更新、分支保护或网络中断）。本地笔记未被覆盖，请重新预览。"); }
       }
-      applyFiles(pending, { ...remote.data, ...p.writeData }, sourceLocal.files);
-      if (!same(scanLocal().files, target)) throw new Error("同步落盘后检测到外部修改，已保留恢复记录，请重新预览。");
-      const next = { ...state, base: target, lastSync: new Date().toISOString(), commit: head };
-      atomicJson(stateFile, next);
-      state = next;
-      fs.unlinkSync(pendingFile);
-      return { lastSync: state.lastSync, backupDirectory: backup, uploaded: p.uploads.length,
-        downloaded: p.downloads.length, deleted: p.deletions.length };
+      const commit = () => {
+        const applied = applyFiles(pending, { ...remote.data, ...p.writeData }, sourceLocal.files);
+        if (!same(scanLocal().files, applied)) throw new Error("同步落盘后检测到外部修改，已保留恢复记录，请重新预览。");
+        const next = { ...state, base: target, lastSync: new Date().toISOString(), commit: head };
+        atomicJson(stateFile, next);
+        state = next;
+        fs.unlinkSync(pendingFile);
+        return { lastSync: state.lastSync, backupDirectory: backup, uploaded: p.uploads.length,
+          downloaded: p.downloads.length, deleted: p.deletions.length, localChanges: !same(applied, target) };
+      };
+      // Network and backup work is finished before editors are coordinated.
+      return changes.length ? withLocalCommit(commit) : commit();
     });
   }
 

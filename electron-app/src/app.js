@@ -389,6 +389,7 @@
       }
     });
     api.githubSync?.onEditor(async ({ phase }) => {
+      if (phase === "flush") { await flushNoteEdits(); return; }
       if (phase === "prepare") {
         syncPaused = true;
         root.inert = true;

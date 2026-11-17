@@ -14,7 +14,7 @@ function createGitHubCoordinator({ getParticipants, timeout = 15000 }) {
     else if (!pending.senders.size) pending.finish();
   }
 
-  function request(participants, phase) {
+  function request(participants, phase, background = false) {
     const id = crypto.randomUUID();
     return new Promise((resolve, reject) => {
       const cleanup = () => {
@@ -31,7 +31,7 @@ function createGitHubCoordinator({ getParticipants, timeout = 15000 }) {
       if (!participants.length) return pending.finish();
       for (const sender of participants) {
         if (sender.isDestroyed()) { pending.fail(new Error("笔记窗口已关闭，请重试。")); break; }
-        sender.send("githubSync:editor", { id, phase, generation });
+        sender.send("githubSync:editor", { id, phase, generation, background });
       }
     });
   }
@@ -43,12 +43,12 @@ function createGitHubCoordinator({ getParticipants, timeout = 15000 }) {
     }
   }
 
-  async function run(operation) {
+  async function run(operation, { background = false } = {}) {
     if (busy) throw new Error("已有笔记同步操作正在进行。");
     busy = true;
     const participants = getParticipants();
     try {
-      await request(participants, "prepare");
+      await request(participants, "prepare", background);
       if (participants.some((sender) => sender.isDestroyed())) throw new Error("笔记窗口已关闭，请重试。");
       locked = true;
       return await operation();
@@ -56,14 +56,19 @@ function createGitHubCoordinator({ getParticipants, timeout = 15000 }) {
       locked = false;
       generation += 1;
       try {
-        await request(participants.filter((sender) => !sender.isDestroyed()), "resume");
+        await request(participants.filter((sender) => !sender.isDestroyed()), "resume", background);
       } finally {
         busy = false;
       }
     }
   }
 
-  return { run, acknowledge, assertWritable, get busy() { return busy; }, get generation() { return generation; } };
+  async function flush() {
+    // Saving drafts does not freeze the UI or invalidate editor generations.
+    await request(getParticipants(), "flush");
+  }
+
+  return { run, flush, acknowledge, assertWritable, get busy() { return busy; }, get generation() { return generation; } };
 }
 
 module.exports = { createGitHubCoordinator };

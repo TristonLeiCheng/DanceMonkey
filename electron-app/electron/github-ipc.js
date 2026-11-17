@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createGitHubAuth } = require("./github-auth");
-const { createGitHubSync } = require("./github-sync");
+const { createBackgroundGitHubSync } = require("./github-sync-background");
 const { createGitHubTransport } = require("./github-transport");
 const { createGitHubCoordinator } = require("./github-coordinator");
 const { createSyncDirectories } = require("./github-vaults");
@@ -34,8 +34,12 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
     openExternal: (url) => shell.openExternal(url) });
   let device = null;
   const syncDirectory = createSyncDirectories(directory, root);
-  const makeSync = (nextRoot) => createGitHubSync({ root: nextRoot, directory: syncDirectory(nextRoot),
-    http: createGitHubTransport(fetchForSync), getToken: () => auth.getToken() });
+  const makeSync = (nextRoot) => createBackgroundGitHubSync({ root: nextRoot, directory: syncDirectory(nextRoot),
+    http: createGitHubTransport(fetchForSync), getToken: () => auth.getToken(),
+    withLocalCommit: operation => coordinator.run(async () => {
+      try { return await operation(); } finally { refreshNotes(); }
+    }, { background: true }),
+  });
   let sync = makeSync(root);
   const coordinator = createGitHubCoordinator({
     getParticipants: () => getWindows().filter((win) => win && !win.isDestroyed()).map((win) => win.webContents),
@@ -52,7 +56,7 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
       return url.origin === `http://127.0.0.1:${process.env.DM_E2E_SERVER_PORT || "5173"}` && url.pathname === "/";
     } catch { return false; }
   };
-  const state = async () => ({ auth: await auth.status(), sync: { ...sync.status(), busy: operationBusy }, root });
+  const state = async () => ({ auth: await auth.status(), sync: { ...await sync.status(), busy: operationBusy }, root });
   const settledState = async () => {
     const result = await state();
     result.sync.busy = false;
@@ -83,6 +87,13 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
       if (isFolderSyncBusy()) throw new Error("请等待截图或文件夹同步完成后重试。");
       try { return await operation(); } finally { refreshNotes(); }
     });
+  });
+
+  const inBackground = operation => exclusive(async () => {
+    auth.cancel();
+    if (isFolderSyncBusy()) throw new Error("请等待文件夹同步完成后重试。");
+    await coordinator.flush();
+    return operation();
   });
 
   ipcMain.handle("githubSync:generation", () => coordinator.generation);
@@ -144,8 +155,8 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
     preview = null;
     return settledState();
   }));
-  handle("preview", () => withEditors(async () => {
-    const binding = sync.status().binding;
+  handle("preview", () => inBackground(async () => {
+    const binding = (await sync.status()).binding;
     if (!binding) throw new Error("请先绑定笔记仓库。");
     const info = await auth.repository(binding);
     if (!info.private) throw new Error("仓库已变为公开状态，请先在 GitHub 恢复为私有仓库。");
@@ -157,30 +168,32 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
     if (!preview || input?.previewId !== preview.id) throw new Error("请先重新预览同步差异。");
     return sync.inspectConflict(input);
   }));
-  handle("resolveConflicts", (_event, input) => withEditors(async () => {
+  handle("resolveConflicts", (_event, input) => inBackground(async () => {
     if (!preview || input?.previewId !== preview.id) throw new Error("请先重新预览同步差异。");
     preview = await sync.resolveConflicts(input);
     return preview;
   }));
-  handle("sync", (event, input) => withEditors(async () => {
+  handle("sync", (event, input) => inBackground(async () => {
     if (!preview || input?.previewId !== preview.id) throw new Error("请先重新预览同步差异。");
     if (preview.conflicts?.length) throw new Error("存在冲突，请先在界面选择处理方式。");
-    const binding = sync.status().binding;
+    const binding = (await sync.status()).binding;
     const info = await auth.repository(binding);
     if (!info.private) throw new Error("仅允许同步到私有仓库，请重新检查仓库设置。");
-    const result = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
-      type: "warning",
-      title: "确认 GitHub 笔记同步",
-      message: `同步到 ${binding.owner}/${binding.repo} · ${binding.branch}？`,
-      detail: `本地目录：${root}\n上传 ${preview.uploads?.length || 0} 项，下载 ${preview.downloads?.length || 0} 项，删除 ${preview.deletions?.length || 0} 项。\n${preview.resolutions?.length ? `按已选方式处理 ${preview.resolutions.length} 个冲突，双方原始副本已备份。\n` : ""}笔记、图片、任务和项目数据会上传至 GitHub，删除的内容仍可能保留在 Git 历史中。仅同步 Journal/task-module.json 和 Journal/zentask-projects.json 两个业务 JSON；应用配置、API Key 和其他 JSON 不会上传。\n任务和项目按整个文件处理冲突，不自动合并记录。操作前会保留本地备份；这不是端到端加密。`,
-      buttons: ["取消", "确认同步"], defaultId: 0, cancelId: 0, noLink: true,
-    });
-    if (result.response !== 1) return { cancelled: true };
+    if (input?.background !== true) {
+      const result = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+        type: "warning",
+        title: "确认 GitHub 笔记同步",
+        message: `同步到 ${binding.owner}/${binding.repo} · ${binding.branch}？`,
+        detail: `本地目录：${root}\n上传 ${preview.uploads?.length || 0} 项，下载 ${preview.downloads?.length || 0} 项，删除 ${preview.deletions?.length || 0} 项。\n${preview.resolutions?.length ? `按已选方式处理 ${preview.resolutions.length} 个冲突，双方原始副本已备份。\n` : ""}笔记、图片、任务和项目数据会上传至 GitHub，删除的内容仍可能保留在 Git 历史中。仅同步 Journal/task-module.json 和 Journal/zentask-projects.json 两个业务 JSON；应用配置、API Key 和其他 JSON 不会上传。\n任务和项目按整个文件处理冲突，不自动合并记录。操作前会保留本地备份；这不是端到端加密。`,
+        buttons: ["取消", "确认同步"], defaultId: 0, cancelId: 0, noLink: true,
+      });
+      if (result.response !== 1) return { cancelled: true };
+    }
     const verified = await auth.repository(binding);
     if (!verified.private) throw new Error("仓库已变为公开状态，已取消上传。");
     const current = preview;
     preview = null;
-    return sync.sync({ previewId: current.id });
+    return sync.sync({ previewId: current.id, background: input?.background === true });
   }));
   handle("openBackup", async () => {
     const target = syncDirectory(root);
@@ -210,16 +223,20 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
           throw new Error("笔记库目录已变化，请重新选择目录。");
         }
         const nextSync = makeSync(nextRoot);
-        if (nextSync.status().error) throw new Error(nextSync.status().error);
+        const nextStatus = await nextSync.status();
+        if (nextStatus.error) { await nextSync.dispose(); throw new Error(nextStatus.error); }
         // Commit is synchronous: no renderer can observe a half-switched context.
-        commit();
+        try { commit(); } catch (error) { await nextSync.dispose(); throw error; }
+        const previous = sync;
         root = nextRoot;
         sync = nextSync;
+        await previous.dispose();
         preview = null;
         device = null;
       });
     },
     assertWritable: (generation) => coordinator.assertWritable(generation),
+    get editorBusy() { return coordinator.busy; },
     get busy() { return operationBusy || coordinator.busy; },
   };
 }

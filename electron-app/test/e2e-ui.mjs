@@ -154,6 +154,30 @@ try {
   assert.equal(await evaluate(`document.querySelector('.tree-expander').getAttribute('aria-expanded') === 'true' && JSON.parse(localStorage.getItem(window.DMTreeState.storageKey(document.querySelector('.ws-vault-path').title))).length === 1`), true);
   assert.equal(await evaluate(`Boolean(document.querySelector('.tree-name[data-action="tree-open"]'))`), true);
   assert.equal(await evaluate(`Boolean(document.querySelector('.tree-expander svg')) && getComputedStyle(document.querySelector('.tree-expander')).borderTopWidth === '0px'`), true);
+  // Deep tree expansion keeps the viewport and the surrounding note/home DOM intact.
+  const scrollFixture = path.join(firstVault, '滚动位置测试');
+  for (let i = 0; i < 80; i++) fs.mkdirSync(path.join(scrollFixture, `目录-${String(i).padStart(2, '0')}`, '下级目录', '再下一级'), { recursive: true });
+  await evaluate(`document.querySelector('[data-action="refresh"]').click()`);
+  await waitFor(() => evaluate(`Boolean(document.querySelector('.tree-row[data-path="滚动位置测试"]'))`), { process: electron });
+  await evaluate(`document.querySelector('.tree-row[data-path="滚动位置测试"] .tree-expander').click()`);
+  await evaluate(`(() => {
+    const row = document.querySelector('.tree-row[data-path="滚动位置测试/目录-60"]');
+    row.scrollIntoView({ block: 'center' });
+    window.__treeBefore = document.querySelector('.ws-tree');
+    window.__mainBefore = document.querySelector('.ws-main');
+    window.__treeTop = window.__treeBefore.scrollTop;
+    row.querySelector('.tree-expander').focus({ preventScroll: true });
+    row.querySelector('.tree-expander').click();
+  })()`);
+  assert.equal(await evaluate(`document.querySelector('.ws-tree') === window.__treeBefore && document.querySelector('.ws-main') === window.__mainBefore && window.__treeTop > 500 && Math.abs(document.querySelector('.ws-tree').scrollTop - window.__treeTop) < 2`), true);
+  await evaluate(`document.querySelector('.tree-row[data-path="滚动位置测试/目录-60/下级目录"] .tree-expander').click()`);
+  assert.equal(await evaluate(`Math.abs(document.querySelector('.ws-tree').scrollTop - window.__treeTop) < 2 && Boolean(document.querySelector('.tree-row[data-path="滚动位置测试/目录-60/下级目录/再下一级"]'))`), true);
+  await evaluate(`document.querySelector('[data-action="refresh"]').click()`);
+  await waitFor(() => evaluate(`document.querySelector('.ws-tree') !== window.__treeBefore`), { process: electron });
+  assert.equal(await evaluate(`Math.abs(document.querySelector('.ws-tree').scrollTop - window.__treeTop) < 2`), true);
+  fs.rmSync(scrollFixture, { recursive: true, force: true });
+  await evaluate(`document.querySelector('[data-action="refresh"]').click()`);
+  await waitFor(() => evaluate(`!document.querySelector('.tree-row[data-path="滚动位置测试"]')`), { process: electron });
   // A selected nested folder must not prevent explicit creation at the vault root.
   await evaluate(`document.querySelector('.tree-row[data-type="folder"] .tree-name').click(); document.querySelector('[data-action="new-root-folder"]').click()`);
   assert.equal(await evaluate(`document.querySelector('.ws-parent-select').value`), "");
@@ -225,7 +249,7 @@ try {
   assert.equal(await evaluate(`document.querySelector('[data-save-state]').textContent`), "已保存");
   await focusWorkspace();
   // Model downloaded JSON on disk, then run the real editor resume handshake.
-  // The unbound preview still prepares/resumes both windows without contacting GitHub.
+  // A read-only preview flushes drafts without freezing or rebuilding either window.
   await evaluate(`document.querySelector('[data-action="section"][data-value="projects"]').click()`);
   await waitFor(() => evaluate(`Boolean(document.querySelector('.pm-task-title'))`), { process: electron });
   const syncedTaskFile = path.join(githubState.root, "Journal", "task-module.json");
@@ -236,9 +260,10 @@ try {
   syncedProjects.Items[0].Name = "另一设备更新的项目";
   fs.writeFileSync(syncedTaskFile, JSON.stringify(syncedTasks));
   fs.writeFileSync(syncedProjectFile, JSON.stringify(syncedProjects));
+  await evaluate(`window.__projectRowBeforeSync = document.querySelector('.pm-task-title')`);
   const refreshedTasks = await evaluate(`window.lumen.githubSync.preview()`);
   assert.match(refreshedTasks.error, /绑定/);
-  assert.equal(await evaluate(`document.body.textContent.includes('另一设备更新的项目') && document.body.textContent.includes('另一设备更新的任务') && Boolean(document.querySelector('.pm-task-title'))`), true);
+  assert.equal(await evaluate(`document.querySelector('.pm-task-title') === window.__projectRowBeforeSync && !document.getElementById('root').inert`), true);
 
   // A sync requested while a task form is open must preserve its unsaved DOM draft.
   await evaluate(`document.querySelector('.pm-task-title').click()`);
@@ -246,7 +271,7 @@ try {
   await evaluate(`window.__taskDraftInput = document.querySelector('form.module-modal input[name="title"]'); window.__taskDraftInput.value = '尚未保存的任务草稿'; window.__taskDraftInput.dispatchEvent(new Event('input',{bubbles:true}));`);
   const blockedTaskDraft = await evaluate(`window.lumen.githubSync.preview()`);
   assert.equal(blockedTaskDraft.success, false);
-  assert.match(blockedTaskDraft.error, /任务\/项目编辑/);
+  assert.match(blockedTaskDraft.error, /绑定/);
   assert.equal(await evaluate(`document.querySelector('form.module-modal input[name="title"]') === window.__taskDraftInput && window.__taskDraftInput.value === '尚未保存的任务草稿' && !document.getElementById('root').inert`), true);
   assert.equal(fs.readFileSync(syncedTaskFile, "utf8").includes("尚未保存的任务草稿"), false);
   await evaluate(`document.querySelector('[data-module-action="close-modal"]').click()`);

@@ -51,6 +51,7 @@ test("rejected task-editor preparation preserves its form through resume and all
     closeDialog: () => { closes += 1; }, closePalette: () => { closes += 1; },
   });
   vm.runInContext(`let syncPaused = false, syncDraftBlocked = false, vaultSwitching = false;
+    let markdownEditor = null, activePath = null, syncEditorPosition = null;
     let modulesReady = true;
     ${sourceSection("workspace-app.js", "  api.githubSync?.onEditor", "  async function openPkbSetup()")}`, context);
   await assert.rejects(editor({ phase: "prepare" }), /先保存任务/);
@@ -68,6 +69,13 @@ test("rejected task-editor preparation preserves its form through resume and all
   await editor({ phase: "resume" });
   assert.equal(saves, 1);
   assert.equal(refreshes, 1);
+  assert.equal(root.inert, false);
+  // A background preview only flushes notes; an open task form stays usable.
+  editing = true; root.form = form;
+  await editor({ phase: "flush" });
+  assert.equal(saves, 2);
+  assert.equal(refreshes, 1);
+  assert.equal(root.form, form);
   assert.equal(root.inert, false);
 });
 

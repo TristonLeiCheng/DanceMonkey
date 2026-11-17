@@ -153,6 +153,7 @@ async function start() {
       if (phase === 'prepare') { await save(); await save(); }
     });
     api.githubSync.onEditor(async ({ phase }) => {
+      if (phase === 'flush') { await save(); return; }
       if (phase === 'prepare') {
         paused = true; root.inert = true;
         if (root.querySelector('.ws-note-task-dialog [data-candidate]')) throw new Error('请先完成或关闭任务预览。');
@@ -162,8 +163,11 @@ async function start() {
         try {
           if (editor.text() === saved) {
             const fresh = await api.note.read();
-            loading = true; saved = fresh.content; editor.replace(saved); loading = false;
-            setMode(mode); refreshStatus();
+            if (fresh.content !== saved) {
+              loading = true; saved = fresh.content; editor.replace(saved); loading = false;
+              setMode(mode);
+            }
+            refreshStatus();
           }
         } catch (reason) { error(reason.message); }
         finally { paused = false; root.inert = frozen; }

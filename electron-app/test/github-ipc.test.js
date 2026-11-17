@@ -17,7 +17,7 @@ function setup(t) {
   const externalUrls = [];
   const copied = [];
   const sender = { isDestroyed: () => false, mainFrame: { url: "http://127.0.0.1:5173/#workspace/settings" }, send: (channel, payload) => {
-    if (channel === "githubSync:editor") queueMicrotask(() => events.get("githubSync:editor-ready")({ sender }, { id: payload.id, error: payload.phase === "prepare" && current.failPrepare }));
+    if (channel === "githubSync:editor") queueMicrotask(() => events.get("githubSync:editor-ready")({ sender }, { id: payload.id, error: ["prepare", "flush"].includes(payload.phase) && current.failPrepare }));
   } };
   const window = { isDestroyed: () => false, webContents: sender };
   const event = { sender, senderFrame: sender.mainFrame };
@@ -36,6 +36,7 @@ function setup(t) {
     inspectConflict: async (input) => { effects.push("inspect"); return { path: input.path }; },
     resolveConflicts: async (input) => { effects.push("resolve"); return { ...preview, id: "resolved-id", conflicts: [], resolutions: input.resolutions }; },
     sync: async () => { effects.push("sync"); return { changed: true }; },
+    dispose: async () => {},
   };
   const module = { exports: {} };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../electron/github-ipc.js"), "utf8"), {
@@ -43,7 +44,7 @@ function setup(t) {
     require: (name) => {
       if (name === "./github-app.json") return { clientId: "", appSlug: "" };
       if (name === "./github-auth") return { createGitHubAuth: (options) => { auth.fetch = options.fetch; return auth; } };
-      if (name === "./github-sync") return { createGitHubSync: () => sync };
+      if (name === "./github-sync-background") return { createBackgroundGitHubSync: () => sync };
       if (name === "./github-transport") return { createGitHubTransport: () => ({}) };
       if (name === "./github-coordinator") return { createGitHubCoordinator };
       if (name === "./github-vaults") return require("../electron/github-vaults");
@@ -205,7 +206,7 @@ test("shutdown aborts a stuck network operation, releases editor locks and block
   assert.equal((await h.call("repositories")).success, true);
 });
 
-test("conflict IPC stages choices with editor locks and only applies the new preview after confirmation", async (t) => {
+test("conflict IPC flushes drafts without editor locks and only applies the new preview after confirmation", async (t) => {
   const { call, preview, current, effects, confirmations } = setup(t);
   await call("bind", { owner: "test", repo: "notes" });
   preview.conflicts = ["test.md"]; await call("preview");
@@ -227,4 +228,27 @@ test("conflict IPC stages choices with editor locks and only applies the new pre
   current.response = 1;
   assert.equal((await call("sync", { previewId: result.id })).success, true);
   assert.equal(effects.filter((item) => item === "sync").length, 1);
+});
+
+test('background click skips modal confirmation, keeps writes available and still enforces preview/private checks', async t => {
+  const h = setup(t);
+  await h.call('bind', { owner: 'test', repo: 'notes' });
+  const generation = h.handlers.get('githubSync:generation')();
+  let release, entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  h.auth.repository = async () => { entered(); await new Promise(resolve => { release = resolve; }); return { private: true }; };
+  const pending = h.call('preview');
+  await started;
+  h.service.assertWritable(generation);
+  assert.equal(h.service.editorBusy, false);
+  assert.equal(h.service.busy, true);
+  assert.equal((await h.call('preview')).success, false);
+  release();
+  assert.equal((await pending).success, true);
+  assert.equal(h.handlers.get('githubSync:generation')(), generation);
+  h.auth.repository = async () => ({ private: true });
+  assert.equal((await h.call('sync', { previewId: 'preview-id', background: true })).success, true);
+  assert.equal(h.confirmations.length, 0);
+  assert.equal(h.effects.filter(effect => effect === 'sync').length, 1);
+  assert.equal((await h.call('sync', { previewId: 'preview-id', background: true })).success, false);
 });

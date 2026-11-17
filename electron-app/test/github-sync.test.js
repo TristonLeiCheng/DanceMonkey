@@ -324,7 +324,7 @@ test("non-fast-forward push race preserves both devices and retries safely", asy
   assert.equal(b.read("note.md"), "local newer");
 });
 
-test("push succeeded but external local edit prevents apply; recovery never overwrites new edits", async (t) => {
+test("edits during upload stay local while unrelated downloads complete", async (t) => {
   const f = setup(t); const b = f.client("b");
   let interrupt = false;
   let a;
@@ -336,14 +336,16 @@ test("push succeeded but external local edit prevents apply; recovery never over
   a.put("note.md", "base"); await f.run(a); await f.run(b);
   b.put("download.md", "remote content"); await f.run(b);
   a.put("local.md", "to upload"); let p = await a.service.preview(); interrupt = true;
-  await assert.rejects(a.service.sync({ previewId: p.id }), /本地.*变化/);
-  assert.equal(a.service.status().pending, true);
+  const result = await a.service.sync({ previewId: p.id });
+  assert.equal(result.localChanges, true);
+  assert.equal(a.service.status().pending, false);
   assert.equal(a.read("local.md"), "edited while pushing");
-  assert.equal(fs.existsSync(path.join(a.root, "download.md")), false);
-  p = await a.service.preview(); assert.deepEqual(p.conflicts, ["local.md"]);
-  a.put("preserved.md", a.read("local.md")); a.put("local.md", "to upload");
-  await f.run(a); assert.equal(a.read("download.md"), "remote content");
-  assert.equal(a.read("preserved.md"), "edited while pushing");
+  assert.equal(a.read("download.md"), "remote content");
+  p = await a.service.preview();
+  assert.deepEqual(p.conflicts, []);
+  assert.deepEqual(p.uploads, ["local.md"]);
+  await a.service.sync({ previewId: p.id }); await f.run(b);
+  assert.equal(b.read("local.md"), "edited while pushing");
 });
 
 test("partial task/project apply failure preserves backups and resumes from its journal after restart", async (t) => {
@@ -560,4 +562,65 @@ test("local edits after choosing a resolution invalidate the plan without losing
   await assert.rejects(b.service.sync({ previewId: resolved.id }), /本地.*变化/);
   assert.equal(b.read("note.md"), "new edit after choosing");
   assert.equal(f.command(["--git-dir", f.remote, "show", "main:note.md"]).toString(), "remote");
+});
+
+test('editing a download target during push preserves both versions and resumes safely', async t => {
+  const f = setup(t), b = f.client('b');
+  let a, interrupt = false;
+  a = f.client('a', { ...git, push: async options => {
+    const result = await git.push(options);
+    if (interrupt) { interrupt = false; a.put('note.md', 'typed during sync'); }
+    return result;
+  } });
+  a.put('note.md', 'base'); await f.run(a); await f.run(b);
+  b.put('note.md', 'remote edit'); await f.run(b);
+  a.put('upload.md', 'new');
+  const p = await a.service.preview(); interrupt = true;
+  await assert.rejects(a.service.sync({ previewId: p.id }), /同步期间发生变化/);
+  assert.equal(a.read('note.md'), 'typed during sync');
+  assert.equal(f.command(['--git-dir', f.remote, 'show', 'main:note.md']).toString(), 'remote edit');
+  assert.equal(a.service.status().pending, true);
+  assert.deepEqual((await a.service.preview()).conflicts, ['note.md']);
+});
+
+test('real background worker scans and transfers notes while main-thread timers and editing continue', async t => {
+  const { createBackgroundGitHubSync } = require('../electron/github-sync-background');
+  const f = setup(t), source = f.client('source');
+  source.put('remote.md', 'remote note'); await f.run(source);
+  const root = path.join(f.folder, 'background-vault');
+  fs.mkdirSync(root);
+  for (let i = 0; i < 1200; i++) fs.writeFileSync(path.join(root, `note-${i}.md`), 'notes '.repeat(100));
+  let commits = 0, holdPush = false, enteredPush, releasePush;
+  const pushStarted = new Promise(resolve => { enteredPush = resolve; });
+  const http = { request: async input => {
+    if (holdPush && input.url.endsWith('/git-receive-pack')) {
+      enteredPush(); await new Promise(resolve => { releasePush = resolve; });
+    }
+    return f.http.request(input);
+  } };
+  const service = createBackgroundGitHubSync({ root, directory: path.join(f.folder, 'background-state'), http,
+    getToken: async () => 'FAKE_TOKEN', withLocalCommit: async operation => { commits++; return operation(); } });
+  t.after(() => service.dispose());
+  await service.configure({ owner: 'test', repo: 'notes' });
+  let ticks = 0;
+  const timer = setInterval(() => { ticks++; }, 1);
+  let p;
+  try { p = await service.preview(); } finally { clearInterval(timer); }
+  assert.ok(ticks > 5, `main event loop ticked ${ticks} times`);
+  assert.equal(commits, 0);
+  assert.deepEqual(p.downloads, ['remote.md']);
+  assert.equal(p.uploads.length, 1200);
+  holdPush = true;
+  const pending = service.sync({ previewId: p.id, background: true });
+  await pushStarted;
+  assert.equal(commits, 0, 'editors are not coordinated during upload');
+  assert.equal((await service.status()).busy, true);
+  fs.writeFileSync(path.join(root, 'note-0.md'), 'typed while uploading');
+  holdPush = false; releasePush();
+  assert.equal((await pending).localChanges, true);
+  assert.equal(commits, 1);
+  assert.equal(fs.readFileSync(path.join(root, 'remote.md'), 'utf8'), 'remote note');
+  assert.ok((await service.status()).lastSync);
+  assert.deepEqual((await service.preview()).uploads, ['note-0.md']);
+  assert.equal(fs.readFileSync(path.join(root, 'note-0.md'), 'utf8'), 'typed while uploading');
 });

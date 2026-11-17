@@ -13,6 +13,7 @@
     let device = null;
     let busy = false;
     let quickBusy = false;
+    let needsAttention = false;
     let message = "";
     let error = "";
     let timer = null;
@@ -198,10 +199,11 @@
         <details><summary>同步范围与隐私说明</summary><p class="ws-settings-desc">同步 .md、.png、.jpg、.jpeg、.gif、.webp，以及任务数据 Journal/task-module.json 和项目数据 Journal/zentask-projects.json。每文件 ≤10 MiB，最多 5000 个文件 / 200 MiB。其他 JSON、应用设置、API Key 和隐藏目录不上传；符号链接会阻止同步。</p><p class="ws-settings-desc">任务和项目按整个数据文件判断冲突；两台设备同时修改同一数据文件时会停止同步、保留双方副本，不逐条自动合并。</p><p class="ws-settings-desc">私有仓库不是端到端加密；删除的内容仍可能留在 Git 历史中。请检查截图隐私。断开连接不删除任何笔记。</p></details>
       </section>`;
     }
-    async function handleAction(action, id) {
+    async function handleAction(action, id, { background = false } = {}) {
       if (!action.startsWith("github-")) return false;
       if (!api.githubSync || (busy && action !== "github-cancel")) return true;
       capture();
+      if (!quickBusy && ["github-preview", "github-sync"].includes(action)) needsAttention = false;
       if (action.startsWith("github-conflict-") || action.startsWith("github-conflicts-")) {
         const strategy = action.split("-").at(-1);
         const files = action.startsWith("github-conflicts-") ? preview?.conflicts || [] : [id];
@@ -270,12 +272,12 @@
             resolutions: preview.conflicts.map((file) => ({ path: file, strategy: choices.get(file) })) });
           if (result.success) setPreview(result);
         }
-        if (action === "github-sync") { result = await api.githubSync.sync({ previewId: preview?.id }); if (!result.cancelled) preview = null; }
+        if (action === "github-sync") { result = await api.githubSync.sync({ previewId: preview?.id, ...(background ? { background: true } : {}) }); if (!result.cancelled) preview = null; }
         if (action === "github-backup") result = await api.githubSync.openBackup();
         if (action === "github-refresh") { await load(); result = { success: true }; }
         if (!result?.success) throw new Error(result?.error || "操作失败");
         await load();
-        if (action === "github-sync") message = result.cancelled ? "已取消，未执行同步。" : "手动同步完成。";
+        if (action === "github-sync") message = result.cancelled ? "已取消，未执行同步。" : result.localChanges ? "同步完成，期间的新修改已保留，可再次点击同步。" : "笔记同步完成。";
         else if (action === "github-resolve") message = "解决方案已就绪，尚未修改文件。确认变更后点击「确认并手动同步」。";
         else if (["github-bind", "github-use-repository"].includes(action)) message = "笔记库已就绪。请先预览差异，确认后再同步。";
         else if (action === "github-configure") message = "App 配置已保存，现在可以点击连接 GitHub。";
@@ -294,25 +296,33 @@
     function renderQuickButton() {
       const running = busy || quickBusy || state.sync?.busy;
       const configured = Boolean(state.auth.connected && state.sync.binding);
-      const label = running ? '正在同步笔记…' : error ? `笔记同步失败：${error}` : message || (configured ? '立即同步笔记' : '设置笔记同步');
+      const label = running ? '正在后台同步，可继续操作…' : error ? `笔记同步失败：${error}` : message || (configured ? '立即同步笔记' : '设置笔记同步');
       const recent = state.sync.lastSync ? ` · 最近同步 ${new Date(state.sync.lastSync).toLocaleString()}` : '';
-      return `<button type="button" class="ws-header-icon ws-quick-sync ${running ? 'is-syncing' : ''} ${error ? 'has-error' : ''}" data-action="quick-note-sync" aria-label="${attr(label)}" title="${attr(label + recent)}" ${running ? 'disabled aria-busy="true"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 2M4 16l2 2a7 7 0 0 0 12-1"/></svg><span class="ws-sync-dot ${configured ? 'connected' : ''}" aria-hidden="true"></span></button>`;
+      return `<button type="button" class="ws-header-icon ws-quick-sync ${running ? 'is-syncing' : ''} ${error ? 'has-error' : ''}" data-action="quick-note-sync" aria-label="${attr(label)}" title="${attr(label + recent + (needsAttention ? ' · 点击查看详情' : ''))}" ${running ? 'disabled aria-busy="true"' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 2M4 16l2 2a7 7 0 0 0 12-1"/></svg><span class="ws-sync-dot ${configured ? 'connected' : ''}" aria-hidden="true"></span></button><span class="ws-sync-status" role="status" aria-live="polite">${esc(running ? "后台同步中" : error ? "同步未完成 · 点击查看" : message)}</span>`;
     }
     async function quickSync() {
       if (quickBusy || busy) return { busy: true };
+      if (needsAttention) { needsAttention = false; return { openSettings: true }; }
       quickBusy = true;
       capture(); beforeRender?.(); onChange?.();
       try {
         if (!api.githubSync) return { openSettings: true };
         error = ''; message = '';
         await load();
-        if (error || !state.auth.connected || !state.sync.binding) return { openSettings: true };
+        if (error) throw new Error(error);
+        if (!state.auth.connected || !state.sync.binding) return { openSettings: true };
         if (state.sync.busy) return { busy: true };
         await handleAction('github-preview');
-        if (error || !preview || preview.conflicts?.length) return { openSettings: true };
-        await handleAction('github-sync');
-        return { openSettings: Boolean(error) };
-      } catch (cause) { error = cause.message || '笔记同步失败，请重试。'; return { openSettings: true }; }
+        if (error || !preview || preview.conflicts?.length) {
+          needsAttention = true;
+          if (!error) error = '有笔记冲突，请点击同步图标查看。';
+          return { needsAttention: true };
+        }
+        await handleAction('github-sync', null, { background: true });
+        needsAttention = Boolean(error);
+        return { needsAttention };
+
+      } catch (cause) { error = cause.message || '笔记同步失败，请重试。'; needsAttention = true; return { needsAttention: true }; }
       finally { quickBusy = false; update(); }
     }
     return { load, render, handleAction, pause, capture, quickSync, renderQuickButton };

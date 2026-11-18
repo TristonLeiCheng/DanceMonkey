@@ -93,7 +93,7 @@
                 RaciRole: "Responsible",
                 EnergyLevel: "Medium",
                 WorkflowStatus: "Todo",
-                DueDate: new Date().toISOString(),
+                DueDate: window.DMZenModel.localDate(),
                 Notes: "浏览器预览数据，桌面模式会读写 NoteVault。",
                 Tags: "focus",
               },
@@ -305,7 +305,7 @@
     }
 
     function zenDate(value) {
-      return value ? String(value).slice(0, 10) : "";
+      return window.DMZenModel.calendarDate(value);
     }
 
     function zenPriority(task) {
@@ -318,12 +318,12 @@
     }
 
     function zenDone(task) {
-      return ["Completed", "Done"].includes(zenField(task, "WorkflowStatus"));
+      return window.DMZenModel.done(task);
     }
 
     function applyZen(data) {
-      zenTasks = data?.tasks || [];
       zenProjects = data?.projects || [];
+      zenTasks = (data?.tasks || []).filter((task) => !window.DMZenModel.taskArchived(task, zenProjects));
     }
 
     async function loadZenTasks() {
@@ -348,14 +348,10 @@
 
     function zenStats() {
       const open = zenTasks.filter((task) => !zenDone(task));
-      const today = new Date().toISOString().slice(0, 10);
       return {
         open: open.length,
         urgent: open.filter((task) => zenPriority(task)[1] === "q1").length,
-        overdue: open.filter((task) => {
-          const due = zenDate(zenField(task, "DueDate"));
-          return due && due < today;
-        }).length,
+        overdue: open.filter((task) => window.DMZenModel.isOverdue(task)).length,
       };
     }
 
@@ -742,7 +738,7 @@
         const id = zenField(task, "Id");
         const [label, level] = zenPriority(task);
         const due = zenDate(zenField(task, "DueDate"));
-        const overdue = due && due < new Date().toISOString().slice(0, 10) && !zenDone(task);
+        const overdue = window.DMZenModel.isOverdue(task);
         return `<div class="zen-item ${zenDone(task) ? "done" : ""} ${overdue ? "overdue" : ""}">
           <button class="check ${zenDone(task) ? "checked" : ""}" data-act="toggle-zen" data-id="${escapeAttr(id)}"></button>
           <div class="zen-body">
@@ -758,7 +754,7 @@
       };
       return `<div class="zen-wrap">
         <div class="zen-stats">
-          <div><strong>${stats.open}</strong><span>进行中</span></div>
+          <div><strong>${stats.open}</strong><span>未完成</span></div>
           <div><strong>${stats.urgent}</strong><span>紧急</span></div>
           <div><strong>${stats.overdue}</strong><span>逾期</span></div>
         </div>

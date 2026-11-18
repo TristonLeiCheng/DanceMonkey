@@ -126,6 +126,54 @@
 .pm-attention-list span { margin-top: 5px; color: var(--ws-muted); font-size: 10px; }
 .pm-confirm { flex-direction: row !important; align-items: center; }
 .pm-confirm input { width: auto; }
+.pm-detail { gap: 16px; }
+.pm-tabs { display: flex; flex: none; gap: 6px; border-bottom: 1px solid var(--ws-line); overflow-x: auto; }
+.pm-tabs button { flex: none; padding: 12px 20px; border: 0; border-bottom: 2px solid transparent; color: var(--ws-muted); font: inherit; font-size: 14px; background: transparent; }
+.pm-tabs button[aria-selected="true"] { border-bottom-color: var(--ws-accent); color: var(--ws-accent); font-weight: 600; }
+.pm-tabs button:hover { background: var(--ws-hover); color: var(--ws-text); }
+.pm-detail [role="tabpanel"][hidden] { display: none; }
+.pm-detail [role="tabpanel"] { min-width: 0; }
+.pm-detail [role="tabpanel"]:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 4px; }
+.pm-overview-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr); gap: 20px; margin-top: 20px; align-items: start; }
+.pm-overview-side { display: grid; gap: 20px; }
+.pm-overview-side h3 { font-size: 16px; margin: 0; }
+.pm-overview-side p { font-size: 13px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pm-summary-text { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.pm-overview-grid .pm-context .pm-panel-heading .pm-button { width: auto; margin: 0; }
+.pm-overview-grid .pm-context h3 { font-size: 12px; }
+.pm-overview-grid .pm-context p { font-size: 14px; }
+.pm-detail .pm-task-bottom, .pm-detail .pm-milestone small, .pm-detail .pm-note small { font-size: 12px; }
+.pm-detail .pm-task p, .pm-detail .pm-milestone p { font-size: 12px; }
+.pm-detail .pm-milestone .pm-button { font-size: 12px; }
+.pm-detail .pm-board { grid-template-columns: repeat(4, minmax(200px, 1fr)); }
+.pm-edit-form { padding: 24px; gap: 16px; }
+.pm-edit-form h2 { font-family: inherit; font-size: 20px; }
+.pm-edit-form label { position: relative; gap: 7px; font-size: 13px; }
+.pm-edit-form input, .pm-edit-form select, .pm-edit-form textarea { font-size: 14px; padding: 9px 10px; }
+.pm-edit-form :is(input, select, textarea, button, summary):focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 2px; }
+.pm-form-hint { margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.7; }
+.pm-required { position: absolute; top: 0; right: 0; font-size: 11px; font-weight: 400; color: var(--ws-muted); }
+.pm-form-advanced { border-top: 1px solid var(--ws-line); padding-top: 12px; }
+.pm-form-advanced summary { cursor: pointer; color: var(--ws-text); font-size: 13px; padding: 4px 0; }
+.pm-form-advanced summary span { margin-left: 10px; color: var(--ws-muted); font-size: 12px; }
+.pm-form-fields { display: grid; gap: 14px; margin-top: 16px; }
+.pm-edit-form .form-columns { gap: 14px; }
+.pm-edit-form .module-modal-actions { padding-top: 8px; }
+.pm-edit-form .module-modal-actions button { min-height: 36px; padding: 0 14px; font-size: 13px; }
+.task-project-link { padding: 0; color: var(--ws-accent); font: inherit; background: none; border: none; cursor: pointer; }
+.task-project-link:hover { text-decoration: underline; }
+.task-status { color: var(--ws-text); }
+[data-task-filter] { padding: 8px 12px; color: var(--ws-text); background: var(--ws-panel); border: 1px solid var(--ws-line); border-radius: 7px; font: inherit; font-size: 13px; }
+[data-task-filter] option { color: var(--ws-text); background: var(--ws-bg); }
+@media (max-width: 850px) {
+  .pm-overview-grid { grid-template-columns: minmax(0, 1fr); }
+  .pm-tabs button { padding: 12px 16px; }
+}
+@media (max-width: 480px) {
+  .pm-edit-form { padding: 18px; }
+  .pm-edit-form .form-columns { grid-template-columns: 1fr; }
+  .pm-form-advanced summary span { display: block; margin: 4px 0; }
+}
 @media (max-width: 1100px) {
   .pm-detail-grid { grid-template-columns: minmax(0, 1fr); }
   .pm-context .pm-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }

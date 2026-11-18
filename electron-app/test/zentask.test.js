@@ -241,3 +241,74 @@ test("renaming a note moves task source and project link together", (t) => {
   assert.equal(store.load().tasks.find((item) => item.Id === task.Id).SourceNotePath, "归档/项目/会议.md");
   assert.deepEqual(store.load().projects[0].LinkedNotes, ["归档/项目/会议.md"]);
 });
+
+test("task summary distinguishes unfinished, in-progress and legacy Done", () => {
+  const tasks = [{ WorkflowStatus: "Todo" }, { WorkflowStatus: "In Progress" }, { WorkflowStatus: "Blocked" }, { workflowStatus: "Done" }, {}];
+  const stats = model.taskSummary(tasks);
+  assert.equal(stats.open, 4);
+  assert.equal(stats.inProgress, 1);
+  assert.equal(stats.blocked, 1);
+  assert.equal(stats.completed, 1);
+  assert.equal(stats.progress, 20);
+  assert.equal(tasks.filter(task => model.matchesTaskFilter(task, "Todo")).length, 2);
+  assert.equal(tasks.filter(task => model.matchesTaskFilter(task, "Completed")).length, 1);
+});
+
+test("local calendar rules agree at Shanghai midnight and DST boundaries", () => {
+  const { execFileSync } = require("node:child_process");
+  const modelPath = require.resolve("../src/zen-model");
+  for (const [tz, instant, expected] of [
+    ["Asia/Shanghai", "2026-11-16T16:30:00Z", "2026-11-17"],
+    ["America/Los_Angeles", "2026-11-17T02:30:00Z", "2026-11-16"],
+    ["America/New_York", "2026-03-08T07:30:00Z", "2026-03-08"],
+  ]) {
+    const output = execFileSync(process.execPath, ["-e", `
+      const m=require(${JSON.stringify(modelPath)}), now=new Date(${JSON.stringify(instant)});
+      const task={WorkflowStatus:'Todo',DueDate:${JSON.stringify(expected)}};
+      console.log(JSON.stringify({day:m.localDate(now),overdue:m.isOverdue(task,now),summary:m.taskSummary([task],now).overdue,
+        due:m.calendarDate('${expected}T00:00:00Z'),invalid:m.localDate('2026-02-30')}));
+    `], { env: { ...process.env, TZ: tz }, encoding: "utf8" });
+    assert.deepEqual(JSON.parse(output), { day: expected, overdue: false, summary: 0, due: expected, invalid: "" }, tz);
+  }
+});
+
+test("missing or invalid history never claims fourteen days without a progress report", () => {
+  const now = new Date(2026, 10, 17, 0, 30);
+  const project = { Id: "p", Name: "旧项目", Status: "On Track", LifecycleStatus: "In Progress" };
+  for (const createdAt of [undefined, "", "bad", "2026-02-30", "2026-11-03"]) {
+    const items = model.attentionItems({ projects: [{ ...project, CreatedAt: createdAt }], tasks: [] }, now);
+    assert.equal(items.some(item => item.kind === "stale-update"), false, String(createdAt));
+  }
+  const old = { ...project, CreatedAt: "2026-11-02", UpdatedAt: "2026-11-17" };
+  const reminder = model.attentionItems({ projects: [old], tasks: [] }, now).find(item => item.kind === "stale-update");
+  assert.match(reminder.label, /未记录进展/);
+  old.Updates = [{ CreatedAt: "2026-11-17" }];
+  assert.equal(model.attentionItems({ projects: [old], tasks: [] }, now).length, 0);
+});
+
+test("acceptance never replaces task completion progress, and activity includes task changes", () => {
+  const project = { Id: "p", UpdatedAt: "2026-11-01T00:00:00Z" };
+  const tasks = [{ ProjectId: "p", MilestoneId: "m", WorkflowStatus: "Todo", UpdatedAt: "2026-11-17T00:00:00Z" }];
+  assert.deepEqual(model.milestoneProgress({ Id: "m", CompletedAt: "2026-11-17" }, tasks), { total: 1, completed: 0, percent: 0 });
+  assert.equal(model.projectActivity(project, tasks), tasks[0].UpdatedAt);
+  assert.equal(project.UpdatedAt, "2026-11-01T00:00:00Z");
+});
+
+for (const environment of ["desktop", "preview"]) {
+  test(`${environment}: archived project tasks stay read-only until restoration`, async t => {
+    let memory = { projects: [], tasks: [] };
+    const { store } = fixture(t);
+    const api = environment === "desktop" ? store : model.previewApi(() => structuredClone(memory), next => (memory = structuredClone(next)));
+    const p = (await api.addProject({ name: "归档规则" })).projects[0];
+    const task = (await api.addTask({ title: "保留原始任务", projectId: p.Id, notes: "高级字段" })).tasks[0];
+    await api.updateProject(p.Id, { archived: true });
+    await assert.rejects(async () => api.updateTask(task.Id, { title: "不应改动" }), /先恢复/);
+    await assert.rejects(async () => api.toggleTask(task.Id), /先恢复/);
+    await assert.rejects(async () => api.deleteTask(task.Id), /先恢复/);
+    assert.equal((await api.load()).tasks[0].Title, task.Title);
+    await api.updateProject(p.Id, { archived: false });
+    const updated = (await api.updateTask(task.Id, { title: "恢复后修改" })).tasks[0];
+    assert.equal(updated.Title, "恢复后修改");
+    assert.equal(updated.Notes, "高级字段");
+  });
+}

@@ -112,7 +112,7 @@
               RaciRole: "Responsible",
               EnergyLevel: "Medium",
               WorkflowStatus: "Todo",
-              DueDate: new Date().toISOString(),
+              DueDate: window.DMZenModel.localDate(),
               Notes: "浏览器预览数据，桌面模式会读写 NoteVault。",
               Tags: "focus",
             },

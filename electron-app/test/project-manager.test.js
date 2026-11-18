@@ -15,13 +15,13 @@ function fixture() {
   const api = { zenTask: model.previewApi(() => structuredClone(state), (next) => next), workspace: { list: async () => ({ tree: [{ type: "file", name: "说明.md", path: "项目/说明.md" }] }) } };
   const calls = [];
   const esc = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
-  const manager = context.window.DMProjectManager.create({ api, esc, attr: esc, rerender() {}, getState: () => state, onResult: async (next) => { state = next; }, editTask: (task, projectId) => calls.push({ task, projectId }), editProject() {}, openNote: async (note) => calls.push({ note }) });
+  const manager = context.window.DMProjectManager.create({ api, esc, attr: esc, rerender() {}, getState: () => state, onResult: async (next) => { state = next; }, editTask: (task, projectId, milestoneId) => calls.push({ task, projectId, milestoneId }), editProject() {}, openNote: async (note) => calls.push({ note }) });
   return { manager, calls, api, getState: () => state };
 }
 
 test("project detail uses exact IDs, new tasks inherit project, and note links open the source", async () => {
   const { manager, calls } = fixture();
-  await manager.open("p1");
+  await manager.open("p1", "tasks");
   assert.match(manager.render(), /本项目任务/);
   assert.doesNotMatch(manager.render(), /不应混入/);
   await manager.handleAction("pm-add-task", "p1");
@@ -35,7 +35,7 @@ test("project detail uses exact IDs, new tasks inherit project, and note links o
 
 test("archive hides editing, keeps relationships, and can be restored from the archive list", async () => {
   const { manager, getState } = fixture();
-  await manager.open("p1");
+  await manager.open("p1", "tasks");
   await manager.handleAction("pm-archive", "p1");
   assert.match(manager.render(), /项目已归档/);
   assert.doesNotMatch(manager.render(), /data-module-action="pm-add-task"/);
@@ -64,14 +64,17 @@ test("milestone cards show task progress and can be confirmed independently of t
   const { manager, getState } = fixture();
   getState().projects[0].Milestones = [{ Id: "m1", Name: "首版交付", AcceptanceCriteria: "验收通过", DueDate: "2026-10-01", CompletedAt: null }];
   getState().tasks[0].MilestoneId = "m1";
-  await manager.open("p1");
+  await manager.open("p1", "milestones");
   assert.match(manager.render(), /首版交付/);
-  assert.match(manager.render(), /任务 0\/1/);
+  assert.match(manager.render(), /任务完成率 0% · 0\/1/);
+  await manager.handleAction("pm-tab", "tasks");
   assert.match(manager.render(), /里程碑 · 首版交付/);
+  await manager.handleAction("pm-tab", "milestones");
   await manager.handleAction("pm-toggle-milestone", "m1");
   assert.ok(getState().projects[0].Milestones[0].CompletedAt);
   assert.equal(getState().tasks[0].WorkflowStatus, "Todo");
-  assert.match(manager.render(), /已验收/);
+  assert.match(manager.render(), /已验收，仍有 1 项任务未完成/);
+  assert.match(manager.render(), /任务完成率 0% · 0\/1/);
   await manager.handleAction("pm-toggle-milestone", "m1");
   assert.equal(getState().projects[0].Milestones[0].CompletedAt, null);
 });
@@ -118,11 +121,43 @@ test("detail separates lifecycle, health, weekly history and source links", asyn
   assert.match(html, /阶段 · 已暂停/);
   assert.match(html, /健康度 · 有风险/);
   assert.match(html, /方案待确认/);
-  assert.match(html, /来源笔记/);
+  await manager.handleAction("pm-tab", "tasks");
+  assert.match(manager.render(), /来源笔记/);
   await manager.handleAction("pm-open-task-source", "项目/说明.md");
   assert.equal(calls[0].note, "项目/说明.md");
   await manager.handleAction("pm-new-update", "");
   assert.match(manager.renderModal(), /本周进展/);
   await manager.handleAction("pm-close-dialog", "");
   assert.equal(manager.renderModal(), "");
+});
+
+
+test("project tabs isolate content, remember selection, and reset between vaults", async () => {
+  const { manager } = fixture();
+  await manager.open("p1");
+  assert.match(manager.render(), /id="pm-tab-overview"[^>]*aria-selected="true"/);
+  assert.doesNotMatch(manager.render(), /本项目任务|pm-notes/);
+  await manager.handleAction("pm-tab", "notes");
+  assert.match(manager.render(), /说明/);
+  assert.doesNotMatch(manager.render(), /本项目任务/);
+  await manager.handleAction("pm-back", "");
+  await manager.open("p1");
+  assert.match(manager.render(), /id="pm-tab-notes"[^>]*aria-selected="true"/);
+  manager.resetVault();
+  await manager.open("p1");
+  assert.match(manager.render(), /id="pm-tab-overview"[^>]*aria-selected="true"/);
+});
+
+test("milestone task navigation opens the task tab and new tasks inherit that milestone", async () => {
+  const { manager, calls, getState } = fixture();
+  getState().projects[0].Milestones = [{ Id: "m1", Name: "首版" }];
+  getState().tasks[0].MilestoneId = "m1";
+  getState().tasks.push({ Id: "other", Title: "其他阶段任务", ProjectId: "p1" });
+  await manager.open("p1", "milestones");
+  await manager.handleAction("pm-filter-stage", "m1");
+  assert.match(manager.render(), /id="pm-tab-tasks"[^>]*aria-selected="true"/);
+  assert.match(manager.render(), /本项目任务/);
+  assert.doesNotMatch(manager.render(), /其他阶段任务/);
+  await manager.handleAction("pm-add-task", "p1");
+  assert.deepEqual(calls[0], { task: null, projectId: "p1", milestoneId: "m1" });
 });

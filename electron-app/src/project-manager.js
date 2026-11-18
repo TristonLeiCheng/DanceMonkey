@@ -1,19 +1,15 @@
 (() => {
-  const { value: field, done, archived, lifecycle, health, milestoneProgress, list } = window.DMZenModel;
-  const STATUS = { Todo: "待办", "In Progress": "进行中", Blocked: "受阻", Completed: "完成" };
+  const { value: field, done, archived, lifecycle, health, milestoneProgress, list, calendarDate: date, localDate, taskStatus: status, statusLabels: STATUS, taskSummary, isOverdue: overdue, matchesTaskFilter, projectActivity } = window.DMZenModel;
   const HEALTH = { "On Track": "正常", "At Risk": "有风险", Blocked: "受阻" };
   const LIFECYCLE = { Planned: "计划中", "In Progress": "进行中", Paused: "已暂停", Completed: "已完成" };
   const PRIORITY = { Low: "低", Medium: "中", High: "高", Critical: "紧急" };
-  const date = (value) => String(value || "").slice(0, 10);
-  const today = () => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  };
-  const status = (task) => done(task) ? "Completed" : field(task, "WorkflowStatus", "Todo");
+  const TABS = [["overview", "概览"], ["tasks", "任务"], ["milestones", "里程碑"], ["notes", "资料"], ["updates", "动态"]];
   const flatten = (tree) => tree.flatMap((node) => node.type === "file" ? [node] : flatten(node.children || []));
 
   function create({ api, esc, attr, rerender, getState, onResult, editTask, editProject, openNote }) {
     let selectedId = "";
+    let detailTab = "overview";
+    const projectTabs = new Map();
     let filter = "active";
     let query = "";
     let taskQuery = "";
@@ -32,21 +28,22 @@
 
     const project = () => getState().projects.find((p) => field(p, "Id") === selectedId);
     const associated = (id) => getState().tasks.filter((task) => field(task, "ProjectId") === id);
-    const overdue = (task) => !done(task) && date(field(task, "DueDate")) && date(field(task, "DueDate")) < today();
     const button = (action, label, id = "", className = "pm-button") => `<button type="button" class="${className}" data-module-action="pm-${action}" data-id="${attr(id)}" ${busy ? "disabled" : ""}>${label}</button>`;
     const errorHtml = () => pageError ? `<div class="module-error" role="alert">${esc(pageError)}</div>` : "";
-    function metrics(id) {
-      const tasks = associated(id);
-      const completed = tasks.filter(done).length;
-      return { tasks, completed, progress: tasks.length ? Math.round(100 * completed / tasks.length) : 0, blocked: tasks.filter((t) => status(t) === "Blocked").length, overdue: tasks.filter(overdue).length };
+    const metrics = (id) => taskSummary(associated(id));
+    function selectTab(tab) {
+      if (!TABS.some(([key]) => key === tab)) return;
+      detailTab = tab;
+      projectTabs.set(selectedId, tab);
     }
     async function loadFiles() {
       filesLoaded = false;
       files = flatten((await api.workspace.list()).tree || []);
       filesLoaded = true;
     }
-    async function open(id) {
+    async function open(id, tab) {
       selectedId = id;
+      selectTab(tab || projectTabs.get(id) || "overview");
       taskQuery = "";
       taskFilter = "all";
       milestoneFilter = "all";
@@ -63,14 +60,14 @@
       visible.sort((a, b) => sort === "due"
         ? (date(field(a, "DueDate")) || "9999").localeCompare(date(field(b, "DueDate")) || "9999")
         : sort === "name" ? field(a, "Name").localeCompare(field(b, "Name"), "zh-CN")
-        : String(field(b, "UpdatedAt")).localeCompare(String(field(a, "UpdatedAt"))));
+        : (Date.parse(projectActivity(b, getState().tasks)) || 0) - (Date.parse(projectActivity(a, getState().tasks)) || 0));
       return `<section class="module-page pm-page">
         <div class="module-heading"><div><div class="pm-eyebrow">PROJECTS / 项目工作台</div><h1>把目标推进到完成</h1><p>任务、行动与笔记，都留在项目里。</p></div>${button("new", "＋ 新建项目", "", "module-primary")}</div>
         ${errorHtml()}
-        ${filter === "active" ? `<section class="pm-panel pm-attention"><div class="pm-panel-heading"><h2>Needs attention / 需要关注 <span>${renderedAttention.length}</span></h2><small>未来 7 天里程碑 · 逾期/受阻任务 · 风险健康度 · 14 天未更新</small></div>${renderedAttention.length ? `<div class="pm-attention-list">${renderedAttention.map((item, index) => `<button type="button" data-module-action="pm-attention" data-id="${index}"><strong>${esc(item.projectName)} · ${esc(item.label)}</strong><span>${esc(item.detail)}</span></button>`).join("")}</div>` : '<div class="pm-empty compact">当前没有需要关注的活跃项目。</div>'}</section>` : ""}
+        ${filter === "active" ? `<section class="pm-panel pm-attention"><div class="pm-panel-heading"><h2>Needs attention / 需要关注 <span>${renderedAttention.length}</span></h2><small>未来 7 天里程碑 · 逾期/受阻任务 · 风险健康度 · 14 天未汇报进展</small></div>${renderedAttention.length ? `<div class="pm-attention-list">${renderedAttention.map((item, index) => `<button type="button" data-module-action="pm-attention" data-id="${index}"><strong>${esc(item.projectName)} · ${esc(item.label)}</strong><span>${esc(item.detail)}</span></button>`).join("")}</div>` : '<div class="pm-empty compact">当前没有需要关注的活跃项目。</div>'}</section>` : ""}
         <div class="module-toolbar pm-toolbar"><div class="module-segments">${button("filter", `活跃项目 · ${all.filter((p) => !archived(p)).length}`, "active", filter === "active" ? "active" : "")}${button("filter", `已归档 · ${all.filter(archived).length}`, "archived", filter === "archived" ? "active" : "")}</div>
           <input class="pm-search module-search" data-pm-search="projects" value="${attr(query)}" aria-label="搜索项目" placeholder="搜索项目、负责人或分类" />
-          <select data-pm-sort aria-label="项目排序"><option value="updated" ${sort === "updated" ? "selected" : ""}>最近更新</option><option value="due" ${sort === "due" ? "selected" : ""}>截止日期</option><option value="name" ${sort === "name" ? "selected" : ""}>项目名称</option></select>
+          <select data-pm-sort aria-label="项目排序"><option value="updated" ${sort === "updated" ? "selected" : ""}>最近活动</option><option value="due" ${sort === "due" ? "selected" : ""}>截止日期</option><option value="name" ${sort === "name" ? "selected" : ""}>项目名称</option></select>
         </div>
         <div class="projects-grid pm-projects">${visible.map((p) => {
           const id = field(p, "Id");
@@ -93,35 +90,69 @@
         ${field(task, "Notes") ? `<p>${esc(field(task, "Notes"))}</p>` : ""}
         <div class="pm-task-bottom"><span class="${overdue(task) ? "pm-overdue" : ""}">${due ? `${overdue(task) ? "逾期 · " : "截止 "}${esc(due)}` : "无截止日期"}</span>${field(task, "MilestoneId") ? `<span>里程碑 · ${esc(field(list(project(), "Milestones").find((stage) => field(stage, "Id") === field(task, "MilestoneId")), "Name") || "已移除")}</span>` : ""}${field(task, "SourceNotePath") ? button("open-task-source", "↗ 来源笔记", field(task, "SourceNotePath")) : ""}<select data-pm-task-status="${attr(id)}" aria-label="${attr(field(task, "Title"))}的状态" ${readOnly || busy ? "disabled" : ""}>${Object.entries(STATUS).map(([key, text]) => `<option value="${key}" ${state === key ? "selected" : ""}>${text}</option>`).join("")}</select></div>${field(task, "SourceExcerpt") ? `<small class="pm-source-excerpt">摘录：${esc(field(task, "SourceExcerpt"))}</small>` : ""}</article>`;
     }
-    function renderDetail(p) {
-      const id = field(p, "Id");
-      const m = metrics(id);
-      const readOnly = archived(p);
-      const visible = m.tasks.filter((task) => (!focusedTaskId || field(task, "Id") === focusedTaskId) && (taskFilter === "all" || (taskFilter === "open" ? !done(task) : done(task))) && (milestoneFilter === "all" || field(task, "MilestoneId") === milestoneFilter || (milestoneFilter === "none" && !field(task, "MilestoneId"))) && `${field(task, "Title")} ${field(task, "Notes")} ${field(task, "Tags")}`.toLowerCase().includes(taskQuery.trim().toLowerCase()));
-      visible.sort((a, b) => Number(done(a)) - Number(done(b)) || (date(field(a, "DueDate")) || "9999").localeCompare(date(field(b, "DueDate")) || "9999"));
-      const linked = field(p, "LinkedNotes", []);
+    function renderStats(m) {
+      return `<div class="module-stats pm-stats"><div><strong>${m.progress}<small>%</small></strong><span>任务完成率 · ${m.completed}/${m.tasks.length}</span></div><div><strong>${m.inProgress}</strong><span>进行中</span></div><div><strong>${m.blocked}</strong><span>受阻任务</span></div><div><strong>${m.overdue}</strong><span>逾期任务</span></div></div>`;
+    }
+    function renderProjectOverview(p, m, readOnly) {
       const stages = list(p, "Milestones");
+      const upcoming = stages.filter((stage) => !field(stage, "CompletedAt")).sort((a, b) => (date(field(a, "DueDate")) || "9999").localeCompare(date(field(b, "DueDate")) || "9999"))[0];
+      const latest = list(p, "Updates")[0];
+      return `${renderStats(m)}<div class="pm-overview-grid">
+        <section class="pm-panel pm-context"><div class="pm-panel-heading"><h2>目标与行动</h2>${!readOnly ? button("edit", "编辑说明", field(p, "Id")) : ""}</div>
+          ${[["Goal", "项目目标", "明确这个项目要解决的问题。"], ["AcceptanceCriteria", "完成标准", "写下可检查的交付成果。"], ["NextAction", "下一步行动", "从任务中选择下一件要推进的事。"], ["Blockers", "阻塞与风险", "暂无记录"]].map(([key, label, fallback]) => `<div class="pm-context-item"><h3>${label}</h3><p class="${field(p, key) ? "" : "pm-muted"}">${esc(field(p, key) || fallback)}</p></div>`).join("")}
+          ${button("tab", `查看任务 · ${m.open} 项未完成`, "tasks")}
+        </section>
+        <div class="pm-overview-side"><section class="pm-panel"><div class="pm-panel-heading"><h2>下一里程碑</h2>${button("tab", "全部里程碑", "milestones")}</div>
+          ${upcoming ? `<h3>${esc(field(upcoming, "Name"))}</h3><p class="pm-muted">${date(field(upcoming, "DueDate")) ? `目标 ${esc(date(field(upcoming, "DueDate")))}` : "未设置目标日期"}</p><p>${esc(field(upcoming, "AcceptanceCriteria") || "尚未填写验收标准")}</p>` : `<p class="pm-muted">${stages.length ? "全部里程碑已验收。" : "添加一个阶段交付成果，让目标更清晰。"}</p>${!readOnly && !stages.length ? button("new-milestone", "＋ 添加里程碑") : ""}`}
+        </section><section class="pm-panel"><div class="pm-panel-heading"><h2>最新进展</h2>${button("tab", "查看动态", "updates")}</div>
+          ${latest ? `<p class="pm-muted">${esc(localDate(field(latest, "CreatedAt")))} · ${esc(HEALTH[field(latest, "Health")] || field(latest, "Health"))}</p><p class="pm-summary-text">${esc(field(latest, "Summary"))}</p>` : '<p class="pm-muted">尚无进展记录。</p>'}
+          ${!readOnly ? button("new-update", "＋ 记录本周进展") : ""}
+        </section></div></div>`;
+    }
+    function renderMilestones(p, m, readOnly) {
+      const stages = list(p, "Milestones");
+      return `<section class="pm-panel pm-milestones"><div class="pm-panel-heading"><div><h2>里程碑 <span>${stages.length}</span></h2><p class="pm-muted">任务完成率与成果验收分别记录。</p></div>${!readOnly ? button("new-milestone", "＋ 添加里程碑") : ""}</div><div class="pm-milestone-grid">${stages.map((stage) => {
+        const progress = milestoneProgress(stage, m.tasks); const stageId = field(stage, "Id");
+        return `<article class="pm-milestone"><div class="pm-milestone-head"><strong>${esc(field(stage, "Name"))}</strong><span>${field(stage, "CompletedAt") ? "已验收" : "待验收"}</span></div>
+          <div class="project-progress"><span style="width:${progress.percent}%"></span></div><small>任务完成率 ${progress.percent}% · ${progress.completed}/${progress.total}</small>
+          <p>${esc(field(stage, "AcceptanceCriteria") || "未设置验收标准")}</p><small>${field(stage, "DueDate") ? `目标 ${esc(date(field(stage, "DueDate")))}` : "未设置目标日期"}</small>
+          ${field(stage, "CompletedAt") && progress.completed < progress.total ? `<p class="pm-alert">已验收，仍有 ${progress.total - progress.completed} 项任务未完成。</p>` : ""}
+          <div class="module-row-actions visible">${button("filter-stage", "查看任务", stageId)}${!readOnly ? `${button("move-milestone-up", "上移", stageId)}${button("move-milestone-down", "下移", stageId)}${button("edit-milestone", "编辑", stageId)}${button("toggle-milestone", field(stage, "CompletedAt") ? "重新打开" : "标记已验收", stageId)}${button("delete-milestone", "删除", stageId)}` : ""}</div></article>`;
+      }).join("") || '<div class="pm-empty compact">设定阶段交付成果，再把任务分配给里程碑。</div>'}</div></section>`;
+    }
+    function renderTasks(p, m, readOnly) {
+      const visible = m.tasks.filter((task) => (!focusedTaskId || field(task, "Id") === focusedTaskId) && matchesTaskFilter(task, taskFilter) && (milestoneFilter === "all" || field(task, "MilestoneId") === milestoneFilter || (milestoneFilter === "none" && !field(task, "MilestoneId"))) && `${field(task, "Title")} ${field(task, "Notes")} ${field(task, "Tags")}`.toLowerCase().includes(taskQuery.trim().toLowerCase()));
+      visible.sort((a, b) => Number(done(a)) - Number(done(b)) || (date(field(a, "DueDate")) || "9999").localeCompare(date(field(b, "DueDate")) || "9999"));
+      return `<section class="pm-panel"><div class="pm-panel-heading"><h2>项目任务 <span>${visible.length}/${m.tasks.length}</span></h2>${!readOnly ? button("add-task", "＋ 添加任务", field(p, "Id"), "module-primary") : ""}</div>
+        <div class="pm-task-toolbar"><div class="module-segments">${button("view", "列表", "list", view === "list" ? "active" : "")}${button("view", "看板", "board", view === "board" ? "active" : "")}</div><input class="pm-search" data-pm-search="tasks" value="${attr(taskQuery)}" placeholder="搜索项目内任务" aria-label="搜索项目内任务" /><select data-pm-task-filter aria-label="任务筛选">${[["all", "全部任务"], ["open", "未完成"], ...Object.entries(STATUS)].map(([key, label]) => `<option value="${key}" ${taskFilter === key ? "selected" : ""}>${label}</option>`).join("")}</select><select data-pm-milestone-filter aria-label="里程碑筛选"><option value="all" ${milestoneFilter === "all" ? "selected" : ""}>所有里程碑</option><option value="none" ${milestoneFilter === "none" ? "selected" : ""}>未分配</option>${list(p, "Milestones").map((stage) => `<option value="${attr(field(stage, "Id"))}" ${milestoneFilter === field(stage, "Id") ? "selected" : ""}>${esc(field(stage, "Name"))}</option>`).join("")}</select>${focusedTaskId ? button("clear-task-focus", "显示全部任务") : ""}</div>
+        ${view === "board" ? `<div class="pm-board">${Object.entries(STATUS).map(([key, label]) => {
+          const tasks = visible.filter((task) => status(task) === key);
+          return `<section class="pm-lane"><h3><span class="pm-dot state-${key.replaceAll(" ", "-")}"></span>${label}<span>${tasks.length}</span></h3>${tasks.map((task) => taskCard(task, readOnly)).join("") || '<div class="pm-lane-empty">暂无任务</div>'}</section>`;
+        }).join("")}</div>` : `<div class="pm-task-list">${visible.map((task) => taskCard(task, readOnly)).join("") || `<div class="pm-empty"><strong>${m.tasks.length ? "没有匹配的任务" : "把目标拆成第一个行动"}</strong><p>${m.tasks.length ? "调整搜索、状态或里程碑筛选。" : "任务会自动归属当前项目。"}</p></div>`}</div>`}
+      </section>`;
+    }
+    function renderNotes(p, readOnly) {
+      const linked = list(p, "LinkedNotes");
+      return `<section class="pm-panel"><div class="pm-panel-heading"><h2>关联笔记 <span>${linked.length}</span></h2>${!readOnly ? button("link-notes", "＋ 关联笔记") : ""}</div><div class="pm-notes">${linked.map((note) => {
+        const missing = filesLoaded && !files.some((file) => file.path === note);
+        return `<div class="pm-note"><div><span class="pm-note-icon">▤</span>${button("open-note", esc(note.split("/").pop().replace(/\.md$/i, "")), note)}<small>${esc(note)}${missing ? " · 文件不存在，请重新关联" : ""}</small></div>${!readOnly ? button("unlink-note", "解除关联", note) : ""}</div>`;
+      }).join("") || '<div class="pm-empty compact">把方案、会议记录或复盘关联到这里，随时返回原文。</div>'}</div></section>`;
+    }
+    function renderUpdates(p, readOnly) {
       const updates = list(p, "Updates");
-      return `<section class="module-page pm-page">
+      const activity = localDate(projectActivity(p, getState().tasks));
+      return `<section class="pm-panel pm-updates"><div class="pm-panel-heading"><div><h2>进展记录 <span>${updates.length}</span></h2><p class="pm-muted">最近活动：${esc(activity || "暂无记录")} · 汇报单独记录</p></div>${!readOnly ? button("new-update", "＋ 记录本周进展") : ""}</div>${updates.length ? updates.map((entry) => `<article class="pm-update"><div><strong>${esc(localDate(field(entry, "CreatedAt")))}</strong><span>${esc(HEALTH[field(entry, "Health")] || field(entry, "Health"))}</span></div><p>${esc(field(entry, "Summary"))}</p>${field(entry, "Risks") ? `<small>风险：${esc(field(entry, "Risks"))}</small>` : ""}${field(entry, "NextAction") ? `<small>下一步：${esc(field(entry, "NextAction"))}</small>` : ""}</article>`).join("") : '<div class="pm-empty compact">每周留下进展、风险和下一步，回看时不丢上下文。</div>'}</section>`;
+    }
+    function renderDetail(p) {
+      const id = field(p, "Id"), m = metrics(id), readOnly = archived(p);
+      const panels = { overview: () => renderProjectOverview(p, m, readOnly), tasks: () => renderTasks(p, m, readOnly), milestones: () => renderMilestones(p, m, readOnly), notes: () => renderNotes(p, readOnly), updates: () => renderUpdates(p, readOnly) };
+      return `<section class="module-page pm-page pm-detail">
         <div class="pm-breadcrumb">${button("back", "← 所有项目")}<span>/</span><span>${esc(field(p, "Name"))}</span></div>
-        <div class="module-heading"><div><div class="pm-eyebrow">${esc(field(p, "Category") || "项目详情")} ${readOnly ? " / 已归档" : ""}</div><h1>${esc(field(p, "Name"))}</h1><p>${esc(field(p, "Description") || "为项目留下一段背景说明。")}</p></div><div class="pm-actions">${!readOnly ? button("edit", "编辑项目", id) : ""}${button(readOnly ? "restore" : "archive", readOnly ? "恢复项目" : "归档项目", id)}</div></div>
-        ${errorHtml()}${readOnly ? '<div class="pm-notice">项目已归档，任务与笔记关联均已保留。恢复后可在此继续推进。</div>' : ""}
+        <div class="module-heading"><div><div class="pm-eyebrow">${esc(field(p, "Category") || "项目详情")}${readOnly ? " / 已归档" : ""}</div><h1>${esc(field(p, "Name"))}</h1>${field(p, "Description") ? `<p>${esc(field(p, "Description"))}</p>` : ""}</div><div class="pm-actions">${!readOnly ? button("edit", "编辑项目", id) : ""}${button(readOnly ? "restore" : "archive", readOnly ? "恢复项目" : "归档项目", id)}</div></div>
+        ${errorHtml()}${readOnly ? '<div class="pm-notice">项目已归档，任务与笔记关联均已保留。恢复后可继续编辑。</div>' : ""}
         <div class="pm-facts"><span>负责人 · ${esc(field(p, "Owner") || "未指定")}</span><span>截止 · ${esc(date(field(p, "DueDate")) || "未设置")}</span><span>阶段 · ${esc(LIFECYCLE[lifecycle(p)] || lifecycle(p))}</span><span>健康度 · ${esc(HEALTH[health(p)] || health(p))}</span><span>优先级 · ${esc(PRIORITY[field(p, "Priority")] || "中")}</span></div>
-        <div class="module-stats pm-stats"><div><strong>${m.progress}<small>%</small></strong><span>任务完成率 · ${m.completed}/${m.tasks.length}</span></div><div><strong>${m.tasks.filter((t) => status(t) === "In Progress").length}</strong><span>正在进行</span></div><div><strong>${m.blocked}</strong><span>受阻任务</span></div><div><strong>${m.overdue}</strong><span>逾期任务</span></div></div>
-        <section class="pm-panel pm-milestones"><div class="pm-panel-heading"><h2>里程碑 <span>${stages.length}</span></h2>${!readOnly ? button("new-milestone", "＋ 添加里程碑") : ""}</div><div class="pm-milestone-grid">${stages.map((stage) => { const progress = milestoneProgress(stage, m.tasks); const stageId = field(stage, "Id"); return `<article class="pm-milestone"><div class="pm-milestone-head"><strong>${esc(field(stage, "Name"))}</strong><span>${field(stage, "CompletedAt") ? "已验收" : `任务 ${progress.completed}/${progress.total}`}</span></div><div class="project-progress"><span style="width:${progress.percent}%"></span></div><p>${esc(field(stage, "AcceptanceCriteria") || "未设置验收标准")}</p><small>${field(stage, "DueDate") ? `目标 ${esc(date(field(stage, "DueDate")))}` : "未设置目标日期"} · 进度 ${progress.percent}%</small><div class="module-row-actions visible">${button("filter-stage", "查看任务", stageId)}${!readOnly ? `${button("move-milestone-up", "↑", stageId)}${button("move-milestone-down", "↓", stageId)}${button("edit-milestone", "编辑", stageId)}${button("toggle-milestone", field(stage, "CompletedAt") ? "重新打开" : "确认完成", stageId)}${button("delete-milestone", "删除", stageId)}` : ""}</div></article>`; }).join("") || '<div class="pm-empty compact">设定阶段交付成果，再把任务分配给里程碑。</div>'}</div></section>
-        <div class="pm-detail-grid"><div class="pm-main-column"><section class="pm-panel"><div class="pm-panel-heading"><h2>项目任务 <span>${m.tasks.length}</span></h2>${!readOnly ? button("add-task", "＋ 添加任务", id, "module-primary") : ""}</div>
-          <div class="pm-task-toolbar"><div class="module-segments">${button("view", "列表", "list", view === "list" ? "active" : "")}${button("view", "看板", "board", view === "board" ? "active" : "")}</div><input class="pm-search" data-pm-search="tasks" value="${attr(taskQuery)}" placeholder="搜索项目内任务" aria-label="搜索项目内任务" /><select data-pm-task-filter aria-label="任务筛选"><option value="all" ${taskFilter === "all" ? "selected" : ""}>全部任务</option><option value="open" ${taskFilter === "open" ? "selected" : ""}>未完成</option><option value="done" ${taskFilter === "done" ? "selected" : ""}>已完成</option></select><select data-pm-milestone-filter aria-label="里程碑筛选"><option value="all" ${milestoneFilter === "all" ? "selected" : ""}>所有里程碑</option><option value="none" ${milestoneFilter === "none" ? "selected" : ""}>未分配</option>${stages.map((stage) => `<option value="${attr(field(stage, "Id"))}" ${milestoneFilter === field(stage, "Id") ? "selected" : ""}>${esc(field(stage, "Name"))}</option>`).join("")}</select>${focusedTaskId ? button("clear-task-focus", "显示全部任务") : ""}</div>
-          ${view === "board" ? `<div class="pm-board">${Object.entries(STATUS).map(([key, label]) => {
-            const tasks = visible.filter((t) => (STATUS[status(t)] ? status(t) : "Todo") === key);
-            return `<section class="pm-lane"><h3><span class="pm-dot state-${key.replaceAll(" ", "-")}"></span>${label}<span>${tasks.length}</span></h3>${tasks.map((t) => taskCard(t, readOnly)).join("") || '<div class="pm-lane-empty">暂无任务</div>'}</section>`;
-          }).join("")}</div>` : `<div class="pm-task-list">${visible.map((t) => taskCard(t, readOnly)).join("") || `<div class="pm-empty"><strong>${m.tasks.length ? "没有匹配的任务" : "把目标拆成第一个行动"}</strong><p>${m.tasks.length ? "调整搜索或完成状态筛选。" : "任务会自动归属当前项目。"}</p></div>`}</div>`}
-        </section><section class="pm-panel"><div class="pm-panel-heading"><h2>关联笔记 <span>${linked.length}</span></h2>${!readOnly ? button("link-notes", "＋ 关联笔记") : ""}</div>
-          <div class="pm-notes">${linked.map((note) => {
-            const missing = filesLoaded && !files.some((file) => file.path === note);
-            return `<div class="pm-note"><div><span class="pm-note-icon">▤</span>${button("open-note", esc(note.split("/").pop().replace(/\.md$/i, "")), note)}<small>${esc(note)}${missing ? " · 文件不存在，请重新关联" : ""}</small></div>${!readOnly ? button("unlink-note", "解除关联", note) : ""}</div>`;
-          }).join("") || '<div class="pm-empty compact">把方案、会议记录或复盘关联到这里，随时返回原文。</div>'}</div>
-        </section></div><aside class="pm-context"><section class="pm-panel"><h2>目标与行动</h2>${[["Goal", "项目目标", "这个项目要解决什么问题？"], ["AcceptanceCriteria", "完成标准", "交付什么成果，才算完成？"], ["NextAction", "下一步行动", "下一件可以立即推进的事。"], ["Blockers", "阻塞与风险", "暂无记录"]].map(([key, label, fallback]) => `<div class="pm-context-item"><h3>${label}</h3><p class="${field(p, key) ? "" : "pm-muted"}">${esc(field(p, key) || fallback)}</p></div>`).join("")}${!readOnly ? button("edit", "完善项目说明", id) : ""}</section></aside></div>
-        <section class="pm-panel pm-updates"><div class="pm-panel-heading"><h2>进展记录 <span>${updates.length}</span></h2>${!readOnly ? button("new-update", "＋ 记录本周进展") : ""}</div>${updates.length ? updates.map((entry) => `<article class="pm-update"><div><strong>${esc(date(field(entry, "CreatedAt")))}</strong><span>${esc(HEALTH[field(entry, "Health")] || field(entry, "Health"))}</span></div><p>${esc(field(entry, "Summary"))}</p>${field(entry, "Risks") ? `<small>风险：${esc(field(entry, "Risks"))}</small>` : ""}${field(entry, "NextAction") ? `<small>下一步：${esc(field(entry, "NextAction"))}</small>` : ""}</article>`).join("") : '<div class="pm-empty compact">每周留下进展、风险和下一步，回看时不丢上下文。</div>'}</section>
+        <div class="pm-tabs" role="tablist" aria-label="项目详情">${TABS.map(([key, label]) => `<button type="button" role="tab" id="pm-tab-${key}" aria-controls="pm-panel-${key}" aria-selected="${detailTab === key}" tabindex="${detailTab === key ? 0 : -1}" data-module-action="pm-tab" data-id="${key}">${label}</button>`).join("")}</div>
+        ${TABS.map(([key]) => `<div role="tabpanel" id="pm-panel-${key}" aria-labelledby="pm-tab-${key}" tabindex="0" ${detailTab !== key ? "hidden" : ""}>${detailTab === key ? panels[key]() : ""}</div>`).join("")}
       </section>`;
     }
     function render() { const p = project(); return p ? renderDetail(p) : renderOverview(); }
@@ -151,10 +182,11 @@
       await run(async () => {
         const p = project();
         if (action === "pm-open") await open(id);
+        if (action === "pm-tab") selectTab(id);
         if (action === "pm-back") { selectedId = ""; picker = null; }
-        if (action === "pm-attention") { const item = renderedAttention[Number(id)]; if (item) { await open(item.projectId); if (item.milestoneId) milestoneFilter = item.milestoneId; if (item.taskFilter) taskFilter = item.taskFilter; if (item.taskId) { focusedTaskId = item.taskId; taskQuery = ""; view = "list"; } } }
+        if (action === "pm-attention") { const item = renderedAttention[Number(id)]; if (item) { await open(item.projectId, item.taskId ? "tasks" : item.milestoneId ? "milestones" : item.kind === "stale-update" ? "updates" : "overview"); if (item.milestoneId) milestoneFilter = item.milestoneId; if (item.taskFilter) taskFilter = item.taskFilter; if (item.taskId) { focusedTaskId = item.taskId; taskQuery = ""; view = "list"; } } }
         if (action === "pm-clear-task-focus") { focusedTaskId = ""; taskFilter = "all"; }
-        if (action === "pm-new-milestone") dialog = { type: "milestone", id: "" };
+        if (action === "pm-new-milestone") { selectTab("milestones"); dialog = { type: "milestone", id: "" }; }
         if (action === "pm-edit-milestone") dialog = { type: "milestone", id };
         if (action === "pm-delete-milestone") dialog = { type: "delete-milestone", id };
         if (action === "pm-move-milestone-up" || action === "pm-move-milestone-down") {
@@ -162,9 +194,9 @@
           const from = stages.findIndex((stage) => stage.id === id); const to = from + (action.endsWith("up") ? -1 : 1);
           if (from >= 0 && to >= 0 && to < stages.length) { [stages[from], stages[to]] = [stages[to], stages[from]]; await onResult(await api.zenTask.updateProject(selectedId, { milestones: stages })); }
         }
-        if (action === "pm-new-update") dialog = { type: "update" };
+        if (action === "pm-new-update") { selectTab("updates"); dialog = { type: "update" }; }
         if (action === "pm-close-dialog") dialog = null;
-        if (action === "pm-filter-stage") { milestoneFilter = id; view = "list"; }
+        if (action === "pm-filter-stage") { milestoneFilter = id; focusedTaskId = ""; taskFilter = "all"; taskQuery = ""; view = "list"; selectTab("tasks"); }
         if (action === "pm-toggle-milestone") {
           const stages = list(p, "Milestones");
           await onResult(await api.zenTask.updateProject(selectedId, { milestones: stages.map((stage) => ({ id: field(stage, "Id"), name: field(stage, "Name"), dueDate: field(stage, "DueDate"), acceptanceCriteria: field(stage, "AcceptanceCriteria"), completed: field(stage, "Id") === id ? !field(stage, "CompletedAt") : !!field(stage, "CompletedAt") })) }));
@@ -172,14 +204,14 @@
         if (action === "pm-new") editProject(null);
         if (action === "pm-edit") editProject(p);
         if (action === "pm-filter") { filter = id; }
-        if (action === "pm-view") view = id;
-        if (action === "pm-add-task") editTask(null, selectedId);
+        if (action === "pm-view") { view = id; selectTab("tasks"); }
+        if (action === "pm-add-task") { selectTab("tasks"); editTask(null, selectedId, list(p, "Milestones").some((stage) => field(stage, "Id") === milestoneFilter) ? milestoneFilter : ""); }
         if (action === "pm-edit-task") editTask(getState().tasks.find((t) => field(t, "Id") === id), selectedId);
         if (action === "pm-archive" || action === "pm-restore") {
           await onResult(await api.zenTask.updateProject(id, { archived: action === "pm-archive" }));
           filter = action === "pm-archive" ? "archived" : "active";
         }
-        if (action === "pm-link-notes") { await loadFiles(); picker = { query: "", selected: new Set(field(p, "LinkedNotes", [])) }; }
+        if (action === "pm-link-notes") { selectTab("notes"); await loadFiles(); picker = { query: "", selected: new Set(field(p, "LinkedNotes", [])) }; }
         if (action === "pm-close-picker") picker = null;
         if (action === "pm-save-notes") { await onResult(await api.zenTask.updateProject(selectedId, { linkedNotes: [...picker.selected] })); picker = null; }
         if (action === "pm-unlink-note") await onResult(await api.zenTask.updateProject(selectedId, { linkedNotes: field(p, "LinkedNotes", []).filter((note) => note !== id) }));
@@ -189,6 +221,17 @@
       return true;
     }
     function bind(scope) {
+      scope.querySelectorAll('.pm-tabs [role="tab"]').forEach((tab) => {
+        tab.onkeydown = (event) => {
+          const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+          if (!keys.includes(event.key)) return;
+          event.preventDefault();
+          const current = TABS.findIndex(([key]) => key === tab.dataset.id);
+          const index = event.key === "Home" ? 0 : event.key === "End" ? TABS.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + TABS.length) % TABS.length;
+          selectTab(TABS[index][0]); rerender();
+          scope.querySelector(`#pm-tab-${detailTab}`)?.focus();
+        };
+      });
       scope.querySelectorAll("[data-pm-search]").forEach((input) => {
         input.oninput = () => {
           const key = input.dataset.pmSearch;
@@ -245,6 +288,10 @@
     }
     function resetVault() {
       selectedId = "";
+      detailTab = "overview";
+      projectTabs.clear();
+      taskFilter = "all";
+      view = "list";
       picker = null;
       dialog = null;
       files = [];

@@ -232,6 +232,7 @@ try {
   await waitFor(() => evaluate(`document.body.textContent.includes("Needs attention")`), { process: electron });
   assert.equal(await evaluate(`document.body.textContent.includes("项目健康度受阻") && document.body.textContent.includes("里程碑已逾期")`), true);
   await evaluate(`document.querySelector('[data-module-action="pm-attention"]').click()`);
+  await evaluate(`document.querySelector('#pm-tab-tasks').click()`);
   await waitFor(() => evaluate(`document.body.textContent.includes("完成 UI 验收")`), { process: electron });
   await evaluate(`document.querySelector('[data-module-action="pm-open-task-source"]').click()`);
   await focusDocument("本周计划.md");

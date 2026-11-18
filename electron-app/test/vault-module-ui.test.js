@@ -13,6 +13,7 @@ test("project selection and open note picker are cleared on vault switch", () =>
   const context = vm.createContext({});
   const reset = section("project-manager.js", "    function resetVault()", "    return { render, renderModal");
   vm.runInContext(`
+    let detailTab = 'notes'; const projectTabs = new Map([['same-id','notes']]); let taskFilter = 'open'; let view = 'board';
     let selectedId = 'same-id'; let picker = {selected: new Set(['old.md'])};
     let dialog = {type:'milestone'}; let files = ['old.md']; let filesLoaded = true;
     let focusedTaskId = 'old-task'; let milestoneFilter = 'old-stage'; let taskQuery = 'old';
@@ -21,6 +22,8 @@ test("project selection and open note picker are cleared on vault switch", () =>
     resetVault();
   `, context);
   for (const name of ["selectedId", "focusedTaskId", "taskQuery", "pageError"]) assert.equal(vm.runInContext(name, context), "");
+  assert.equal(vm.runInContext("detailTab", context), "overview");
+  assert.equal(vm.runInContext("projectTabs.size", context), 0);
   assert.equal(vm.runInContext("picker", context), null);
   assert.equal(vm.runInContext("dialog", context), null);
   assert.equal(vm.runInContext("filesLoaded", context), false);
@@ -116,4 +119,67 @@ test("task, project, milestone, progress and note-picker dialogs block preparati
     assert.equal(modules.closeModal(), true);
     assert.doesNotThrow(() => modules.prepareSync());
   }
+});
+
+
+test("global task status filters agree with project status and separate archive tasks", async () => {
+  const { modules, click, data } = modulesFixture();
+  data.tasks.push({ Id: "in-progress", Title: "正在执行", ProjectId: "p1", WorkflowStatus: "In Progress" });
+  data.tasks.push({ Id: "blocked", Title: "等待解除阻塞", ProjectId: "p1", WorkflowStatus: "Blocked" });
+  data.projects[1].ArchivedAt = "2026-11-17";
+  data.tasks.push({ Id: "archived", Title: "历史任务", ProjectId: "p2", WorkflowStatus: "Todo" });
+  await modules.reloadSyncedTasks();
+  let html = modules.render("tasks");
+  assert.match(html, /<strong>4<\/strong><span>未完成<\/span>/);
+  assert.match(html, /<strong>1<\/strong><span>进行中<\/span>/);
+  assert.doesNotMatch(html, /历史任务/);
+  await click("task-filter", "In Progress");
+  html = modules.render("tasks");
+  assert.match(html, /正在执行/);
+  assert.doesNotMatch(html, /原任务|等待解除阻塞/);
+  await click("task-filter", "archived");
+  html = modules.render("tasks");
+  assert.match(html, /历史任务/);
+  assert.doesNotMatch(html, /data-module-action="edit-task"|data-module-action="delete-task"/);
+});
+
+test("editing a task sends only changed fields, retains a failed draft and prevents duplicate retries", async () => {
+  const original = { title: "原标题", priority: "legacy-priority", dueDate: "2026-11-17", notes: "保留备注" };
+  const fields = { ...original, title: "新标题" };
+  const button = { disabled: false };
+  const form = { dataset: { form: "task" }, reportValidity: () => true, querySelector: () => button };
+  const submissions = [];
+  let finishSave;
+  const context = vm.createContext({
+    document: { querySelector: (selector) => selector === "form.module-modal" ? form : button },
+    FormData: class { constructor() { return Object.entries(fields); } },
+    original,
+    api: { zenTask: { updateTask: async (id, input) => {
+      submissions.push({ id, input: JSON.parse(JSON.stringify(input)) });
+      if (submissions.length === 1) throw new Error("模拟保存失败");
+      return new Promise((resolve) => { finishSave = resolve; });
+    } } },
+    rerender() {},
+  });
+  vm.runInContext(`
+    let modal = { type: 'task', id: 't1', initialValues: original };
+    let modalSaving = false, error = '';
+    async function refreshZen() { modal = null; error = ''; }
+    ${section("workspace-modules.js", "    async function saveModal()", "    async function testAiConnection()")}
+  `, context);
+  await vm.runInContext("saveModal()", context);
+  assert.deepEqual(submissions, [{ id: "t1", input: { title: "新标题" } }]);
+  assert.equal(vm.runInContext("modal.draft.title", context), "新标题");
+  assert.equal(vm.runInContext("error", context), "模拟保存失败");
+  assert.equal(button.disabled, false);
+  fields.title = "重试标题";
+  const pending = vm.runInContext("saveModal()", context);
+  await vm.runInContext("saveModal()", context);
+  assert.equal(submissions.length, 2);
+  assert.deepEqual(submissions[1].input, { title: "重试标题" });
+  assert.equal(button.disabled, true);
+  finishSave({});
+  await pending;
+  assert.equal(vm.runInContext("modal", context), null);
+  assert.equal(button.disabled, false);
 });

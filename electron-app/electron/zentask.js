@@ -81,7 +81,9 @@ function createZenTaskStore(notesRoot, options = {}) {
     return updateTask(id, { workflowStatus: model.done(task) ? "Todo" : "Completed" });
   }
   function deleteTask(id) {
-    write(taskFile, load().tasks.filter((task) => value(task, "Id") !== id));
+    const state = load();
+    model.assertTaskEditable(find(state.tasks, id, "任务"), state.projects);
+    write(taskFile, state.tasks.filter((task) => value(task, "Id") !== id));
     return load();
   }
   function addProject(input) {

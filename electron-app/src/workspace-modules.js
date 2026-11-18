@@ -5,7 +5,7 @@
   }
 
   function dateValue(value) {
-    return value ? String(value).slice(0, 10) : "";
+    return window.DMZenModel.calendarDate(value);
   }
 
   function priority(task) {
@@ -105,8 +105,8 @@
         modal = { type: "project", id: field(project, "Id"), item: project || {} };
         error = "";
       },
-      editTask: (task, projectId) => {
-        modal = { type: "task", id: field(task, "Id"), item: task || { ProjectId: projectId } };
+      editTask: (task, projectId, milestoneId = "") => {
+        modal = { type: "task", id: field(task, "Id"), item: task || { ProjectId: projectId, MilestoneId: milestoneId } };
         error = "";
       },
     });
@@ -246,47 +246,26 @@
       if (box && follow) box.scrollTop = box.scrollHeight;
     }
 
-    function isDone(task) {
-      return ["Completed", "Done"].includes(field(task, "WorkflowStatus"));
-    }
-
+    const isDone = window.DMZenModel.done;
+    const isArchivedTask = (task) => window.DMZenModel.taskArchived(task, projects);
     function filteredTasks() {
       const text = query.trim().toLowerCase();
       return tasks.filter((task) => {
-        if (taskFilter === "open" && isDone(task)) return false;
-        if (taskFilter === "done" && !isDone(task)) return false;
-        if (!text) return true;
-        return [
-          field(task, "Title"),
-          field(task, "Project"),
-          field(task, "Tags"),
-          field(task, "Notes"),
-        ].some((value) => String(value).toLowerCase().includes(text));
+        if (isArchivedTask(task) !== (taskFilter === "archived")) return false;
+        if (!window.DMZenModel.matchesTaskFilter(task, taskFilter)) return false;
+        return !text || ["Title", "Project", "Tags", "Notes"].some((key) => String(field(task, key)).toLowerCase().includes(text));
       });
     }
-
     function taskStats() {
-      const open = tasks.filter((task) => !isDone(task));
-      const overdue = open.filter((task) => {
-        const due = dateValue(field(task, "DueDate"));
-        return due && due < new Date().toISOString().slice(0, 10);
-      });
-      return {
-        total: tasks.length,
-        open: open.length,
-        done: tasks.length - open.length,
-        urgent: open.filter((task) => priority(task)[2] === "q1").length,
-        overdue: overdue.length,
-      };
+      return window.DMZenModel.taskSummary(tasks.filter((task) => isArchivedTask(task) === (taskFilter === "archived")));
     }
-
     function renderStats() {
       const stats = taskStats();
       return `<div class="module-stats">
-        <div><strong>${stats.open}</strong><span>进行中</span></div>
-        <div><strong>${stats.urgent}</strong><span>紧急重要</span></div>
+        <div><strong>${stats.open}</strong><span>未完成</span></div>
+        <div><strong>${stats.inProgress}</strong><span>进行中</span></div>
+        <div><strong>${stats.blocked}</strong><span>受阻</span></div>
         <div><strong>${stats.overdue}</strong><span>已逾期</span></div>
-        <div><strong>${stats.done}</strong><span>已完成</span></div>
       </div>`;
     }
 
@@ -296,23 +275,24 @@
           const id = field(task, "Id");
           const [, label, level] = priority(task);
           const due = dateValue(field(task, "DueDate"));
+          const readOnly = isArchivedTask(task);
+          const state = window.DMZenModel.taskStatus(task);
           return `<article class="task-card ${isDone(task) ? "done" : ""}">
-            <button class="task-check ${isDone(task) ? "checked" : ""}" data-module-action="toggle-task" data-id="${attr(id)}" title="切换完成"></button>
+            <button class="task-check ${isDone(task) ? "checked" : ""}" data-module-action="toggle-task" data-id="${attr(id)}" aria-label="${attr(field(task, "Title"))}：切换完成" ${readOnly ? "disabled" : ""}></button>
             <div class="task-content">
               <div class="task-title">${esc(field(task, "Title", "未命名任务"))}</div>
               <div class="task-meta">
-                <span>${esc(field(task, "Project", "Unassigned"))}</span>
+                ${field(task, "ProjectId") ? `<button class="task-project-link" data-module-action="project-tasks" data-id="${attr(field(task, "ProjectId"))}">${esc(field(task, "Project"))}</button>` : "<span>未分配项目</span>"}
+                <span class="task-status">${esc(window.DMZenModel.statusLabels[state])}${readOnly ? " · 项目已归档" : ""}</span>
                 <span class="priority ${level}">${label}</span>
-                <span>${esc(field(task, "RaciRole", "Responsible"))}</span>
-                <span>能量 ${esc(field(task, "EnergyLevel", "Medium"))}</span>
-                ${due ? `<span>截止 ${esc(due)}</span>` : ""}
+                ${due ? `<span class="${window.DMZenModel.isOverdue(task) ? "pm-overdue" : ""}">${window.DMZenModel.isOverdue(task) ? "逾期" : "截止"} ${esc(due)}</span>` : ""}
               </div>
               ${field(task, "Notes") ? `<p>${esc(field(task, "Notes"))}</p>` : ""}
             </div>
-            <div class="module-row-actions visible">
+            ${!readOnly ? `<div class="module-row-actions visible">
               <button data-module-action="edit-task" data-id="${attr(id)}">编辑</button>
               <button class="danger" data-module-action="delete-task" data-id="${attr(id)}">删除</button>
-            </div>
+            </div>` : ""}
           </article>`;
         })
         .join("");
@@ -323,10 +303,8 @@
         </div>
         ${renderStats()}
         <div class="module-toolbar">
-          <input class="module-search" value="${attr(query)}" placeholder="搜索任务、项目或标签" />
-          <div class="module-segments">
-            ${[["open", "进行中"], ["all", "全部"], ["done", "已完成"]].map(([key, label]) => `<button class="${taskFilter === key ? "active" : ""}" data-module-action="task-filter" data-value="${key}">${label}</button>`).join("")}
-          </div>
+          <input class="module-search" value="${attr(query)}" placeholder="搜索任务、项目或标签" aria-label="搜索任务" />
+          <select data-task-filter aria-label="任务状态筛选">${[["open", "未完成"], ["all", "全部活跃任务"], ...Object.entries(window.DMZenModel.statusLabels), ["archived", "已归档项目任务"]].map(([key, label]) => option(key, taskFilter, label)).join("")}</select>
         </div>
         <div class="task-list">${rows || '<div class="module-empty">当前筛选下没有任务</div>'}</div>
       </section>`;
@@ -713,48 +691,50 @@
         </form></div>`;
       }
       if (modal.type === "task") {
-        const item = draftItem;
-        const projectId = field(item, "ProjectId");
+        const item = draftItem, projectId = field(item, "ProjectId");
         const currentPriority = modal.draft?.priority || priority(item)[0];
-        return `<div class="module-modal-backdrop"><form class="module-modal" data-form="task" onsubmit="return false;">
-          <h2>${modal.id ? "编辑任务" : "新建任务"}</h2>
-          <label>标题<input name="title" required value="${attr(field(item, "Title"))}" /></label>
-          <div class="form-columns">
-            <label>项目<select name="projectId"><option value="">未分配</option>${projects.filter((p) => !window.DMZenModel.archived(p) || field(p, "Id") === projectId).map((p) => option(field(p, "Id"), projectId, field(p, "Name") + (window.DMZenModel.archived(p) ? "（已归档）" : ""))).join("")}</select></label>
-            <label>里程碑<select name="milestoneId"><option value="">未分配阶段</option>${window.DMZenModel.list(projects.find((p) => field(p, "Id") === projectId), "Milestones").map((stage) => option(field(stage, "Id"), field(item, "MilestoneId"), field(stage, "Name"))).join("")}</select></label>
-            <label>优先级<select name="priority">${[["Urgent & Important", "紧急且重要"], ["Not Urgent & Important", "重要不紧急"], ["Urgent & Not Important", "紧急不重要"], ["Medium", "普通"], ["Low", "低"]].map(([p, label]) => option(p, currentPriority, label)).join("")}</select></label>
-            <label>责任角色<select name="raci">${["Responsible", "Accountable", "Consulted", "Informed"].map((p) => option(p, field(item, "RaciRole", "Responsible"))).join("")}</select></label>
-            <label>能量<select name="energy">${["Low", "Medium", "High"].map((p) => option(p, field(item, "EnergyLevel", "Medium"))).join("")}</select></label>
-            <label>状态<select name="workflowStatus">${[["Todo", "待办"], ["In Progress", "进行中"], ["Blocked", "受阻"], ["Completed", "完成"]].map(([p, label]) => option(p, isDone(item) ? "Completed" : field(item, "WorkflowStatus", "Todo"), label)).join("")}</select></label>
-            <label>截止日期<input name="dueDate" type="date" value="${attr(dateValue(field(item, "DueDate")))}" /></label>
-          </div>
-          <label>标签<input name="tags" value="${attr(field(item, "Tags"))}" /></label>
-          <label>备注<textarea name="notes" rows="4">${esc(field(item, "Notes"))}</textarea></label>
+        const status = window.DMZenModel.taskStatus(item);
+        const choices = (items, selected) => (items.some(([key]) => key === selected) || !selected ? items : [...items, [selected, selected]]).map(([key, label]) => option(key, selected, label)).join("");
+        return `<div class="module-modal-backdrop"><form class="module-modal pm-edit-form" data-form="task" role="dialog" aria-modal="true" aria-labelledby="zen-form-title">
+          <h2 id="zen-form-title">${modal.id ? "编辑任务" : "新建任务"}</h2>
+          <p class="pm-form-hint">${modal.id ? "修改任务安排，高级选项会保留原值。" : "先记下要做的事，输入标题后按回车即可创建。"}</p>
+          <label>标题 <span class="pm-required">必填</span><input name="title" required value="${attr(field(item, "Title"))}" placeholder="下一件要推进的事" /></label>
+          <div class="form-columns"><label>项目<select name="projectId"><option value="">未分配</option>${projects.filter((p) => !window.DMZenModel.archived(p) || field(p, "Id") === projectId).map((p) => option(field(p, "Id"), projectId, field(p, "Name") + (window.DMZenModel.archived(p) ? "（已归档）" : ""))).join("")}</select></label>
+          <label>截止日期<input name="dueDate" type="date" value="${attr(dateValue(field(item, "DueDate")))}" /></label></div>
+          <details class="pm-form-advanced" ${modal.advancedOpen ?? Boolean(modal.id) ? "open" : ""}><summary>更多选项<span>里程碑、状态、优先级与备注</span></summary><div class="pm-form-fields">
+            <div class="form-columns"><label>里程碑<select name="milestoneId"><option value="">未分配阶段</option>${window.DMZenModel.list(projects.find((p) => field(p, "Id") === projectId), "Milestones").map((stage) => option(field(stage, "Id"), field(item, "MilestoneId"), field(stage, "Name"))).join("")}</select></label>
+            <label>状态<select name="workflowStatus">${Object.entries(window.DMZenModel.statusLabels).map(([key, label]) => option(key, status, label)).join("")}</select></label>
+            <label>优先级<select name="priority">${[["Urgent & Important", "紧急且重要"], ["Not Urgent & Important", "重要不紧急"], ["Urgent & Not Important", "紧急不重要"], ["Medium", "普通"], ["Low", "低"]].map(([key, label]) => option(key, currentPriority, label)).join("")}</select></label>
+            <label>责任角色<select name="raci">${choices([["Responsible", "执行人"], ["Accountable", "最终负责人"], ["Consulted", "征询人"], ["Informed", "知会人"]], field(item, "RaciRole", "Responsible"))}</select></label>
+            <label>所需能量<select name="energy">${choices([["Low", "低"], ["Medium", "中"], ["High", "高"]], field(item, "EnergyLevel", "Medium"))}</select></label>
+            <label>标签<input name="tags" value="${attr(field(item, "Tags"))}" /></label></div>
+            <label>备注<textarea name="notes" rows="3">${esc(field(item, "Notes"))}</textarea></label>
+          </div></details>
           ${field(item, "SourceNotePath") ? `<div class="pm-source-line">来源笔记：<button type="button" data-module-action="pm-open-note" data-id="${attr(field(item, "SourceNotePath"))}">${esc(field(item, "SourceNotePath"))}</button>${field(item, "SourceExcerpt") ? `<small>${esc(field(item, "SourceExcerpt"))}</small>` : ""}</div>` : ""}
-          ${error ? `<div class="module-error">${esc(error)}</div>` : ""}
-          <div class="module-modal-actions"><button type="button" data-module-action="close-modal">取消</button><button class="module-primary" type="button" data-module-action="save-modal">保存</button></div>
+          ${error ? `<div class="module-error" role="alert">${esc(error)}</div>` : ""}
+          <div class="module-modal-actions"><button type="button" data-module-action="close-modal">取消</button><button class="module-primary" type="submit" data-save-zen ${modalSaving ? "disabled" : ""}>${modal.id ? "保存" : "创建任务"}</button></div>
         </form></div>`;
       }
       if (modal.type === "project") {
         const item = draftItem;
-        return `<div class="module-modal-backdrop"><form class="module-modal" data-form="project" onsubmit="return false;">
-          <h2>${modal.id ? "编辑项目" : "新建项目"}</h2>
-          <label>项目名称<input name="name" required value="${attr(field(item, "Name"))}" /></label>
-          <div class="form-columns">
-            <label>负责人<input name="owner" value="${attr(field(item, "Owner"))}" /></label>
-            <label>优先级<select name="priority">${[["Low", "低"], ["Medium", "中"], ["High", "高"], ["Critical", "紧急"]].map(([p, label]) => option(p, field(item, "Priority", "Medium"), label)).join("")}</select></label>
-            <label>生命周期<select name="lifecycleStatus">${[["Planned", "计划中"], ["In Progress", "进行中"], ["Paused", "已暂停"], ["Completed", "已完成"]].map(([p, label]) => option(p, modal.id ? window.DMZenModel.lifecycle(item) : "Planned", label)).join("")}</select></label>
-            <label>健康度<select name="status">${[["On Track", "正常"], ["At Risk", "有风险"], ["Blocked", "受阻"]].map(([p, label]) => option(p, window.DMZenModel.health(item), label)).join("")}</select></label>
-            <label>分类<input name="category" value="${attr(field(item, "Category"))}" placeholder="例如：产品研发" /></label>
-            <label>截止日期<input name="dueDate" type="date" value="${attr(dateValue(field(item, "DueDate")))}" /></label>
-          </div>
-          <label>背景说明<textarea name="description" rows="2">${esc(field(item, "Description"))}</textarea></label>
+        return `<div class="module-modal-backdrop"><form class="module-modal pm-edit-form" data-form="project" role="dialog" aria-modal="true" aria-labelledby="zen-form-title">
+          <h2 id="zen-form-title">${modal.id ? "编辑项目" : "新建项目"}</h2><p class="pm-form-hint">${modal.id ? "更新目标与计划，已有任务和资料会保留。" : "从一个明确的目标开始，其余计划可以随时补充。"}</p>
+          <label>项目名称 <span class="pm-required">必填</span><input name="name" required value="${attr(field(item, "Name"))}" placeholder="给项目起一个名称" /></label>
           <label>项目目标<textarea name="goal" rows="2" placeholder="这个项目要解决什么问题？">${esc(field(item, "Goal"))}</textarea></label>
-          <label>完成标准<textarea name="acceptanceCriteria" rows="2" placeholder="交付什么成果，才算完成？">${esc(field(item, "AcceptanceCriteria"))}</textarea></label>
-          <label>下一步行动<input name="nextAction" value="${attr(field(item, "NextAction"))}" placeholder="一件可以立即推进的事" /></label>
-          <label>阻塞与风险<textarea name="blockers" rows="2">${esc(field(item, "Blockers"))}</textarea></label>
-          ${error ? `<div class="module-error">${esc(error)}</div>` : ""}
-          <div class="module-modal-actions"><button type="button" data-module-action="close-modal">取消</button><button class="module-primary" type="button" data-module-action="save-modal">保存</button></div>
+          <label>截止日期<input name="dueDate" type="date" value="${attr(dateValue(field(item, "DueDate")))}" /></label>
+          <details class="pm-form-advanced" ${modal.advancedOpen ?? Boolean(modal.id) ? "open" : ""}><summary>更多设置<span>负责人、阶段与详细计划</span></summary><div class="pm-form-fields">
+            <div class="form-columns"><label>负责人<input name="owner" value="${attr(field(item, "Owner"))}" /></label>
+            <label>优先级<select name="priority">${[["Low", "低"], ["Medium", "中"], ["High", "高"], ["Critical", "紧急"]].map(([key, label]) => option(key, field(item, "Priority", "Medium"), label)).join("")}</select></label>
+            <label>项目阶段<select name="lifecycleStatus">${[["Planned", "计划中"], ["In Progress", "进行中"], ["Paused", "已暂停"], ["Completed", "已完成"]].map(([key, label]) => option(key, modal.id ? window.DMZenModel.lifecycle(item) : "Planned", label)).join("")}</select></label>
+            <label>健康度<select name="status">${[["On Track", "正常"], ["At Risk", "有风险"], ["Blocked", "受阻"]].map(([key, label]) => option(key, window.DMZenModel.health(item), label)).join("")}</select></label>
+            <label>分类<input name="category" value="${attr(field(item, "Category"))}" placeholder="例如：产品研发" /></label></div>
+            <label>背景说明<textarea name="description" rows="2">${esc(field(item, "Description"))}</textarea></label>
+            <label>完成标准<textarea name="acceptanceCriteria" rows="2" placeholder="交付什么成果，才算完成？">${esc(field(item, "AcceptanceCriteria"))}</textarea></label>
+            <label>下一步行动<input name="nextAction" value="${attr(field(item, "NextAction"))}" placeholder="一件可以立即推进的事" /></label>
+            <label>阻塞与风险<textarea name="blockers" rows="2">${esc(field(item, "Blockers"))}</textarea></label>
+          </div></details>
+          ${error ? `<div class="module-error" role="alert">${esc(error)}</div>` : ""}
+          <div class="module-modal-actions"><button type="button" data-module-action="close-modal">取消</button><button class="module-primary" type="submit" data-save-zen ${modalSaving ? "disabled" : ""}>${modal.id ? "保存" : "创建项目"}</button></div>
         </form></div>`;
       }
       const item = modal.item || {};
@@ -1104,7 +1084,7 @@
         return true;
       }
       if (action === "project-tasks") {
-        await projectManager.open(id);
+        await projectManager.open(id, "tasks");
         await setSection("projects");
         return true;
       }
@@ -1316,10 +1296,12 @@
       const form = document.querySelector("form.module-modal");
       if (!form || !modal) return;
       if (typeof form.reportValidity === "function" && !form.reportValidity()) return;
-      const values = Object.fromEntries(new FormData(form));
-      modal.draft = values;
+      const draft = Object.fromEntries(new FormData(form));
+      modal.draft = draft;
+      const values = modal.id && modal.initialValues && ["task", "project"].includes(modal.type)
+        ? Object.fromEntries(Object.entries(draft).filter(([key, value]) => value !== modal.initialValues[key])) : draft;
       modalSaving = true;
-      const saveButton = form.querySelector('[data-module-action="save-modal"]');
+      const saveButton = form.querySelector('[data-module-action="save-modal"], [data-save-zen]');
       if (saveButton) saveButton.disabled = true;
       try {
         if (form.dataset.form === "ai-settings") {
@@ -1341,10 +1323,16 @@
             : await api.zenTask.addTask(values);
           await refreshZen(result);
         } else if (form.dataset.form === "project") {
+          const creating = !modal.id;
+          const existingIds = new Set(projects.map((p) => field(p, "Id")));
           const result = modal.id
             ? await api.zenTask.updateProject(modal.id, values)
             : await api.zenTask.addProject(values);
           await refreshZen(result);
+          if (creating) {
+            const created = result.projects.find((p) => !existingIds.has(field(p, "Id")));
+            if (created) await projectManager.open(field(created, "Id"), "overview");
+          }
         } else {
           links = modal.id
             ? await api.quickAccess.update(modal.id, values)
@@ -1358,6 +1346,8 @@
         rerender();
       } finally {
         modalSaving = false;
+        const button = document.querySelector('[data-save-zen], [data-module-action="save-modal"]');
+        if (button) button.disabled = false;
       }
     }
 
@@ -1463,6 +1453,7 @@
     }
 
     function closeModal() {
+      if (modalSaving) return false;
       if (remindersUI?.closeModal()) return true;
       if (!modal && projectManager.closeModal()) return true;
       if (!modal) return false;
@@ -1489,6 +1480,25 @@
       remindersUI?.bind(scope);
       personaManager?.bind(scope);
       projectManager.bind(scope);
+      const taskFilterSelect = scope.querySelector("[data-task-filter]");
+      if (taskFilterSelect) taskFilterSelect.onchange = () => { taskFilter = taskFilterSelect.value; rerender(); };
+      const zenForm = scope.querySelector('form.pm-edit-form');
+      if (zenForm && modal) {
+        modal.initialValues ||= Object.fromEntries(new FormData(zenForm));
+        const advanced = zenForm.querySelector("details");
+        if (advanced) advanced.ontoggle = () => { if (modal) modal.advancedOpen = advanced.open; };
+        zenForm.onsubmit = (event) => { event.preventDefault(); saveModal(); };
+        zenForm.onkeydown = (event) => {
+          if (event.key === "Escape") { event.preventDefault(); closeModal(); }
+          if (event.key === "Tab") {
+            const controls = [...zenForm.querySelectorAll('input, select, textarea, button, summary')].filter((node) => !node.disabled && node.getClientRects().length);
+            const first = controls[0], last = controls.at(-1);
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+          }
+        };
+        zenForm.querySelector('input[required]')?.focus();
+      }
       const taskProject = scope.querySelector('form[data-form="task"] select[name="projectId"]');
       if (taskProject) taskProject.onchange = () => {
         const select = scope.querySelector('form[data-form="task"] select[name="milestoneId"]');
@@ -1642,7 +1652,7 @@
     return { pauseGitHub: () => githubUI?.pause(),
       setSettingsTab: id => selectSettingsTab(id), loadQuickSync: () => githubUI?.load(),
       renderQuickSync: () => githubUI?.renderQuickButton() || '', quickSync: () => githubUI?.quickSync(),
-      disposePreviews: () => { petPicker?.destroy(); petPicker = null; }, prepareSync, reloadSyncedTasks: loadZen, reloadVault, loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id) };
+      disposePreviews: () => { petPicker?.destroy(); petPicker = null; }, prepareSync, reloadSyncedTasks: loadZen, reloadVault, loadAll, loadAi, render, renderModal, handleClick, bindSearch, closeModal, syncAiMessages, openProject: (id) => projectManager.open(id, "tasks") };
   }
 
   window.DMWorkspaceModules = { create };

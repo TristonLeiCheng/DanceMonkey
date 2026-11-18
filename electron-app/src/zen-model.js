@@ -8,6 +8,42 @@
   const done = (task) => ["Completed", "Done"].includes(value(task, "WorkflowStatus"));
   const archived = (project) => Boolean(value(project, "ArchivedAt"));
   const statuses = ["Todo", "In Progress", "Blocked", "Completed"];
+  const statusLabels = { Todo: "待办", "In Progress": "进行中", Blocked: "受阻", Completed: "已完成" };
+  const taskStatus = (task) => done(task) ? "Completed" : statuses.includes(value(task, "WorkflowStatus")) ? value(task, "WorkflowStatus") : "Todo";
+  // Due dates are calendar dates, including legacy ISO-shaped values. Never shift them by timezone.
+  const calendarDate = (input) => String(input || "").slice(0, 10);
+  function localDate(input = new Date()) {
+    if (!input) return "";
+    if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+      try { return date(input); } catch { return ""; }
+    }
+    const instant = input instanceof Date ? input : new Date(input);
+    if (!Number.isFinite(instant.getTime())) return "";
+    return `${instant.getFullYear()}-${String(instant.getMonth() + 1).padStart(2, "0")}-${String(instant.getDate()).padStart(2, "0")}`;
+  }
+  const isOverdue = (task, now = new Date()) => !done(task) && Boolean(calendarDate(value(task, "DueDate"))) && calendarDate(value(task, "DueDate")) < localDate(now);
+  function matchesTaskFilter(task, filter) {
+    if (filter === "open") return !done(task);
+    if (filter === "done") return done(task);
+    return !statuses.includes(filter) || taskStatus(task) === filter;
+  }
+  function taskSummary(tasks, now = new Date()) {
+    const completed = tasks.filter(done).length;
+    return { tasks, completed, open: tasks.length - completed, progress: tasks.length ? Math.round(100 * completed / tasks.length) : 0,
+      inProgress: tasks.filter((task) => taskStatus(task) === "In Progress").length,
+      blocked: tasks.filter((task) => taskStatus(task) === "Blocked").length, overdue: tasks.filter((task) => isOverdue(task, now)).length };
+  }
+  const taskArchived = (task, projects) => projects.some((project) => value(project, "Id") === value(task, "ProjectId") && archived(project));
+  function assertTaskEditable(task, projects) {
+    if (taskArchived(task, projects)) throw new Error("请先恢复项目再修改任务");
+  }
+  function projectActivity(project, tasks = []) {
+    const dates = [value(project, "UpdatedAt"), value(project, "CreatedAt"),
+      ...tasks.filter((task) => value(task, "ProjectId") === value(project, "Id")).flatMap((task) => [value(task, "UpdatedAt"), value(task, "CreatedAt")]),
+      ...list(project, "Milestones").map((stage) => value(stage, "UpdatedAt")),
+      ...list(project, "Updates").map((update) => value(update, "CreatedAt"))];
+    return dates.filter((date) => date && Number.isFinite(Date.parse(date))).sort((a, b) => Date.parse(b) - Date.parse(a))[0] || "";
+  }
   const lifecycles = ["Planned", "In Progress", "Paused", "Completed"];
   const healthStatuses = ["On Track", "At Risk", "Blocked"];
   const lifecycle = (project) => value(project, "LifecycleStatus") || (value(project, "Status") === "Completed" ? "Completed" : "In Progress");
@@ -63,7 +99,7 @@
   function milestoneProgress(stage, tasks) {
     const assigned = tasks.filter((task) => value(task, "MilestoneId") === value(stage, "Id"));
     const completed = assigned.filter(done).length;
-    return { total: assigned.length, completed, percent: value(stage, "CompletedAt") ? 100 : assigned.length ? Math.round(100 * completed / assigned.length) : 0 };
+    return { total: assigned.length, completed, percent: assigned.length ? Math.round(100 * completed / assigned.length) : 0 };
   }
   function normalizeTaskTitle(title) {
     return String(title || "").normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase();
@@ -161,6 +197,7 @@
     return applyProject({ Id: id, Name: required(input.name, "项目名称"), Owner: "", Progress: 0, Priority: "Medium", Status: "On Track", LifecycleStatus: "Planned", Category: "", Team: 1, Description: "", Goal: "", AcceptanceCriteria: "", NextAction: "", Blockers: "", DueDate: null, LinkedNotes: [], Milestones: [], Updates: [], ArchivedAt: null, CreatedAt: timestamp }, input, timestamp);
   }
   function applyTask(existing, input, projects, timestamp = new Date().toISOString()) {
+    assertTaskEditable(existing, projects);
     const next = { ...existing };
     if (has(input, "title")) next.Title = required(input.title, "任务标题");
     if (has(input, "projectId")) {
@@ -228,11 +265,10 @@
     });
   }
   function attentionItems(state, now = new Date()) {
-    const day = (value) => String(value || "").slice(0, 10);
-    const localDay = (dateValue) => `${dateValue.getFullYear()}-${String(dateValue.getMonth() + 1).padStart(2, "0")}-${String(dateValue.getDate()).padStart(2, "0")}`;
-    const today = localDay(now);
-    const upcoming = localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7));
-    const staleBefore = new Date(now.getTime() - 14 * 86400000).toISOString();
+    const day = calendarDate;
+    const today = localDate(now);
+    const upcoming = localDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7));
+    const staleBefore = localDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14));
     const items = [];
     for (const project of state.projects || []) {
       if (archived(project) || lifecycle(project) === "Completed") continue;
@@ -250,8 +286,9 @@
         if (value(task, "WorkflowStatus") === "Blocked") add("task-blocked", "任务受阻", value(task, "Title"), { taskId: value(task, "Id"), taskFilter: "open" });
         else if (due && due < today) add("task-overdue", "任务已逾期", `${value(task, "Title")} · ${due}`, { taskId: value(task, "Id"), taskFilter: "open" });
       }
-      const latest = list(project, "Updates").map((entry) => value(entry, "CreatedAt")).sort().at(-1);
-      if ((!latest && value(project, "CreatedAt") < staleBefore) || (latest && latest < staleBefore)) add("stale-update", "超过 14 天未更新", latest ? `上次更新 ${day(latest)}` : "尚无进展记录");
+      const latest = list(project, "Updates").map((entry) => localDate(value(entry, "CreatedAt"))).filter(Boolean).sort().at(-1);
+      const baseline = latest || localDate(value(project, "CreatedAt"));
+      if (baseline && baseline < staleBefore) add("stale-update", "超过 14 天未记录进展", latest ? `上次汇报 ${latest}` : "尚无进展记录");
     }
     return items;
   }
@@ -274,12 +311,12 @@
       addTasksBatch: async (inputs) => { const next = state(); const created = createTaskBatch(inputs, inputs.map(() => crypto.randomUUID()), next.projects, next.tasks); next.tasks.unshift(...created); const source = value(created[0], "SourceNotePath"); const project = next.projects.find((entry) => value(entry, "Id") === value(created[0], "ProjectId")); if (project && source && !list(project, "LinkedNotes").includes(source)) project.LinkedNotes = [...list(project, "LinkedNotes"), source]; return save(next); },
       updateTask: async (id, input) => { const next = state(); Object.assign(find(next.tasks, id), applyTask(find(next.tasks, id), input, next.projects)); return save(next); },
       toggleTask: async (id) => { const next = state(); const task = find(next.tasks, id); Object.assign(task, applyTask(task, { workflowStatus: done(task) ? "Todo" : "Completed" }, next.projects)); return save(next); },
-      deleteTask: async (id) => { const next = state(); next.tasks = next.tasks.filter((t) => value(t, "Id") !== id); return save(next); },
+      deleteTask: async (id) => { const next = state(); assertTaskEditable(find(next.tasks, id), next.projects); next.tasks = next.tasks.filter((t) => value(t, "Id") !== id); return save(next); },
       addProject: async (input) => { const next = state(); next.projects.unshift(createProject(input, crypto.randomUUID())); return save(next); },
       updateProject: async (id, input) => { const next = state(); const project = find(next.projects, id); const updated = applyProject(project, input); if (input.milestones) validateMilestoneLinks(next, id, updated.Milestones); Object.assign(project, updated); return save(normalizeState(next)); },
       deleteMilestone: async (projectId, milestoneId, reassignTo) => { const next = state(); const project = find(next.projects, projectId); const stages = list(project, "Milestones"); if (!stages.some((stage) => value(stage, "Id") === milestoneId)) throw new Error("里程碑不存在"); if (reassignTo && !stages.some((stage) => value(stage, "Id") === reassignTo && reassignTo !== milestoneId)) throw new Error("目标里程碑无效"); const linked = next.tasks.filter((task) => value(task, "ProjectId") === projectId && value(task, "MilestoneId") === milestoneId); if (linked.length && reassignTo === undefined) throw new Error(`仍有 ${linked.length} 项关联任务，请选择转移目标或明确设为未分配`); next.tasks = next.tasks.map((task) => linked.includes(task) ? { ...task, MilestoneId: reassignTo || "" } : task); project.Milestones = stages.filter((stage) => value(stage, "Id") !== milestoneId); return save(next); },
       deleteProject: async (id) => { const next = state(); next.projects = next.projects.filter((p) => value(p, "Id") !== id); next.tasks = next.tasks.map((t) => value(t, "ProjectId") === id ? { ...t, ProjectId: "", Project: "Unassigned" } : t); return save(next); },
     };
   }
-  return { value, done, archived, statuses, lifecycles, healthStatuses, lifecycle, health, list, milestoneProgress, normalizeTaskTitle, duplicateTaskCandidates, createTaskBatch, taskCandidatesFromNote, attentionItems, priorityValues, priorityLabel, normalizeState, applyProject, createProject, applyTask, createTask, renameNoteLinks, renameTaskSources, validateMilestoneLinks, previewApi };
+  return { value, done, archived, statuses, statusLabels, taskStatus, calendarDate, localDate, isOverdue, matchesTaskFilter, taskSummary, taskArchived, assertTaskEditable, projectActivity, lifecycles, healthStatuses, lifecycle, health, list, milestoneProgress, normalizeTaskTitle, duplicateTaskCandidates, createTaskBatch, taskCandidatesFromNote, attentionItems, priorityValues, priorityLabel, normalizeState, applyProject, createProject, applyTask, createTask, renameNoteLinks, renameTaskSources, validateMilestoneLinks, previewApi };
 });

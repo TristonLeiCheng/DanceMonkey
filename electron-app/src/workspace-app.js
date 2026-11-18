@@ -797,7 +797,10 @@
     const text = sel ? (selected ? markdownEditor.view.state.sliceDoc(sel.from, sel.to) : content) : (selected ? editor.value.slice(editor.selectionStart, editor.selectionEnd) : editor.value);
     const sourcePath = activePath;
     await saveActive();
-    return window.DMNoteTasks.open({ root, text, sourcePath, selected, api: api.zenTask, esc, attr,
+    const tasksApi = api.projectAi?.extractNoteTasks
+      ? { ...api.zenTask, aiExtract: (payload) => api.projectAi.extractNoteTasks(payload), aiCancel: (requestId) => api.projectAi.cancel(requestId) }
+      : api.zenTask;
+    return window.DMNoteTasks.open({ root, text, sourcePath, selected, api: tasksApi, esc, attr,
       onProjects: async id => { await setSection("projects"); await modulesInstance?.openProject?.(id); } });
   }
 

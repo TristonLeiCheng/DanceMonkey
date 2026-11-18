@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld("lumen", {
     tasks: {
       load: () => ipcRenderer.invoke("note:tasks-load"),
       addTasksBatch: inputs => writeNotes("note:tasks-add", inputs),
+      aiExtract: payload => ipcRenderer.invoke("note:tasks-ai", payload),
+      aiCancel: requestId => ipcRenderer.invoke("note:tasks-ai-cancel", requestId),
     },
     onDiskChanged: callback => {
       const listener = () => callback();
@@ -98,6 +100,22 @@ contextBridge.exposeInMainWorld("lumen", {
       ipcRenderer.on("ai:chunk", listener);
       return () => ipcRenderer.removeListener("ai:chunk", listener);
     },
+  },
+  projectAi: {
+    history: (projectId) => ipcRenderer.invoke("projectAi:history:get", projectId),
+    saveHistory: (projectId, messages) => ipcRenderer.invoke("projectAi:history:set", projectId, messages),
+    chat: (payload) => ipcRenderer.invoke("projectAi:chat", payload),
+    draftUpdate: (payload) => ipcRenderer.invoke("projectAi:draftUpdate", payload),
+    applyAction: (projectId, action) => writeNotes("projectAi:applyAction", projectId, action),
+    undoAction: (projectId, undo) => writeNotes("projectAi:undoAction", projectId, undo),
+    getBrief: () => ipcRenderer.invoke("projectAi:brief:get"),
+    brief: (payload) => ipcRenderer.invoke("projectAi:brief", payload),
+    plan: (payload) => ipcRenderer.invoke("projectAi:plan", payload),
+    applyPlan: (projectId, plan) => writeNotes("projectAi:applyPlan", projectId, plan),
+    saveNote: (input) => writeNotes("projectAi:saveNote", input),
+    cancel: (requestId) => ipcRenderer.invoke("projectAi:cancel", requestId),
+    extractNoteTasks: (payload) => ipcRenderer.invoke("projectAi:extractNoteTasks", payload),
+    personaReview: (payload) => ipcRenderer.invoke("projectAi:personaReview", payload),
   },
   personas: {
     list: () => ipcRenderer.invoke("personas:list"),

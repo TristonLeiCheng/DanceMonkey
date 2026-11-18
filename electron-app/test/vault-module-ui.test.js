@@ -17,7 +17,7 @@ test("project selection and open note picker are cleared on vault switch", () =>
     let selectedId = 'same-id'; let picker = {selected: new Set(['old.md'])};
     let dialog = {type:'milestone'}; let files = ['old.md']; let filesLoaded = true;
     let focusedTaskId = 'old-task'; let milestoneFilter = 'old-stage'; let taskQuery = 'old';
-    let pageError = 'old error'; let renderedAttention = ['old-project'];
+    let pageError = 'old error'; let renderedAttention = ['old-project']; let aiPanel = null; let planUI = null;
     ${reset}
     resetVault();
   `, context);

@@ -460,6 +460,13 @@ function createDesktopPet({ BrowserWindow, screen, Menu, powerSaveBlocker, confi
       return true;
     },
     dismissReminder,
+    // Short app notices (e.g. the daily brief). Never interrupts dragging, menus, control mode or a reminder.
+    announce(text, options = {}) {
+      if (!settings.petModeEnabled || !alive() || motion || drag || menuOpen || reminder || win.isVisible?.() === false || !String(text || '').trim()) return false;
+      speak({ text, section: options.section || 'projects', animation: options.animation || 'jump' }, options.seconds || 10);
+      nextAuto = Math.max(nextAuto, now() + 15000);
+      return true;
+    },
     toggle: () => save({ petModeEnabled: !settings.petModeEnabled }),
     get enabled() { return settings.petModeEnabled; },
     get window() { return alive() ? win : null; },

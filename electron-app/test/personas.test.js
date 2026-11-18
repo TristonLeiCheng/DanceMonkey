@@ -393,3 +393,27 @@ test("each demo chats only with its own editorial context and retains simulation
     assert.match(calls.at(-1).systemPrompt, /模拟分析/);
   }
 });
+
+test("persona review cites retrieved sources, stays out of persona conversations, and needs a saved card", async (t) => {
+  const { service, calls } = fixture(t, async (payload, onChunk) => {
+    onChunk("看法");
+    return payload.systemPrompt.includes("审阅用户提供的项目资料") ? "整体可行，但上线前缺回滚方案 [S1]，另见 [S9]。" : JSON.stringify(card());
+  });
+  const person = await ready(service, "评审者", "上线前必须准备回滚方案。");
+  const before = (await service.get(person.id)).conversations.map((item) => item.messages.length);
+  const chunks = [];
+  const result = await service.review({ id: person.id, subject: "项目：官网改版", material: "# 项目：官网改版\n下一步：上线", focus: "进度风险", requestId: "review-1" }, (chunk) => chunks.push(chunk));
+  assert.equal(result.name, "评审者");
+  assert.match(result.text, /\[S1\]/);
+  assert.match(result.text, /（来源未核实）/, "unknown markers are not trusted");
+  assert.equal(result.citations.length, 1);
+  assert.match(result.citations[0].excerpt, /回滚方案/);
+  assert.deepEqual(chunks, ["看法"]);
+  const request = JSON.parse(calls.at(-1).messages[0].content);
+  assert.equal(request.task, "review");
+  assert.equal(request.reviewFocus, "进度风险");
+  assert.match(request.projectMaterial, /官网改版/);
+  assert.deepEqual((await service.get(person.id)).conversations.map((item) => item.messages.length), before);
+  const bare = await service.create({ name: "无卡人物" });
+  await assert.rejects(service.review({ id: bare.id, subject: "x", material: "y", requestId: "review-2" }), /人物卡/);
+});

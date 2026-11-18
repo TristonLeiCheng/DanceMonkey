@@ -100,6 +100,7 @@
       api, esc, attr, rerender,
       getState: () => ({ tasks, projects }),
       onResult: refreshZen,
+      renderMarkdown: (text) => renderMarkdown(text),
       openNote: async (path) => { await helpers.openNote(path); modal = null; },
       editProject: (project) => {
         modal = { type: "project", id: field(project, "Id"), item: project || {} };

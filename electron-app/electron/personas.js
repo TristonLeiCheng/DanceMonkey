@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { normalizeSource, chunkSources, retrieveChunks } = require("./persona-sources");
-const { ANALYSIS_PROMPT, MERGE_PROMPT, CARD_PROMPT, CHAT_PROMPT } = require("./persona-prompts");
+const { ANALYSIS_PROMPT, MERGE_PROMPT, CARD_PROMPT, CHAT_PROMPT, REVIEW_PROMPT } = require("./persona-prompts");
 const { EMAIL_LIMITS, emailAddress, sinceDate, emailKeys, validOutlookBinding } = require("./persona-email");
 
 const LIMITS = Object.freeze({
@@ -517,6 +517,34 @@ function createPersonaService({ userDataPath, aiService }) {
     } finally { requests.delete(state.id); }
   }
 
+  // Review outside material (e.g. a project) from this persona's perspective. Nothing is written to the persona.
+  async function review({ id, subject, material, focus = "", requestId }, onChunk = () => {}) {
+    validId(id);
+    subject = textValue(subject, "审阅主题", 200);
+    material = textValue(material, "审阅内容", 16000);
+    focus = textValue(focus, "审阅重点", 500, false);
+    const state = startRequest(requestId, id);
+    try {
+      return await locked(id, async () => {
+        checkRequest(state);
+        const person = read(id);
+        if (!person.card) throw fail("请先为该人物生成并保存人物卡。", "NO_CARD");
+        const query = [focus, material.slice(0, 4000)].filter(Boolean).join("\n");
+        const chunks = retrieveChunks(chunkSources(allSources(person)), query, { limit: 6, maxChars: 10000 });
+        const selected = evidence(chunks, person).map((chunk, index) => ({ ...chunk, marker: "S" + (index + 1) }));
+        const citations = selected.map((chunk) => ({ id: chunk.marker, sourceId: chunk.sourceId, title: chunk.title,
+          excerpt: chunk.text.slice(0, 300), chunkId: chunk.chunkId }));
+        const request = JSON.stringify({ task: "review", subject, reviewFocus: focus || "整体评价", projectMaterial: material,
+          person: { name: person.name, description: person.description }, card: person.card,
+          cardMayBeOutdated: person.cardSourceRevision !== person.sourceRevision, retrievedEvidence: selected });
+        const rawText = await model(state, REVIEW_PROMPT + (person.demoId ? "\n" + demoTools.disclosure + demoTools.rules : ""), [{ role: "user", content: request }], { onChunk });
+        const text = rawText.replace(/\[S(\d+)\]/g, (_match, index) => citations[Number(index) - 1] ? "[S" + Number(index) + "]" : "（来源未核实）");
+        checkRequest(state);
+        return { text, citations: citations.filter((citation) => text.includes("[" + citation.id + "]")), name: person.name };
+      });
+    } finally { requests.delete(state.id); }
+  }
+
   function newConversation({ id }) {
     return mutate(id, (person) => {
       if (person.conversations.length >= LIMITS.conversations) throw fail("最多保留 " + LIMITS.conversations + " 个会话，请删除不再需要的旧会话。", "CONVERSATION_LIMIT");
@@ -563,7 +591,7 @@ function createPersonaService({ userDataPath, aiService }) {
     return locked(id, () => { read(id); fs.unlinkSync(personPath(id)); return true; });
   }
 
-  return { list, create, get, updateProfile, addSources, importEmails, captureModel, removeSource, generate, saveCard, chat,
+  return { list, create, get, updateProfile, addSources, importEmails, captureModel, removeSource, generate, saveCard, chat, review,
     newConversation, selectConversation, deleteConversation, restoreCard, remove, cancel, cancelAll: () => { for (const id of requests.keys()) cancel(id); } };
 }
 

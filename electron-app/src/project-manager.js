@@ -3,10 +3,10 @@
   const HEALTH = { "On Track": "正常", "At Risk": "有风险", Blocked: "受阻" };
   const LIFECYCLE = { Planned: "计划中", "In Progress": "进行中", Paused: "已暂停", Completed: "已完成" };
   const PRIORITY = { Low: "低", Medium: "中", High: "高", Critical: "紧急" };
-  const TABS = [["overview", "概览"], ["tasks", "任务"], ["milestones", "里程碑"], ["notes", "资料"], ["updates", "动态"]];
+  const TABS = [["overview", "概览"], ["tasks", "任务"], ["milestones", "里程碑"], ["notes", "资料"], ["updates", "动态"], ["ai", "AI 助手"]];
   const flatten = (tree) => tree.flatMap((node) => node.type === "file" ? [node] : flatten(node.children || []));
 
-  function create({ api, esc, attr, rerender, getState, onResult, editTask, editProject, openNote }) {
+  function create({ api, esc, attr, rerender, getState, onResult, editTask, editProject, openNote, renderMarkdown }) {
     let selectedId = "";
     let detailTab = "overview";
     const projectTabs = new Map();
@@ -31,6 +31,44 @@
     const button = (action, label, id = "", className = "pm-button") => `<button type="button" class="${className}" data-module-action="pm-${action}" data-id="${attr(id)}" ${busy ? "disabled" : ""}>${label}</button>`;
     const errorHtml = () => pageError ? `<div class="module-error" role="alert">${esc(pageError)}</div>` : "";
     const metrics = (id) => taskSummary(associated(id));
+    const aiPanel = window.DMProjectAIPanel?.create({ api, esc, attr, rerender, renderMarkdown, getState, onResult,
+      openNote, onNoteSaved: async () => { if (selectedId) { try { await loadFiles(); } catch { filesLoaded = false; } } },
+      onWeeklyDraft: () => { const p = project(); if (!p || archived(p)) return; selectTab("updates"); dialog = updateDialog(); void draftUpdate(); } });
+    const planUI = window.DMProjectPlan?.create({ api, esc, attr, rerender, onResult, onCreated: () => { selectTab("milestones"); milestoneFilter = "all"; pageError = ""; } });
+    const updateDialog = () => ({ type: "update", values: { health: health(project()), summary: "", risks: "", nextAction: "" }, drafting: false, notice: "", requestId: "" });
+    const canDraft = () => Boolean(api.projectAi?.draftUpdate);
+    async function draftUpdate() {
+      const current = dialog;
+      if (current?.type !== "update" || current.drafting || !canDraft()) return;
+      current.drafting = true;
+      current.cancelled = false;
+      current.notice = "";
+      current.requestId = `pm-draft-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      pageError = "";
+      rerender();
+      try {
+        const result = await api.projectAi.draftUpdate({ requestId: current.requestId, projectId: selectedId, notes: { ...current.values } });
+        if (dialog !== current) return;
+        if (!result?.success) throw new Error(result?.error || "AI 起草失败，请重试。");
+        const draft = result.draft || {};
+        current.values = { health: draft.health || current.values.health, summary: draft.summary || "", risks: draft.risks || "", nextAction: draft.nextAction || "" };
+        const counts = result.counts || {};
+        current.notice = draft.parsed
+          ? `已根据本周完成 ${counts.completed || 0} 项、新增 ${counts.created || 0} 项、受阻 ${counts.blocked || 0} 项、逾期 ${counts.overdue || 0} 项起草，请检查后保存。`
+          : "AI 未按约定格式返回，已将全文放入「本周进展」，请整理后保存。";
+      } catch (error) {
+        if (dialog !== current) return;
+        if (current.cancelled) current.notice = "已停止起草，表单内容未改变。";
+        else pageError = error?.message || "AI 起草失败，请重试。";
+      } finally {
+        if (dialog === current) { current.drafting = false; current.requestId = ""; rerender(); }
+      }
+    }
+    function cancelDraft() {
+      if (!dialog?.drafting) return;
+      dialog.cancelled = true;
+      if (dialog.requestId) void api.ai?.cancel?.(dialog.requestId);
+    }
     function selectTab(tab) {
       if (!TABS.some(([key]) => key === tab)) return;
       detailTab = tab;
@@ -64,6 +102,7 @@
       return `<section class="module-page pm-page">
         <div class="module-heading"><div><div class="pm-eyebrow">PROJECTS / 项目工作台</div><h1>把目标推进到完成</h1><p>任务、行动与笔记，都留在项目里。</p></div>${button("new", "＋ 新建项目", "", "module-primary")}</div>
         ${errorHtml()}
+        ${filter === "active" && aiPanel && all.some((p) => !archived(p)) ? aiPanel.renderBrief() : ""}
         ${filter === "active" ? `<section class="pm-panel pm-attention"><div class="pm-panel-heading"><h2>Needs attention / 需要关注 <span>${renderedAttention.length}</span></h2><small>未来 7 天里程碑 · 逾期/受阻任务 · 风险健康度 · 14 天未汇报进展</small></div>${renderedAttention.length ? `<div class="pm-attention-list">${renderedAttention.map((item, index) => `<button type="button" data-module-action="pm-attention" data-id="${index}"><strong>${esc(item.projectName)} · ${esc(item.label)}</strong><span>${esc(item.detail)}</span></button>`).join("")}</div>` : '<div class="pm-empty compact">当前没有需要关注的活跃项目。</div>'}</section>` : ""}
         <div class="module-toolbar pm-toolbar"><div class="module-segments">${button("filter", `活跃项目 · ${all.filter((p) => !archived(p)).length}`, "active", filter === "active" ? "active" : "")}${button("filter", `已归档 · ${all.filter(archived).length}`, "archived", filter === "archived" ? "active" : "")}</div>
           <input class="pm-search module-search" data-pm-search="projects" value="${attr(query)}" aria-label="搜索项目" placeholder="搜索项目、负责人或分类" />
@@ -80,6 +119,7 @@
             ${m.blocked || m.overdue ? `<div class="pm-alert">${m.blocked ? `${m.blocked} 项受阻` : ""}${m.blocked && m.overdue ? " · " : ""}${m.overdue ? `${m.overdue} 项逾期` : ""}</div>` : ""}
             <div class="module-row-actions visible">${button("open", "打开项目 →", id)}${button(archived(p) ? "restore" : "archive", archived(p) ? "恢复" : "归档", id)}</div></article>`;
         }).join("") || `<div class="pm-empty"><strong>${query ? "没有匹配的项目" : filter === "archived" ? "还没有归档项目" : "从一个明确的目标开始"}</strong><p>${query ? "试试项目名称、负责人或分类。" : filter === "archived" ? "归档保留全部任务与笔记关联，随时可以恢复。" : "创建项目，再把目标拆成可执行的任务。"}</p>${!query && filter === "active" ? button("new", "创建第一个项目", "", "module-primary") : ""}</div>`}</div>
+        ${filter === "active" && aiPanel && all.some((p) => !archived(p)) ? aiPanel.renderPortfolio() : ""}
       </section>`;
     }
     function taskCard(task, readOnly) {
@@ -101,6 +141,7 @@
         <section class="pm-panel pm-context"><div class="pm-panel-heading"><h2>目标与行动</h2>${!readOnly ? button("edit", "编辑说明", field(p, "Id")) : ""}</div>
           ${[["Goal", "项目目标", "明确这个项目要解决的问题。"], ["AcceptanceCriteria", "完成标准", "写下可检查的交付成果。"], ["NextAction", "下一步行动", "从任务中选择下一件要推进的事。"], ["Blockers", "阻塞与风险", "暂无记录"]].map(([key, label, fallback]) => `<div class="pm-context-item"><h3>${label}</h3><p class="${field(p, key) ? "" : "pm-muted"}">${esc(field(p, key) || fallback)}</p></div>`).join("")}
           ${button("tab", `查看任务 · ${m.open} 项未完成`, "tasks")}
+          ${!readOnly && planUI?.available() && !stages.length && !m.tasks.length ? `<div class="pm-plan-hint"><span>还没有里程碑和任务？</span>${button("plan-open", "✨ 用 AI 拆解目标")}</div>` : ""}
         </section>
         <div class="pm-overview-side"><section class="pm-panel"><div class="pm-panel-heading"><h2>下一里程碑</h2>${button("tab", "全部里程碑", "milestones")}</div>
           ${upcoming ? `<h3>${esc(field(upcoming, "Name"))}</h3><p class="pm-muted">${date(field(upcoming, "DueDate")) ? `目标 ${esc(date(field(upcoming, "DueDate")))}` : "未设置目标日期"}</p><p>${esc(field(upcoming, "AcceptanceCriteria") || "尚未填写验收标准")}</p>` : `<p class="pm-muted">${stages.length ? "全部里程碑已验收。" : "添加一个阶段交付成果，让目标更清晰。"}</p>${!readOnly && !stages.length ? button("new-milestone", "＋ 添加里程碑") : ""}`}
@@ -111,7 +152,7 @@
     }
     function renderMilestones(p, m, readOnly) {
       const stages = list(p, "Milestones");
-      return `<section class="pm-panel pm-milestones"><div class="pm-panel-heading"><div><h2>里程碑 <span>${stages.length}</span></h2><p class="pm-muted">任务完成率与成果验收分别记录。</p></div>${!readOnly ? button("new-milestone", "＋ 添加里程碑") : ""}</div><div class="pm-milestone-grid">${stages.map((stage) => {
+      return `<section class="pm-panel pm-milestones"><div class="pm-panel-heading"><div><h2>里程碑 <span>${stages.length}</span></h2><p class="pm-muted">任务完成率与成果验收分别记录。</p></div>${!readOnly ? `<div class="pm-actions">${planUI?.available() ? button("plan-open", "✨ AI 拆解计划") : ""}${button("new-milestone", "＋ 添加里程碑")}</div>` : ""}</div><div class="pm-milestone-grid">${stages.map((stage) => {
         const progress = milestoneProgress(stage, m.tasks); const stageId = field(stage, "Id");
         return `<article class="pm-milestone"><div class="pm-milestone-head"><strong>${esc(field(stage, "Name"))}</strong><span>${field(stage, "CompletedAt") ? "已验收" : "待验收"}</span></div>
           <div class="project-progress"><span style="width:${progress.percent}%"></span></div><small>任务完成率 ${progress.percent}% · ${progress.completed}/${progress.total}</small>
@@ -145,7 +186,7 @@
     }
     function renderDetail(p) {
       const id = field(p, "Id"), m = metrics(id), readOnly = archived(p);
-      const panels = { overview: () => renderProjectOverview(p, m, readOnly), tasks: () => renderTasks(p, m, readOnly), milestones: () => renderMilestones(p, m, readOnly), notes: () => renderNotes(p, readOnly), updates: () => renderUpdates(p, readOnly) };
+      const panels = { overview: () => renderProjectOverview(p, m, readOnly), tasks: () => renderTasks(p, m, readOnly), milestones: () => renderMilestones(p, m, readOnly), notes: () => renderNotes(p, readOnly), updates: () => renderUpdates(p, readOnly), ai: () => aiPanel ? aiPanel.render(p, { readOnly }) : '<div class="pm-empty compact">AI 助手暂不可用。</div>' };
       return `<section class="module-page pm-page pm-detail">
         <div class="pm-breadcrumb">${button("back", "← 所有项目")}<span>/</span><span>${esc(field(p, "Name"))}</span></div>
         <div class="module-heading"><div><div class="pm-eyebrow">${esc(field(p, "Category") || "项目详情")}${readOnly ? " / 已归档" : ""}</div><h1>${esc(field(p, "Name"))}</h1>${field(p, "Description") ? `<p>${esc(field(p, "Description"))}</p>` : ""}</div><div class="pm-actions">${!readOnly ? button("edit", "编辑项目", id) : ""}${button(readOnly ? "restore" : "archive", readOnly ? "恢复项目" : "归档项目", id)}</div></div>
@@ -156,7 +197,17 @@
       </section>`;
     }
     function render() { const p = project(); return p ? renderDetail(p) : renderOverview(); }
+    function renderUpdateFields() {
+      const values = dialog.values || updateDialog().values;
+      const off = dialog.drafting ? "disabled" : "";
+      const option = (key, label) => `<option value="${key}" ${values.health === key ? "selected" : ""}>${label}</option>`;
+      const bar = canDraft() ? `<div class="pm-draft-bar"><span>${dialog.drafting ? "正在根据本周任务变化起草…" : "根据本周任务变化和你已写的要点起草，保存前可修改。"}</span>${dialog.drafting
+        ? '<button type="button" class="pm-button" data-module-action="pm-cancel-draft">停止起草</button>'
+        : `<button type="button" class="pm-button pm-draft-button" data-module-action="pm-draft-update" ${busy ? "disabled" : ""}>✨ AI 起草</button>`}</div>${dialog.notice ? `<p class="pm-draft-notice" role="status">${esc(dialog.notice)}</p>` : ""}` : "";
+      return `${bar}<label>当前健康度<select name="health" ${off}>${option("On Track", "正常")}${option("At Risk", "有风险")}${option("Blocked", "受阻")}</select></label><label>本周进展<textarea name="summary" required rows="4" placeholder="本周完成了什么？" ${off}>${esc(values.summary)}</textarea></label><label>风险或阻塞<textarea name="risks" rows="2" placeholder="当前风险（可选）" ${off}>${esc(values.risks)}</textarea></label><label>下一步行动<textarea name="nextAction" rows="2" placeholder="下周最重要的行动（可选）" ${off}>${esc(values.nextAction)}</textarea></label>`;
+    }
     function renderModal() {
+      if (planUI?.isOpen()) return planUI.renderModal(project());
       if (dialog) {
         const editing = dialog.type === "milestone" ? list(project(), "Milestones").find((stage) => field(stage, "Id") === dialog.id) : null;
         if (dialog.type === "delete-milestone") {
@@ -164,7 +215,7 @@
           const others = list(project(), "Milestones").filter((stage) => field(stage, "Id") !== dialog.id);
           return `<div class="module-modal-backdrop"><div class="module-modal pm-dialog" role="dialog" aria-modal="true"><h2>确认删除里程碑</h2><p>${linked ? `仍有 ${linked} 项关联任务。必须转移到其他里程碑或设为未分配后才能删除。` : "此操作不会删除任务，且无法撤销。"}</p><form data-pm-delete-milestone>${linked ? `<label>关联任务处理<select name="reassign" required><option value="">设为未分配</option>${others.map((stage) => `<option value="${attr(field(stage, "Id"))}">转移到 ${esc(field(stage, "Name"))}</option>`).join("")}</select></label>` : ""}<label class="pm-confirm"><input type="checkbox" name="confirmed" required /> 我确认删除此里程碑</label><div class="module-modal-actions">${button("close-dialog", "取消")}<button class="module-primary" type="submit">确认删除</button></div></form>${errorHtml()}</div></div>`;
         }
-        return `<div class="module-modal-backdrop"><div class="module-modal pm-dialog" role="dialog" aria-modal="true" aria-label="${dialog.type === "milestone" ? "编辑里程碑" : "记录项目进展"}"><h2>${dialog.type === "milestone" ? editing ? "编辑里程碑" : "新建里程碑" : "记录本周进展"}</h2><form data-pm-dialog-form>${dialog.type === "milestone" ? `<label>里程碑名称<input name="name" required maxlength="160" value="${attr(field(editing, "Name"))}" placeholder="例如：首版方案通过" /></label><label>目标日期<input name="dueDate" type="date" value="${attr(date(field(editing, "DueDate")))}" /></label><label>验收标准<textarea name="acceptanceCriteria" rows="3" placeholder="交付什么成果算完成？">${esc(field(editing, "AcceptanceCriteria"))}</textarea></label>` : `<label>当前健康度<select name="health"><option value="On Track" ${health(project()) === "On Track" ? "selected" : ""}>正常</option><option value="At Risk" ${health(project()) === "At Risk" ? "selected" : ""}>有风险</option><option value="Blocked" ${health(project()) === "Blocked" ? "selected" : ""}>受阻</option></select></label><label>本周进展<textarea name="summary" required rows="3" placeholder="本周完成了什么？"></textarea></label><label>风险或阻塞<textarea name="risks" rows="2" placeholder="当前风险（可选）"></textarea></label><label>下一步行动<textarea name="nextAction" rows="2" placeholder="下周最重要的行动（可选）"></textarea></label>`}<div class="module-modal-actions">${button("close-dialog", "取消")}<button class="module-primary" type="submit" ${busy ? "disabled" : ""}>保存</button></div></form>${errorHtml()}</div></div>`;
+        return `<div class="module-modal-backdrop"><div class="module-modal pm-dialog" role="dialog" aria-modal="true" aria-label="${dialog.type === "milestone" ? "编辑里程碑" : "记录项目进展"}"><h2>${dialog.type === "milestone" ? editing ? "编辑里程碑" : "新建里程碑" : "记录本周进展"}</h2><form data-pm-dialog-form>${dialog.type === "milestone" ? `<label>里程碑名称<input name="name" required maxlength="160" value="${attr(field(editing, "Name"))}" placeholder="例如：首版方案通过" /></label><label>目标日期<input name="dueDate" type="date" value="${attr(date(field(editing, "DueDate")))}" /></label><label>验收标准<textarea name="acceptanceCriteria" rows="3" placeholder="交付什么成果算完成？">${esc(field(editing, "AcceptanceCriteria"))}</textarea></label>` : renderUpdateFields()}<div class="module-modal-actions">${button("close-dialog", "取消")}<button class="module-primary" type="submit" ${busy || dialog.drafting ? "disabled" : ""}>保存</button></div></form>${errorHtml()}</div></div>`;
       }
       if (!picker) return "";
       const matches = files.filter((file) => file.path.toLowerCase().includes(picker.query.toLowerCase()));
@@ -179,6 +230,14 @@
     }
     async function handleAction(action, id) {
       if (!action.startsWith("pm-")) return false;
+      // AI requests run for a long time and must not hold the page-wide busy lock.
+      if (action.startsWith("pm-ai-") || action === "pm-weekly-draft") {
+        if (aiPanel) await aiPanel.handleAction(action, id, project());
+        return true;
+      }
+      if (action.startsWith("pm-plan-")) { if (planUI) await planUI.handleAction(action, id, project()); return true; }
+      if (action === "pm-draft-update") { void draftUpdate(); return true; }
+      if (action === "pm-cancel-draft") { cancelDraft(); return true; }
       await run(async () => {
         const p = project();
         if (action === "pm-open") await open(id);
@@ -194,8 +253,8 @@
           const from = stages.findIndex((stage) => stage.id === id); const to = from + (action.endsWith("up") ? -1 : 1);
           if (from >= 0 && to >= 0 && to < stages.length) { [stages[from], stages[to]] = [stages[to], stages[from]]; await onResult(await api.zenTask.updateProject(selectedId, { milestones: stages })); }
         }
-        if (action === "pm-new-update") { selectTab("updates"); dialog = { type: "update" }; }
-        if (action === "pm-close-dialog") dialog = null;
+        if (action === "pm-new-update") { selectTab("updates"); dialog = updateDialog(); }
+        if (action === "pm-close-dialog") { cancelDraft(); dialog = null; }
         if (action === "pm-filter-stage") { milestoneFilter = id; focusedTaskId = ""; taskFilter = "all"; taskQuery = ""; view = "list"; selectTab("tasks"); }
         if (action === "pm-toggle-milestone") {
           const stages = list(p, "Milestones");
@@ -252,10 +311,16 @@
       if (stageSelect) stageSelect.onchange = () => { milestoneFilter = stageSelect.value; rerender(); };
       const deleteForm = scope.querySelector("[data-pm-delete-milestone]");
       if (deleteForm) deleteForm.onsubmit = (event) => { event.preventDefault(); if (!deleteForm.reportValidity()) return; const data = new FormData(deleteForm); run(async () => { await onResult(await api.zenTask.deleteMilestone(selectedId, dialog.id, deleteForm.elements.reassign ? data.get("reassign") : "")); dialog = null; }); };
+      if (detailTab === "ai" && project()) aiPanel?.bind(scope, project());
+      else if (!project()) aiPanel?.bind(scope, null);
+      planUI?.bind(scope);
       const form = scope.querySelector("[data-pm-dialog-form]");
+      if (form && dialog?.type === "update") form.oninput = form.onchange = () => {
+        if (!dialog.drafting) dialog.values = { ...dialog.values, ...Object.fromEntries(new FormData(form)) };
+      };
       if (form) form.onsubmit = (event) => {
         event.preventDefault();
-        if (!form.reportValidity()) return;
+        if (!form.reportValidity() || dialog?.drafting) return;
         const data = new FormData(form);
         run(async () => {
           if (dialog.type === "milestone") {
@@ -281,12 +346,15 @@
         };
       });
     }
-    function closeModal() { if ((!picker && !dialog) || busy) return false; picker = null; dialog = null; pageError = ""; rerender(); return true; }
+    function closeModal() { if (planUI?.isOpen()) return planUI.close(); if ((!picker && !dialog) || busy) return false; cancelDraft(); picker = null; dialog = null; pageError = ""; rerender(); return true; }
     async function refreshFiles() {
       if (!selectedId) return;
       try { await loadFiles(); } catch { filesLoaded = false; }
     }
     function resetVault() {
+      if (dialog?.requestId) void api.ai?.cancel?.(dialog.requestId);
+      aiPanel?.reset();
+      planUI?.reset();
       selectedId = "";
       detailTab = "overview";
       projectTabs.clear();
@@ -303,7 +371,7 @@
       renderedAttention = [];
     }
     return { render, renderModal, handleAction, bind, open, closeModal, refreshFiles, resetVault,
-      hasPendingEdits: () => Boolean(picker || dialog) };
+      hasPendingEdits: () => Boolean(picker || dialog || planUI?.isOpen()) };
   }
   window.DMProjectManager = { create };
 })();

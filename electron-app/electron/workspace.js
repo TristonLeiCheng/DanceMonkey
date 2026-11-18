@@ -349,6 +349,19 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
       fs.writeFileSync(target, notesHome.compose(type, resolvedTitle, crypto.randomUUID()), { encoding: "utf8", flag: "wx", mode: 0o600 });
       return { path: toRelative(target) };
     },
+    // AI output goes to the PKB output folders when initialized, otherwise to a plain top-level folder.
+    createAiNote({ title, body, kind = "insight", source = "DM 项目 AI 助手", project = "" } = {}) {
+      const cleanTitle = String(title || "").replace(/[\r\n\x00-\x1f]+/g, " ").trim().slice(0, 80) || "AI 输出";
+      const parent = createPkb(root).status().initialized ? `90_AI/91_Outputs/${kind === "digest" ? "digests" : "insights"}` : "AI 输出";
+      fs.mkdirSync(resolveSafe(parent), { recursive: true });
+      const target = uniquePath(parent, cleanTitle, "file");
+      const now = new Date();
+      const front = ["---", `id: ${JSON.stringify(crypto.randomUUID())}`, `type: ${JSON.stringify("ai-output")}`, `title: ${JSON.stringify(cleanTitle)}`,
+        `created: ${JSON.stringify(now.toISOString())}`, `source: ${JSON.stringify(String(source))}`, ...(project ? [`project: ${JSON.stringify(String(project))}`] : []), "---"];
+      const content = [...front, "", `# ${cleanTitle}`, "", "> 由 AI 根据项目数据生成，可能不准确，请核对后使用。", "", String(body || "").trim(), ""].join("\n");
+      fs.writeFileSync(target, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
+      return { path: toRelative(target) };
+    },
     createFolder(parentRelative, name) {
       const target = uniquePath(parentRelative, name, "folder");
       fs.mkdirSync(target, { recursive: false });

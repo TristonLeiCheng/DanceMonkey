@@ -29,7 +29,8 @@
     "test:e2e:network": "node test/e2e-network.mjs",
     "test:e2e:update:mac": "electron test/e2e-mac-update.cjs",
     "build:editor": "esbuild src/note-document.mjs --bundle --format=iife --target=chrome120 --minify --outfile=src/note-document.bundle.js",
-    "test:e2e:notes": "node test/e2e-note-editor.mjs"
+    "test:e2e:notes": "node test/e2e-note-editor.mjs",
+    "test:e2e:project-ai": "node test/e2e-project-ai.mjs"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.10.2",

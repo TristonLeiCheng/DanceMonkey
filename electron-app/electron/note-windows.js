@@ -7,7 +7,7 @@ const { createZenTaskStore } = require('./zentask');
 // Each document owns its workspace and disk snapshot. Switching the main vault
 // must never redirect an already open document's reads or writes.
 function createNoteWindows({ BrowserWindow, ipcMain, dialog, getWorkspace, rendererUrl, icon,
-  assertWritable, isBusy, canClose, changed, trusted = () => true, timeoutMs = 15000 }) {
+  assertWritable, isBusy, canClose, changed, trusted = () => true, timeoutMs = 15000, extractTasks = null, cancelAi = () => false }) {
   const records = new Map();
   const windows = () => [...records.values()].map(record => record.win);
   function recordFor(event) {
@@ -147,6 +147,18 @@ function createNoteWindows({ BrowserWindow, ipcMain, dialog, getWorkspace, rende
     changed(record.workspace.root);
     return { saved: true };
   });
+  // The note path comes from the window record, so protected-folder checks cannot be bypassed by the renderer.
+  ipcMain.handle('note:tasks-ai', async (event, payload = {}) => {
+    try {
+      if (!extractTasks) throw new Error('当前版本不支持 AI 提取。');
+      const record = recordFor(event);
+      const state = createZenTaskStore(record.workspace.root).load();
+      return { success: true, ...await extractTasks(state, { projectId: payload.projectId, text: payload.text, requestId: payload.requestId, sourcePath: record.path }) };
+    } catch (error) {
+      return { success: false, error: error?.message || 'AI 提取失败' };
+    }
+  });
+  ipcMain.handle('note:tasks-ai-cancel', (_event, requestId) => cancelAi(requestId));
   ipcMain.handle('note:tasks-load', event => createZenTaskStore(recordFor(event).workspace.root).load());
   ipcMain.handle('note:tasks-add', (event, inputs, generation) => {
     assertWritable(generation);

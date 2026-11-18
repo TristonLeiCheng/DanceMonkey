@@ -447,3 +447,16 @@ test('pixel idle timing keeps a short blink and a longer resting pose, including
   assert.equal(sprites.frameAt(2800 * 20 + 2660), 3);
   assert.equal(sprites.frameAt(NaN), 0);
 });
+
+test('app announcements show a bubble that opens the given section, but never interrupt menus or a disabled pet', () => {
+  const off = harness(); off.pet.sync();
+  assert.equal(off.pet.announce('今日简报：催办法务'), false);
+  const h = harness({ petModeEnabled: true }); h.pet.sync(); const win = h.pet.window;
+  assert.equal(h.pet.announce('   '), false);
+  assert.equal(h.pet.announce('今日简报：催办法务', { section: 'projects' }), true);
+  assert.equal(win.state.bubble, '今日简报：催办法务');
+  h.emit('pet:tasks'); assert.deepEqual(h.opens, ['projects']);
+  h.time(30000); h.emit('pet:menu');
+  assert.equal(h.pet.announce('第二条'), false, 'an open menu is not interrupted');
+  h.pet.dispose();
+});

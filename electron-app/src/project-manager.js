@@ -73,6 +73,7 @@
       if (!TABS.some(([key]) => key === tab)) return;
       detailTab = tab;
       projectTabs.set(selectedId, tab);
+      if (tab === 'ai') void aiPanel?.refreshSources(selectedId);
     }
     async function loadFiles() {
       filesLoaded = false;
@@ -348,6 +349,7 @@
     }
     function closeModal() { if (planUI?.isOpen()) return planUI.close(); if ((!picker && !dialog) || busy) return false; cancelDraft(); picker = null; dialog = null; pageError = ""; rerender(); return true; }
     async function refreshFiles() {
+      await aiPanel?.refreshSources(selectedId || '__portfolio__');
       if (!selectedId) return;
       try { await loadFiles(); } catch { filesLoaded = false; }
     }

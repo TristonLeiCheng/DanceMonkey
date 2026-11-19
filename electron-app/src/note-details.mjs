@@ -1,4 +1,5 @@
 import model from './note-details-model.js';
+import { create as createNoteAi } from './note-ai.mjs';
 export { model };
 
 const drafts = new Map(), tabs = new Map();
@@ -7,14 +8,15 @@ const canonical = text => text.replace(/\r\n/g, '\n');
 const icons = {
   metadata: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
   links: '<path d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0M16 8l1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/>',
+  ai: '<path d="m12 3 2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6Z"/>',
 };
 export function markup() {
   return `<aside class="note-details-panel" id="note-details-panel" aria-label="文档详情" hidden></aside>
-    <nav class="note-details-rail" aria-label="文档侧栏">${[['metadata', '信息', '文档信息与元数据'], ['links', '双链', '双链信息']].map(([tab, label, title]) =>
+    <nav class="note-details-rail" aria-label="文档侧栏">${[['metadata', '信息', '文档信息与元数据'], ['links', '双链', '双链信息'], ['ai', 'AI', '笔记 AI 助手']].map(([tab, label, title]) =>
       `<button type="button" data-details-tab="${tab}" aria-label="${title}" title="${title}" aria-controls="note-details-panel" aria-expanded="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[tab]}</svg><span>${label}</span></button>`).join('')}</nav>`;
 }
 
-export function create({ host, path, root, getText, replaceText, inspect, save, openNote, onDraft = () => {} }) {
+export function create({ host, path, root, getText, replaceText, inspect, save, openNote, ai = {}, onDraft = () => {} }) {
   const panel = host.querySelector('.note-details-panel'), rail = host.querySelector('.note-details-rail');
   const id = `${root}\0${path}`;
   const initial = model.splitMetadata(getText());
@@ -22,6 +24,7 @@ export function create({ host, path, root, getText, replaceText, inspect, save, 
   if (!draft?.dirty) draft = { base: canonical(initial.yaml), yaml: canonical(initial.yaml), dirty: false };
   drafts.set(id, draft);
   let tab = tabs.get(id) || '', data, disposed = false, request = 0, saving = false, stale = false;
+  const assistant = createNoteAi({ root, path, getText, save, openNote, flush, ...ai });
   const message = text => { const element = panel.querySelector('.note-details-message'); if (element) element.textContent = text; };
   const date = value => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '未知';
   function renderMetadata() {
@@ -62,12 +65,15 @@ export function create({ host, path, root, getText, replaceText, inspect, save, 
       ${data?.omitted || data?.unreadable ? `<p class="note-details-help">${data.omitted} 篇笔记超出扫描范围，${data.unreadable} 篇暂时无法读取；上方为当前可读取的结果。</p>` : ''}`;
   }
   function render() {
+    assistant.unmount();
     panel.hidden = !tab;
+    panel.classList.toggle('note-details-ai', tab === 'ai');
     rail.querySelectorAll('[data-details-tab]').forEach(button => button.setAttribute('aria-expanded', String(button.dataset.detailsTab === tab)));
     if (!tab) return;
-    panel.setAttribute('aria-label', tab === 'metadata' ? '文档信息与元数据' : '双链信息');
-    panel.innerHTML = `<header><h2>${tab === 'metadata' ? '文档信息' : '双链信息'}</h2><button type="button" data-details-refresh aria-label="刷新文档信息" title="刷新">↻</button><button type="button" data-details-close aria-label="收起文档详情" title="收起">×</button></header><div class="note-details-message" role="status"></div><div class="note-details-content"></div>`;
-    if (tab === 'metadata') renderMetadata(); else renderLinks();
+    const title = tab === 'metadata' ? '文档信息' : tab === 'ai' ? '笔记 AI 助手' : '双链信息';
+    panel.setAttribute('aria-label', title);
+    panel.innerHTML = `<header><h2>${title}</h2>${tab !== 'ai' ? '<button type="button" data-details-refresh aria-label="刷新文档信息" title="刷新">↻</button>' : ''}<button type="button" data-details-close aria-label="收起文档详情" title="收起">×</button></header><div class="note-details-message" role="status"></div><div class="note-details-content"></div>`;
+    if (tab === 'metadata') renderMetadata(); else if (tab === 'ai') assistant.mount(panel.querySelector('.note-details-content')); else renderLinks();
   }
   function setTab(next) { tab = next; tabs.set(id, tab); render(); }
   async function refresh() {
@@ -98,7 +104,7 @@ export function create({ host, path, root, getText, replaceText, inspect, save, 
   rail.onclick = event => {
     const button = event.target.closest('[data-details-tab]'); if (!button) return;
     event.stopPropagation(); setTab(tab === button.dataset.detailsTab ? '' : button.dataset.detailsTab);
-    if (tab) { panel.querySelector('header button')?.focus(); void refresh(); }
+    if (tab) { panel.querySelector('header button')?.focus(); if (tab !== 'ai') void refresh(); }
   };
   panel.onclick = async event => {
     event.stopPropagation();
@@ -122,18 +128,18 @@ export function create({ host, path, root, getText, replaceText, inspect, save, 
       event.preventDefault(); event.stopPropagation(); void save().then(() => message('已保存'), error => message(error.message));
     }
   };
-  render(); if (tab) void refresh();
+  render(); if (tab && tab !== 'ai') void refresh();
   return { flush, refresh, hasDraft: () => draft.dirty,
     onTextChanged() {
       if (disposed) return;
       const parts = model.splitMetadata(getText());
       if (!draft.dirty && canonical(parts.yaml) !== draft.base) {
         draft.base = canonical(parts.yaml); draft.yaml = draft.base;
-        const input = panel.querySelector('textarea'); if (input) input.value = draft.yaml;
+        const input = panel.querySelector('[data-details-yaml]'); if (input) input.value = draft.yaml;
       }
       const count = panel.querySelector('[data-details-count]'); if (count) count.textContent = `${getText().length.toLocaleString()} 字符`;
       if (tab === 'links' && !stale) { stale = true; message('正文已变化，点击刷新更新双链'); }
     },
-    destroy() { disposed = true; request++; rail.onclick = null; panel.onclick = null; panel.onkeydown = null; if (!draft.dirty) drafts.delete(id); },
+    destroy() { disposed = true; request++; assistant.destroy(); rail.onclick = null; panel.onclick = null; panel.onkeydown = null; if (!draft.dirty) drafts.delete(id); },
   };
 }

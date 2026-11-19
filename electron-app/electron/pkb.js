@@ -340,24 +340,6 @@ function getPkbPaths(root) {
   };
 }
 
-function hasLegacyQuickNotes(root) {
-  const dir = path.join(root, LEGACY_QUICK_NOTES);
-  try {
-    if (fs.lstatSync(dir).isSymbolicLink()) return false;
-    if (!fs.statSync(dir).isDirectory()) return false;
-    return fs
-      .readdirSync(dir, { withFileTypes: true })
-      .some((entry) => {
-        if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) return true;
-        if (!entry.isDirectory() || !['随手记', '会议要点', '临时想法'].includes(entry.name)) return false;
-        return fs.readdirSync(path.join(dir, entry.name), { withFileTypes: true })
-          .some(child => child.isFile() && child.name.toLowerCase().endsWith('.md'));
-      });
-  } catch {
-    return false;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Preflight: plan directories/files, detect conflicts, without writing
 // ---------------------------------------------------------------------------
@@ -365,7 +347,11 @@ function hasLegacyQuickNotes(root) {
 function planDirectories(root) {
   const toCreate = [];
   const warnings = [];
+  const manifest = readManifest(root);
   for (const relative of pkbDirectories()) {
+    // Respect an existing explicitly chosen route instead of creating a
+    // second quick-note directory when PKB setup is run again.
+    if (relative === NEW_QUICK_NOTES && manifest && manifest.paths.quickNotes !== NEW_QUICK_NOTES) continue;
     let resolved;
     try {
       resolved = resolveSafe(root, relative);
@@ -508,13 +494,12 @@ function createPkb(root) {
     }
 
     if (existing) return status();
-    const useLegacyQuickNotes = hasLegacyQuickNotes(resolvedRoot);
     const manifest = {
       schemaVersion: SCHEMA_VERSION,
       id: crypto.randomUUID(),
       created: new Date().toISOString(),
       paths: {
-        quickNotes: useLegacyQuickNotes ? LEGACY_QUICK_NOTES : NEW_QUICK_NOTES,
+        quickNotes: NEW_QUICK_NOTES,
         screenshots: "00_Inbox/attachments",
         captures: NEW_CAPTURES,
       },
@@ -600,7 +585,7 @@ function createPkb(root) {
     return content.slice(start, end).replace(/\s+/g, " ").trim();
   }
 
-  function search(query) {
+  function search(query, { allowPath = () => true, excludeSensitive = false } = {}) {
     const q = String(query || "").trim();
     const results = [];
     if (!q) return results;
@@ -648,6 +633,7 @@ function createPkb(root) {
         }
 
         const relative = path.relative(resolvedRoot, absolute).replaceAll("\\", "/");
+        if (!allowPath(relative)) continue;
         const nameMatches = entry.name.toLowerCase().includes(q.toLowerCase());
         let content = "";
         try {
@@ -656,6 +642,8 @@ function createPkb(root) {
           skipped += 1;
           continue;
         }
+        const frontmatter = excludeSensitive && /^\uFEFF?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(content);
+        if (frontmatter && /^\s*sensitivity\s*:\s*['"]?sensitive\b/im.test(frontmatter[1])) continue;
         const contentMatches = content.toLowerCase().includes(q.toLowerCase());
         if (!nameMatches && !contentMatches) continue;
 

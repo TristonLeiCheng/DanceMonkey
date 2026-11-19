@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'">
+<title>小智 · 机器人语音</title>
+<link rel="stylesheet" href="./style.css">
+<script src="./ui.js" defer></script>
+</head>
+<body>
+<main>
+  <header><p class="brand">DANCE MONKEY</p><h1>机器人语音</h1><p>由小智收音和播报，电脑连接你选择的语音服务。</p></header>
+  <section aria-labelledby="gateway-title">
+    <div class="heading"><h2 id="gateway-title">小智连接</h2><span id="status">网关未启动</span></div>
+    <div class="row gateway"><label>电脑内网地址<select id="host"></select></label>
+      <label>端口<input id="port" type="number" min="1024" max="65535" value="8765"></label>
+      <button type="button" id="toggle" class="primary">启动网关</button></div>
+    <div id="ota-row" hidden>
+      <label>小智配网的自定义 OTA 地址<input id="ota" type="text" readonly></label>
+      <button id="copy" type="button">复制地址</button>
+    </div>
+    <p class="help">把小智和电脑连到同一个可信 Wi-Fi，在小智配网页的高级设置里填写 OTA 地址。关闭本窗口后网关继续运行，退出 DM 后停止。</p>
+    <label class="check"><input type="checkbox" id="notes">允许小智查询当前笔记库和新增任务</label>
+    <p class="help">可说「查笔记 报价」或「添加任务 明天发报价单」。匹配片段显示在小智屏幕上，任务需要口头确认。</p>
+  </section>
+  <section aria-labelledby="devices-title">
+    <div class="heading"><h2 id="devices-title">网络设备</h2><span class="help">同时连接一台小智</span></div>
+    <form id="device-search" class="row">
+      <label>设备名或 MAC（可选）<input id="device-query" placeholder="Xiaozhi-xxxx.local 或 aa:bb:cc:dd:ee:ff" maxlength="100"></label>
+      <button id="discover" type="submit">查找设备</button>
+    </form>
+    <p class="help">查找当前网络中的小智名称和已知 MAC。未发现时，可先把上方 OTA 地址填入小智配网页；接入 DM 后自动登记。休眠或连接官方服务器的设备可能无法被找到。</p>
+    <p id="discovery-status" role="status"></p>
+    <div id="candidates"></div>
+    <div id="devices"></div>
+    <p class="help">“未连接”表示当前未连接 DM，不代表设备关机。唤醒小智后可刷新状态、调整音量和亮度。重命名和移除记录只影响 DM。</p>
+  </section>
+  <section aria-labelledby="service-title">
+    <div class="heading"><h2 id="service-title">语音服务</h2><button type="button" id="import">导入 CANON 配置</button></div>
+    <div id="modes" class="modes" aria-label="小智当前使用的语音服务">
+      <button type="button" data-mode="local" aria-pressed="true">内网本地语音</button>
+      <button type="button" data-mode="mga" aria-pressed="false">MGA 语音</button>
+    </div>
+    <p class="help" id="mode-help"></p>
+    <details>
+      <summary>连接与模型设置</summary>
+      <form id="profile">
+        <div class="row"><label>HTTPS 服务根地址<input name="origin" type="url" placeholder="https://…" required></label>
+          <label>鉴权方式<select name="auth"><option value="bearer">Bearer</option><option value="api_token">MGA API Token</option><option value="x_api_key">X-API-Key</option></select></label></div>
+        <div class="row"><label>API Key / Token<input name="token" type="password" autocomplete="off" placeholder="留空保留现有凭据"></label>
+          <label class="check"><input type="checkbox" name="remember">加密保存</label>
+          <button type="button" id="clear-credential">清除凭据</button></div>
+        <p class="help" id="credential"></p>
+        <div class="grid">
+          <label>对话模型<input name="textModel" placeholder="留空使用默认"></label>
+          <label>音色<input name="voice" placeholder="留空使用默认"></label>
+          <label>转写模型<input name="sttModel" placeholder="可选"></label>
+          <label>合成模型<input name="ttsModel" placeholder="可选"></label>
+        </div>
+        <div id="local-only">
+          <div class="grid">
+            <label>转写路径<input name="sttPath"></label>
+            <label>对话路径<input name="chatPath"></label>
+            <label>合成路径<input name="ttsPath"></label>
+            <label>内网 CA 文件<input name="caFile" readonly></label>
+          </div>
+          <div class="row"><button id="choose-ca" type="button">选择 CA</button><button id="clear-ca" type="button">移除 CA</button>
+            <label class="check"><input type="checkbox" name="verifyTls">验证证书</label></div>
+          <p class="help">建议安装或选择内网 CA；关闭验证后无法确认服务器身份。</p>
+        </div>
+        <button class="primary" type="submit">保存当前配置</button>
+      </form>
+    </details>
+    <div class="row test"><button type="button" id="test">测试当前语音服务</button><button type="button" id="cancel-test" hidden>取消测试</button></div>
+    <p class="help">测试只发送固定测试文本和合成音频。</p>
+  </section>
+  <p id="notice" role="status"></p>
+</main>
+</body>
+</html>

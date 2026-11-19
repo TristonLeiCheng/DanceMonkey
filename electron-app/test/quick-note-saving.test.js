@@ -209,20 +209,20 @@ test('three quick-note types persist in separate folders and keep their type thr
   assert.equal(reloaded.find(note => note.id === 'meeting').body, '新的会议内容');
 });
 
-test('classified notes follow a custom PKB route, and initializing a legacy categorized vault retains its route', t => {
+test('classified notes follow a custom PKB route, and initialization keeps legacy notes accessible', t => {
   const { root, workspace } = fixture(t);
   const { createPkb } = require('../electron/pkb');
   workspace.syncQuickNotes([{ id: 'meeting', noteType: 'meeting', title: '会后安排', body: '要点' }]);
   const pkb = createPkb(root);
-  assert.equal(pkb.initialize().paths.quickNotes, 'Journal/Stickies');
+  assert.equal(pkb.initialize().paths.quickNotes, '00_Inbox/quick-notes');
   assert.equal(workspace.listQuickNotes()[0].noteType, 'meeting');
   const manifestPath = path.join(root, '_System/pkb.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   manifest.paths.quickNotes = '工作/快捷记录';
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
   const [note] = workspace.syncQuickNotes([{ id: 'idea', noteType: 'idea', title: '新点子', body: '灵感' }]);
-  assert.equal(note.filePath, '工作/快捷记录/临时想法/新点子.md');
-  assert.equal(createWorkspace(root).listQuickNotes()[0].noteType, 'idea');
+  assert.equal(note.filePath, '工作/快捷记录/新点子.md');
+  assert.equal(createWorkspace(root).listQuickNotes().find(item => item.id === 'idea').noteType, 'idea');
 });
 
 test('untouched legacy notes are not moved by editing another category', t => {
@@ -247,4 +247,77 @@ test('legacy category-label files retain their intended type, while folder membe
   const reloaded = createWorkspace(root).listQuickNotes()[0];
   assert.equal(reloaded.noteType, 'meeting');
   assert.equal(reloaded.id, legacy.id);
+});
+
+test('PKB lists legacy locations and saves all note types directly in its one quick-notes folder', t => {
+  const { root, workspace } = fixture(t);
+  fs.writeFileSync(path.join(root, 'Journal/Stickies/旧便签.md'), '旧正文');
+  fs.mkdirSync(path.join(root, 'Stickies'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'Stickies/旧桌面便签.md'), '桌面正文');
+  require('../electron/pkb').createPkb(root).initialize();
+  const legacy = workspace.listQuickNotes().find(note => note.title === '旧便签');
+  assert.equal(workspace.listQuickNotes().length, 2);
+  const saved = workspace.syncQuickNotes([{ ...legacy, body: '新正文' },
+    { id: 'meeting-id', noteType: 'meeting', title: '会议', body: '会议正文' },
+    { id: 'idea-id', noteType: 'idea', title: '想法', body: '想法正文' }]);
+  assert.equal(saved.find(note => note.id === legacy.id).filePath, 'Journal/Stickies/旧便签.md');
+  assert.equal(saved.find(note => note.id === 'meeting-id').filePath, '00_Inbox/quick-notes/会议.md');
+  assert.equal(saved.find(note => note.id === 'idea-id').filePath, '00_Inbox/quick-notes/想法.md');
+  assert.equal(fs.existsSync(path.join(root, '00_Inbox/quick-notes/随手记')), false);
+  const restarted = createWorkspace(root);
+  assert.equal(restarted.listQuickNotes().find(note => note.id === 'meeting-id').noteType, 'meeting');
+  restarted.write('00_Inbox/quick-notes/会议.md', '编辑器正文');
+  const meeting = restarted.listQuickNotes().find(note => note.id === 'meeting-id');
+  assert.equal(meeting.noteType, 'meeting');
+  assert.equal(meeting.body, '编辑器正文');
+  assert.equal(restarted.read(meeting.filePath), '编辑器正文');
+  assert.equal(fs.readFileSync(path.join(root, 'Stickies/旧桌面便签.md'), 'utf8'), '桌面正文');
+});
+
+test('duplicate quick-note IDs are rejected instead of overwriting either note', t => {
+  const { root, workspace } = fixture(t);
+  require('../electron/pkb').createPkb(root).initialize();
+  const first = path.join(root, '00_Inbox/quick-notes/a.md');
+  const second = path.join(root, 'Journal/Stickies/b.md');
+  fs.writeFileSync(first, '<!-- lumen-quick-note:same -->\n一');
+  fs.writeFileSync(second, '<!-- lumen-quick-note:same -->\n二');
+  assert.throws(() => workspace.syncQuickNotes(workspace.listQuickNotes()), /重复 ID/);
+  assert.match(fs.readFileSync(first, 'utf8'), /一/);
+  assert.match(fs.readFileSync(second, 'utf8'), /二/);
+});
+
+test('an existing legacy PKB route can also read notes in the standard folder', t => {
+  const { root, workspace } = fixture(t);
+  const pkb = require('../electron/pkb').createPkb(root);
+  pkb.initialize();
+  const manifestPath = path.join(root, '_System/pkb.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.paths.quickNotes = 'Journal/Stickies';
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  fs.writeFileSync(path.join(root, 'Journal/Stickies/旧.md'), '旧');
+  fs.writeFileSync(path.join(root, '00_Inbox/quick-notes/新.md'), '新');
+  assert.deepEqual(new Set(workspace.listQuickNotes().map(note => note.title)), new Set(['旧', '新']));
+  const [saved] = workspace.syncQuickNotes([{ id: 'new-id', noteType: 'idea', title: '新增', body: '内容' }]);
+  assert.equal(saved.filePath, 'Journal/Stickies/新增.md');
+});
+
+test('legacy task and project references survive a quick-note rename in a PKB', t => {
+  const { root, workspace } = fixture(t);
+  const legacy = path.join(root, 'Journal/Stickies/来源.md');
+  fs.writeFileSync(legacy, '原笔记');
+  fs.writeFileSync(path.join(root, 'Journal/task-module.json'), JSON.stringify({ SchemaVersion: 2, Items: [
+    { Id: 'task', Title: '任务', SourceNotePath: 'Journal/Stickies/来源.md' }
+  ] }));
+  fs.writeFileSync(path.join(root, 'Journal/zentask-projects.json'), JSON.stringify({ SchemaVersion: 2, Items: [
+    { Id: 'project', Name: '项目', LinkedNotes: ['Journal/Stickies/来源.md'] }
+  ] }));
+  require('../electron/pkb').createPkb(root).initialize();
+  const original = workspace.listQuickNotes().find(note => note.title === '来源');
+  const [renamed] = workspace.syncQuickNotes([{ ...original, title: '新标题' }]);
+  require('../electron/zentask').createZenTaskStore(root).relocateNotes(original.filePath, renamed.filePath);
+  const tasks = JSON.parse(fs.readFileSync(path.join(root, 'Journal/task-module.json'), 'utf8'));
+  const projects = JSON.parse(fs.readFileSync(path.join(root, 'Journal/zentask-projects.json'), 'utf8'));
+  assert.equal(tasks.Items[0].SourceNotePath, renamed.filePath);
+  assert.deepEqual(projects.Items[0].LinkedNotes, [renamed.filePath]);
+  assert.equal(workspace.read(renamed.filePath), '原笔记');
 });

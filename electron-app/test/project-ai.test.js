@@ -105,10 +105,10 @@ test("project chats are stored per vault and project, sanitised, and cleared whe
 
 function ui({ withAi = true, chatResult, draftResult } = {}) {
   let data = state();
-  const calls = { chat: [], saved: [], drafts: [], cancelled: [] };
+  const calls = { chat: [], saved: [], drafts: [], cancelled: [], opened: [] };
   const listeners = new Set();
   const context = vm.createContext({
-    window: { DMZenModel: model }, navigator: { clipboard: { writeText: async () => {} } },
+    window: { DMZenModel: model, DMNoteReferences: require("../src/note-references") }, navigator: { clipboard: { writeText: async () => {} } },
     document: { querySelector: () => null }, requestAnimationFrame: (callback) => callback(), console, setTimeout,
   });
   for (const file of ["project-ai-panel.js", "project-plan.js", "project-manager.js"]) vm.runInContext(fs.readFileSync(path.join(__dirname, "../src", file), "utf8"), context);
@@ -132,7 +132,7 @@ function ui({ withAi = true, chatResult, draftResult } = {}) {
   }
   const esc = (value) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
   const manager = context.window.DMProjectManager.create({ api, esc, attr: esc, rerender() {}, getState: () => data, onResult: async (next) => { data = next; },
-    editTask() {}, editProject() {}, openNote: async () => {} });
+    editTask() {}, editProject() {}, openNote: async (path) => { calls.opened.push(path); } });
   const settle = () => new Promise((resolve) => setImmediate(resolve));
   return { manager, calls, histories, api, getState: () => data, settle };
 }
@@ -145,7 +145,7 @@ test("AI tab sends only the project id and selected sources, then keeps the conv
   assert.match(html, /项目 AI 助手/);
   assert.match(html, /任务 · 3/);
   assert.match(html, /笔记标题 · 2/);
-  assert.match(html, /不读取笔记正文/);
+  assert.match(html, /只有用 @ 选中的笔记才发送正文/);
   await manager.handleAction("pm-ai-toggle", "notes");
   await manager.handleAction("pm-ai-prompt", "1");
   await settle();
@@ -286,7 +286,8 @@ test("applying actions writes through the task store and each one can be undone"
     assert.equal(task.ProjectId, "p1");
     assert.equal(task.MilestoneId, "m1");
     assert.equal(task.Tags, "AI 建议");
-    assert.deepEqual(created.undo, { type: "delete_task", taskId: task.Id });
+    assert.equal(created.undo.type, "delete_task");
+    assert.equal(created.undo.taskId, task.Id);
     assert.throws(() => projectAi.applyAction(store, "p1", actions[0]), /已有同名任务/, "re-applying is rejected as a duplicate");
 
     const updated = projectAi.applyAction(store, "p1", actions[1]);
@@ -754,4 +755,274 @@ test("a turn never starts before the stored conversation has loaded, so history 
   await clicked;
   await settle();
   assert.equal(histories.get("p1").map((message) => message.content.slice(0, 3)).join("|"), "旧问题|旧回答|请用 |建议先");
+});
+
+test("damaged project history blocks reads, sends, clears and brief writes without changing the original file", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dm-project-history-damage-"));
+  try {
+    const store = projectAi.createProjectChatStore(dir);
+    assert.deepEqual(store.get("/a", "p1"), [], "only a missing file starts empty");
+    assert.equal(store.getBrief("/a", "2026-11-19"), null);
+    const messages = [{ role: "user", content: "原来的问题" }, { role: "assistant", content: "原来的回答" }];
+    const brief = { date: "2026-11-19", text: "今天的重点", generatedAt: NOW.toISOString() };
+    store.set("/a", "p1", messages);
+    store.set("/b", "p2", messages);
+    store.setBrief("/a", brief);
+    const original = fs.readFileSync(store.file, "utf8");
+    const valid = JSON.parse(original);
+    const cases = {
+      truncated: original.slice(0, -8), empty: "", null: "null", array: "[]",
+      missingChats: JSON.stringify({ version: 1 }),
+      arrayChats: JSON.stringify({ ...valid, chats: [] }),
+      invalidConversation: JSON.stringify({ ...valid, chats: { ...valid.chats, bad: { messages: {} } } }),
+      invalidMessage: JSON.stringify({ ...valid, chats: { ...valid.chats, bad: { messages: [{ role: "assistant", content: null }] } } }),
+      invalidBriefs: JSON.stringify({ ...valid, briefs: [] }),
+      invalidBrief: JSON.stringify({ ...valid, briefs: { "/a": { text: "残缺简报" } } }),
+      futureVersion: JSON.stringify({ ...valid, version: 2 }),
+    };
+    for (const [name, damaged] of Object.entries(cases)) await t.test(name, () => {
+      fs.writeFileSync(store.file, damaged);
+      const reopened = projectAi.createProjectChatStore(dir);
+      for (const operation of [
+        () => reopened.get("/a", "p1"), () => reopened.get("/b", "p2"),
+        () => reopened.getBrief("/a", brief.date),
+        () => reopened.set("/a", "p1", [{ role: "user", content: "新问题" }]),
+        () => reopened.set("/b", "p3", messages), () => reopened.set("/a", "p1", []),
+        () => reopened.setBrief("/a", brief),
+      ]) {
+        assert.throws(operation, /损坏或格式不兼容.*原文件已保留/);
+        assert.equal(fs.readFileSync(store.file, "utf8"), damaged);
+      }
+      assert.deepEqual(fs.readdirSync(dir), ["project-ai-chats.json"], "no replacement or temporary file is left behind");
+    });
+    fs.writeFileSync(store.file, original);
+    store.set("/a", "p1", [...messages, { role: "user", content: "恢复后续聊" }]);
+    assert.deepEqual(store.get("/b", "p2"), messages);
+    assert.deepEqual(store.getBrief("/a", brief.date), brief);
+    assert.equal(store.get("/a", "p1").length, 3);
+    // Earlier v1 files predate daily briefs and remain readable.
+    delete valid.briefs;
+    fs.writeFileSync(store.file, JSON.stringify(valid));
+    assert.deepEqual(store.get("/a", "p1"), messages);
+    store.setBrief("/a", brief);
+    assert.deepEqual(store.get("/b", "p2"), messages);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("history access errors and failed atomic saves preserve every existing conversation", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dm-project-history-io-"));
+  try {
+    const store = projectAi.createProjectChatStore(dir);
+    const messages = [{ role: "user", content: "保留这条记录" }];
+    store.set("/a", "p1", messages);
+    store.set("/b", "p2", messages);
+    const original = fs.readFileSync(store.file, "utf8");
+    const read = fs.readFileSync;
+    const blocked = t.mock.method(fs, "readFileSync", (file, ...args) => {
+      if (file === store.file) throw Object.assign(new Error("denied"), { code: "EACCES" });
+      return read(file, ...args);
+    });
+    assert.throws(() => store.get("/a", "p1"), /无法读取.*已停止保存/);
+    assert.throws(() => store.set("/a", "p1", []), /无法读取.*已停止保存/);
+    assert.equal(read(store.file, "utf8"), original);
+    blocked.mock.restore();
+    const rename = fs.renameSync;
+    t.mock.method(fs, "renameSync", (from, to) => {
+      if (to === store.file) throw Object.assign(new Error("disk error"), { code: "EIO" });
+      return rename(from, to);
+    });
+    for (const operation of [
+      () => store.set("/a", "p1", []),
+      () => store.set("/a", "p1", [{ role: "user", content: "追加内容" }]),
+      () => store.setBrief("/a", { date: "2026-11-19", text: "简报", generatedAt: NOW.toISOString() }),
+    ]) {
+      assert.throws(operation, /disk error/);
+      assert.equal(read(store.file, "utf8"), original);
+      assert.deepEqual(fs.readdirSync(dir), ["project-ai-chats.json"]);
+    }
+  } finally { t.mock.restoreAll(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("undo refuses later manual task and project edits, including edits to newly created tasks", async (t) => {
+  const cases = [
+    ["deadline", { type: "update_task", taskId: "t1", dueDate: "2026-12-20" }, (store) => store.updateTask("t1", { dueDate: "2026-12-21" })],
+    ["status and completion", { type: "update_task", taskId: "t2", status: "In Progress", dueDate: "2026-12-20" }, (store) => store.updateTask("t2", { workflowStatus: "Completed" })],
+    ["task notes", { type: "update_task", taskId: "t1", dueDate: "2026-12-20" }, (store) => store.updateTask("t1", { notes: "人工补充的说明" })],
+    ["project next step", { type: "update_project", nextAction: "AI 下一步", health: "At Risk" }, (store) => store.updateProject("p1", { nextAction: "人工安排的下一步" })],
+    ["project health", { type: "update_project", health: "At Risk" }, (store) => store.updateProject("p1", { status: "Blocked" })],
+    ["project risks", { type: "update_project", blockers: "AI 风险" }, (store) => store.updateProject("p1", { blockers: "人工更新的风险" })],
+    ["new task title", { type: "create_task", title: "AI 新建任务" }, (store, undo) => store.updateTask(undo.taskId, { title: "人工改名后的任务" })],
+    ["new task completion", { type: "create_task", title: "AI 新建任务" }, (store, undo) => store.updateTask(undo.taskId, { workflowStatus: "Completed" })],
+  ];
+  for (const [name, action, edit] of cases) await t.test(name, () => {
+    const { store, cleanup } = seededStore();
+    try {
+      const { undo } = projectAi.applyAction(store, "p1", action);
+      edit(store, undo);
+      const current = store.load();
+      const originals = [current.taskFile, current.projectFile].map((file) => fs.readFileSync(file, "utf8"));
+      assert.throws(() => projectAi.undoAction(store, "p1", JSON.parse(JSON.stringify(undo))), /AI 操作后已被修改.*已保留当前数据/);
+      assert.deepEqual(store.load(), current, "the whole operation is refused, including otherwise unchanged fields");
+      assert.deepEqual([current.taskFile, current.projectFile].map((file) => fs.readFileSync(file, "utf8")), originals);
+    } finally { cleanup(); }
+  });
+});
+
+test("saved undo guards survive reopening, permit unchanged records, and reject legacy or wrong-project undo", () => {
+  const { store, cleanup } = seededStore();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dm-project-undo-history-"));
+  try {
+    const action = { type: "update_task", taskId: "t1", dueDate: "2026-12-20" };
+    const { undo } = projectAi.applyAction(store, "p1", action);
+    const chats = projectAi.createProjectChatStore(dir);
+    chats.set("/a", "p1", [{ role: "assistant", content: "已调整日期", actions: [{ ...action, state: "applied", undo }] }]);
+    const restored = projectAi.createProjectChatStore(dir).get("/a", "p1")[0].actions[0].undo;
+    assert.deepEqual(restored, undo);
+    store.updateTask("t2", { notes: "另一项任务的人工修改" });
+    const { createZenTaskStore } = require("../electron/zentask");
+    const reopened = createZenTaskStore(path.dirname(path.dirname(store.load().taskFile)));
+    const undone = projectAi.undoAction(reopened, "p1", restored);
+    assert.equal(undone.tasks.find((task) => task.Id === "t1").DueDate, "2026-12-10");
+    assert.equal(undone.tasks.find((task) => task.Id === "t2").Notes, "另一项任务的人工修改");
+    const projectUndo = projectAi.applyAction(store, "p1", { type: "update_project", nextAction: "新的下一步" }).undo;
+    const before = store.load();
+    for (const legacy of [
+      { type: "delete_task", taskId: "t1" },
+      { type: "update_task", taskId: "t1", changes: { dueDate: "2026-12-01" } },
+      { type: "update_project", changes: { nextAction: "旧值" } },
+    ]) assert.throws(() => projectAi.undoAction(store, "p1", legacy), /缺少有效的撤销校验记录/);
+    assert.throws(() => projectAi.undoAction(store, "p2", projectUndo), /缺少有效的撤销校验记录/);
+    assert.deepEqual(store.load(), before);
+    store.updateProject("p1", { archived: true });
+    assert.throws(() => projectAi.undoAction(store, "p1", projectUndo), /已归档/);
+  } finally { cleanup(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("failed history reads block sending and clearing until retry restores the original conversation", async (t) => {
+  for (const scope of ["project", "portfolio"]) await t.test(scope, async () => {
+    const { manager, calls, api, settle } = ui();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dm-project-history-ui-"));
+    try {
+      const store = projectAi.createProjectChatStore(dir);
+      const id = scope === "project" ? "p1" : "__portfolio__";
+      const messages = [{ role: "user", content: "重启前的问题" }, { role: "assistant", content: "重启前的回答" }];
+      store.set("/a", id, messages);
+      const original = fs.readFileSync(store.file, "utf8");
+      fs.writeFileSync(store.file, "broken history");
+      let reads = 0, writes = 0;
+      api.projectAi.history = async (key) => { reads += 1; return store.get("/a", key); };
+      api.projectAi.saveHistory = async (key, next) => { writes += 1; return store.set("/a", key, next); };
+      if (scope === "project") await manager.open("p1", "ai");
+      manager.render();
+      await settle();
+      const html = manager.render();
+      assert.match(html, /原文件已保留/);
+      assert.match(html, /data-module-action="pm-ai-reload"/);
+      assert.match(html, /data-module-action="pm-ai-prompt" data-id="0" disabled/);
+      await manager.handleAction("pm-ai-prompt", "0");
+      await manager.handleAction("pm-ai-clear", "");
+      await settle();
+      assert.equal(calls.chat.length, 0);
+      assert.equal(writes, 0);
+      assert.equal(reads, 1, "rendering does not repeatedly retry the damaged file");
+      assert.equal(fs.readFileSync(store.file, "utf8"), "broken history");
+      fs.writeFileSync(store.file, original);
+      await manager.handleAction("pm-ai-reload", "");
+      assert.match(manager.render(), /重启前的回答/);
+      assert.doesNotMatch(manager.render(), /原文件已保留/);
+      await manager.handleAction("pm-ai-prompt", "0");
+      await settle();
+      assert.equal(calls.chat.length, 1);
+      assert.deepEqual(JSON.parse(JSON.stringify(calls.chat[0].messages.slice(0, 2))), messages);
+      assert.equal(store.get("/a", id).length, 4);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+test("a failed clear or send keeps the visible conversation when the file becomes damaged", async () => {
+  const { manager, calls, api, histories, settle } = ui();
+  const messages = [{ role: "user", content: "保留问题" }, { role: "assistant", content: "保留回答" }];
+  histories.set("p1", messages);
+  await manager.open("p1", "ai");
+  manager.render();
+  await settle();
+  api.projectAi.saveHistory = async () => { throw new Error("项目 AI 对话记录损坏，原文件已保留"); };
+  await manager.handleAction("pm-ai-clear", "");
+  assert.match(manager.render(), /保留回答/);
+  assert.match(manager.render(), /原文件已保留/);
+  await manager.handleAction("pm-ai-prompt", "0");
+  await settle();
+  assert.equal(calls.chat.length, 0);
+  assert.match(manager.render(), /保留回答/);
+  assert.deepEqual(histories.get("p1"), messages);
+});
+
+test('project references restore per conversation, show full paths and sources, and are removed from later requests', async () => {
+  const sources = [{ id: 'N1', title: '方案', path: '资料/方案.md' }];
+  const { manager, api, histories, calls, settle } = ui({ chatResult: () => ({ success: true, text: '周五交付 [N1]', sources }) });
+  api.projectAi.listNotes = async () => sources;
+  histories.set('p1', [{ role: 'user', content: '之前的问题', references: sources }]);
+  await manager.open('p1', 'ai'); manager.render(); await settle();
+  assert.match(manager.render(), /已选 1\/8 篇/);
+  assert.match(manager.render(), /<small>资料\/方案.md<\/small>/);
+  await manager.handleAction('pm-ai-prompt', '0'); await settle();
+  assert.deepEqual(Array.from(calls.chat[0].references), ['资料/方案.md']);
+  assert.match(manager.render(), /aria-label="回答来源"/);
+  assert.match(manager.render(), /\[N1\] 方案/);
+  await manager.handleAction('pm-ai-source', '2:N1');
+  assert.deepEqual(calls.opened, ['资料/方案.md']);
+  await manager.handleAction('pm-ai-remove-reference', '0');
+  await manager.handleAction('pm-ai-prompt', '0'); await settle();
+  assert.equal(calls.chat[1].references.length, 0);
+  assert.equal(histories.get('p1')[2].sources[0].path, '资料/方案.md');
+  await manager.open('p2', 'ai'); manager.render(); await settle();
+  assert.match(manager.render(), /已选 0\/8 篇/);
+  await manager.handleAction('pm-ai-prompt', '0'); await settle();
+  assert.equal(calls.chat[2].references.length, 0);
+});
+
+test('reopening a project refreshes cached paths and source clicks resolve later moves without changing citation ids', async () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dm-project-cached-source-')));
+  try {
+    const { createWorkspace } = require('../electron/workspace');
+    const { createNoteChatStore } = require('../electron/note-ai-history');
+    const notes = createNoteChatStore(path.join(dir, 'data'));
+    const ws = createWorkspace(path.join(dir, 'vault'), { noteHistory: notes });
+    ws.createFolder('', '资料'); ws.write('资料/方案.md', '原资料');
+    const store = projectAi.createProjectChatStore(path.join(dir, 'data'), { noteHistory: notes });
+    store.set(ws.root, 'p1', [
+      { role: 'user', content: '原问题', references: [{ path: '资料/方案.md', title: '方案' }] },
+      { role: 'assistant', content: '第一轮 [N2]', sources: [{ id: 'N2', path: '资料/方案.md', title: '方案' }] },
+      { role: 'assistant', content: '第二轮 [N1]', sources: [{ id: 'N1', path: '资料/方案.md', title: '方案' }] },
+    ]);
+    const { manager, api, calls, settle } = ui();
+    api.projectAi.listNotes = async () => [];
+    api.projectAi.history = async id => { notes.reconcile(ws); return store.get(ws.root, id); };
+    api.projectAi.saveHistory = async (id, messages) => store.set(ws.root, id, messages);
+    api.projectAi.resolveReferences = async (items, id) => { notes.reconcile(ws); store.get(ws.root, id); return store.resolveReferences(ws.root, items); };
+    await manager.open('p1', 'ai'); await settle();
+    ws.rename('资料/方案.md', '新方案'); ws.write('资料/方案.md', '新建的另一篇笔记');
+    await manager.open('p1', 'ai'); await settle();
+    const html = manager.render();
+    assert.match(html, /已选 1\/8/);
+    assert.match(html, /<small>资料\/新方案.md<\/small>/);
+    assert.match(html, /data-id="1:N2"/); assert.match(html, /data-id="2:N1"/);
+    await manager.handleAction('pm-ai-source', '1:N2');
+    assert.equal(calls.opened.at(-1), '资料/新方案.md');
+    await manager.handleAction('pm-ai-remove-reference', '0');
+    ws.rename('资料', '移动后');
+    // Even a source button in an already-open view must re-resolve before opening.
+    await manager.handleAction('pm-ai-source', '2:N1');
+    assert.equal(calls.opened.at(-1), '移动后/新方案.md');
+    assert.equal(ws.read(calls.opened.at(-1)), '原资料');
+    await manager.open('p1', 'ai'); await settle();
+    assert.match(manager.render(), /已选 0\/8/, 'refresh does not restore a reference the user removed');
+    assert.equal(store.get(ws.root, 'p1')[1].sources[0].path, '移动后/新方案.md');
+    let release;
+    api.projectAi.resolveReferences = items => new Promise(resolve => { release = () => resolve(items); });
+    const opened = calls.opened.length;
+    const pending = manager.handleAction('pm-ai-source', '1:N2');
+    manager.resetVault(); release(); await pending;
+    assert.equal(calls.opened.length, opened, 'a delayed source click cannot open the same path in a different vault');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

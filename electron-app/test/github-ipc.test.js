@@ -135,6 +135,7 @@ test("vault switching waits for editor saves, keeps generation monotonic and cle
   await call("bind", { owner: "test", repo: "notes" });
   await call("preview");
   const oldGeneration = handlers.get("githubSync:generation")();
+  assert.equal(service.generation, oldGeneration, 'main-process note readers share the renderer vault generation');
   current.failPrepare = true;
   let commits = 0;
   await assert.rejects(service.switchRoot(canonical, () => { commits += 1; }), /保存或刷新/);
@@ -145,6 +146,7 @@ test("vault switching waits for editor saves, keeps generation monotonic and cle
   assert.equal(commits, 1);
   assert.equal((await call("status")).root, canonical);
   assert.ok(handlers.get("githubSync:generation")() > oldGeneration);
+  assert.equal(service.generation, handlers.get("githubSync:generation")());
   assert.throws(() => service.assertWritable(oldGeneration), /版本已更新/);
   assert.equal((await call("sync", { previewId: "preview-id" })).success, false);
 });

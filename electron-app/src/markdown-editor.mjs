@@ -242,6 +242,18 @@ export function createMarkdownEditor(parent, { content, mode = 'live', onChange,
   if (mode === 'live') foldMetadata();
   return {
     view, text: () => { const active = document.activeElement; if (active?.tagName === 'INPUT' && active.closest('.md-media') && view.dom.contains(active)) active.blur(); return serialize(view.state); },
+    selection() {
+      const { from, to } = view.state.selection.main;
+      return { from: view.state.sliceDoc(0, from).replace(/\n/g, lineBreak).length, to: view.state.sliceDoc(0, to).replace(/\n/g, lineBreak).length };
+    },
+    applyEdit(edit) {
+      if (serialize(view.state) !== edit.base) throw new Error('笔记已变化，请重新预览。');
+      const from = edit.base.slice(0, edit.from).replace(/\r\n/g, '\n').length;
+      const to = edit.base.slice(0, edit.to).replace(/\r\n/g, '\n').length;
+      const insert = edit.insert.replace(/\r\n/g, '\n');
+      view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length }, userEvent: 'input', annotations: isolateHistory.of('full'), scrollIntoView: true });
+      view.focus();
+    },
     insertImageMarkdown(markdown, selection) {
       const changes = imageInsertion(view.state.doc.toString(), markdown, selection);
       view.dispatch({ changes, selection: { anchor: changes.from + changes.insert.length }, userEvent: 'input', annotations: isolateHistory.of('full'), scrollIntoView: true });

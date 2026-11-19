@@ -126,8 +126,8 @@
       "darwin"
     ],
     "files": {
-      "electron/main.js": "4fe2fc04200564d26698c7170f844faa99e617a6c52bf9c4b531d9447ce93488",
-      "electron/desktop-pet.js": "1c386c303016b97fd80981ea74eecb81c6dc8a2ff4d9ca2f8442f908031e2817",
+      "electron/main.js": "65c879a9042697213bf8035fb6e9a306237512511b4eda7f89c7cc0fb7f4c352",
+      "electron/desktop-pet.js": "d5b46a16d7594603fd0167e5f05332edd1ad6026da08f0c733e92df8ab6780da",
       "electron/pet-motion.js": "4d1c715cceb95459198c0326ac9f776a665582584a3522217407f5807151103f",
       "electron/pet-carry.js": "7a0e1d0a9bdd4b8dba8a220bcaf4f082b42dd847a4bd23d5742b309730b6d758",
       "electron/desktop-icons.js": "d2766ac3c36ab805513ad9173114d913376254983aff66829538867b8d91c0ed",

@@ -9,6 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createAiService } = require("./ai");
 const projectAi = require("./project-ai");
+const { registerProjectAiIpc } = require("./project-ai-ipc");
 const { createAppQuitController } = require("./app-quit");
 const { installDesktopIntegration } = require("./desktop-integration");
 const { createAppUpdateController } = require("./app-update-controller");
@@ -23,9 +24,13 @@ const { createScreenshotController } = require("./screenshot-controller");
 const { createStore } = require("./store");
 const { createWorkspace } = require("./workspace");
 const { createNoteWindows } = require("./note-windows");
+const { registerNoteAi, listNotes } = require('./note-ai');
+const { createNoteChatStore } = require('./note-ai-history');
 const { createZenTaskStore } = require("./zentask");
 const { createVaultRegistry, registerVaultIpc } = require("./vaults");
 const { registerPkbIpc } = require("./pkb-ipc");
+const { registerRobotVoice } = require("./robot-voice-window");
+const { createRobotActions } = require("./robot-voice-actions");
 const { createPersonaService } = require("./personas");
 const { registerPersonaIpc } = require("./persona-ipc");
 const { createOutlookAuth } = require("./outlook-auth");
@@ -99,7 +104,6 @@ let workspaceStore;
 let aiService;
 let zenTaskStore;
 let projectChatStore;
-const localDayKey = () => require("../src/zen-model").localDate(new Date());
 let quickAccessService;
 let folderSyncService;
 let folderSyncScheduler;
@@ -115,9 +119,11 @@ let appSettings;
 let proxyEnforcement;
 let legacyConfig;
 let githubNotes;
+let robotVoice;
 let overlay = null;
 let workspaceWindow = null;
 let noteWindows;
+let noteChatStore;
 const pendingMarkdownFiles = [];
 function openMarkdownFile(file) {
   if (!/\.md$/i.test(file)) return;
@@ -295,11 +301,13 @@ app.whenReady().then(() => {
     app.quit();
     return;
   }
-  workspaceStore = createWorkspace(initialRoot);
+  noteChatStore = createNoteChatStore(app.getPath('userData'));
+  workspaceStore = createWorkspace(initialRoot, { noteHistory: noteChatStore });
+  try { noteChatStore.reconcile(workspaceStore); } catch (error) { console.warn(error.message); }
   const vaultRegistry = createVaultRegistry({ config: legacyConfig, root: workspaceStore.root,
     protectedRoots: [app.getPath("userData"), path.dirname(legacyConfig.file)] });
   aiService = createAiService(legacyConfig);
-  projectChatStore = projectAi.createProjectChatStore(app.getPath("userData"));
+  projectChatStore = projectAi.createProjectChatStore(app.getPath("userData"), { noteHistory: noteChatStore });
   zenTaskStore = createZenTaskStore(workspaceStore.root);
   githubNotes = registerGitHubSync({
     app, ipcMain, safeStorage, shell, clipboard, dialog, BrowserWindow, fetch: fetchWithSystemProxy,
@@ -309,6 +317,7 @@ app.whenReady().then(() => {
     refreshNotes: () => refreshQuickNotes(),
   });
   noteWindows = createNoteWindows({
+    noteHistory: noteChatStore,
     BrowserWindow, ipcMain, dialog, getWorkspace: () => workspaceStore, rendererUrl, icon: appWindowIcon,
     assertWritable: generation => githubNotes.assertWritable(generation),
     extractTasks: (state, input) => projectAi.extractNoteTasks(aiService, state, input),
@@ -318,9 +327,25 @@ app.whenReady().then(() => {
     trusted: githubNotes.trusted,
     changed: root => { if (root === workspaceStore.root) { refreshQuickNotes(); notifyWorkspaceChanged(); } },
   });
+  registerNoteAi({ ipcMain, aiService, getContext: event => noteWindows.contextFor(event), trusted: githubNotes.trusted,
+    chatStore: noteChatStore });
   registerPkbIpc({
     ipcMain, dialog, BrowserWindow, getRoot: () => workspaceStore.root, githubNotes,
     refreshNotes: () => refreshQuickNotes(),
+  });
+  robotVoice = registerRobotVoice({
+    app, BrowserWindow, ipcMain, dialog, clipboard, config: legacyConfig, safeStorage,
+    fetchMGA: fetchWithSystemProxy, trusted: githubNotes.trusted,
+    runCommand: createRobotActions({
+      enabled: () => legacyConfig.read().robotNotesEnabled === true,
+      getRoot: () => workspaceStore.root,
+      getGeneration: () => githubNotes.generation,
+      addTask: (input, generation) => {
+        githubNotes.assertWritable(generation);
+        zenTaskStore.addTask(input);
+      },
+      onTaskAdded: () => notifyWorkspaceChanged({ tasks: true }),
+    }),
   });
   const personaService = createPersonaService({ userDataPath: app.getPath("userData"), aiService });
   registerPersonaIpc({
@@ -340,7 +365,8 @@ app.whenReady().then(() => {
     busy: () => githubNotes.busy,
     switchVault: async (nextRoot) => githubNotes.switchRoot(nextRoot, () => {
       vaultRegistry.prepare(nextRoot);
-      const nextWorkspace = createWorkspace(nextRoot);
+      const nextWorkspace = createWorkspace(nextRoot, { noteHistory: noteChatStore });
+      try { noteChatStore.reconcile(nextWorkspace); } catch (error) { console.warn(error.message); }
       const nextZen = createZenTaskStore(nextRoot);
       const notes = nextWorkspace.listQuickNotes();
       nextWorkspace.list();
@@ -673,6 +699,10 @@ app.whenReady().then(() => {
   ipcMain.handle("workspace:write", (_e, relativePath, content, generation) => {
     githubNotes.assertWritable(generation);
     noteWindows.assertAvailable(workspaceStore.root, relativePath);
+    const expected = typeof content === 'object' && content !== null ? content.expected : undefined;
+    if (typeof content === 'object' && content !== null) content = content.text;
+    if (typeof content !== 'string') throw new Error('无效的文档内容');
+    if (expected !== undefined && workspaceStore.read(relativePath) !== expected) throw new Error('笔记已被其他程序修改，请先备份当前草稿并重新打开笔记。');
     const result = workspaceStore.write(relativePath, content);
     refreshQuickNotes();
     return result;
@@ -734,122 +764,11 @@ app.whenReady().then(() => {
     }
   });
   ipcMain.handle("ai:cancel", (_event, requestId) => aiService.cancel(requestId));
-  ipcMain.handle("projectAi:history:get", (_event, projectId) => projectChatStore.get(workspaceStore.root, projectId));
-  ipcMain.handle("projectAi:history:set", (_event, projectId, messages) => projectChatStore.set(workspaceStore.root, projectId, messages));
-  // Project data is read here from the active vault; the renderer only names the project.
-  ipcMain.handle("projectAi:chat", async (event, payload = {}) => {
-    const requestId = payload.requestId;
-    try {
-      if (payload.scope === "portfolio") {
-        const portfolio = projectAi.buildPortfolioContext(zenTaskStore.load());
-        const text = await aiService.chat({
-          requestId, model: payload.model, systemPrompt: projectAi.portfolioSystemPrompt(portfolio.text),
-          messages: projectAi.modelMessages(payload.messages),
-        }, (chunk) => {
-          if (!event.sender.isDestroyed()) event.sender.send("ai:chunk", { requestId, chunk });
-        });
-        return { success: true, text: projectAi.splitActions(text).display || text, actions: [], droppedActions: 0, context: portfolio.summary };
-      }
-      const state = zenTaskStore.load();
-      const context = projectAi.buildProjectContext(state, payload.projectId, { include: payload.include });
-      const readOnly = Boolean(state.projects.find((project) => (project.Id ?? project.id) === payload.projectId)?.ArchivedAt);
-      const text = await aiService.chat({
-        requestId, model: payload.model, systemPrompt: projectAi.projectChatSystemPrompt(context.text, { readOnly }),
-        messages: projectAi.modelMessages(payload.messages),
-      }, (chunk) => {
-        if (!event.sender.isDestroyed()) event.sender.send("ai:chunk", { requestId, chunk });
-      });
-      // Validate against the latest data: tasks may have changed while the reply streamed.
-      const extracted = readOnly ? { display: projectAi.splitActions(text).display, actions: [], dropped: 0 } : projectAi.extractActions(text, zenTaskStore.load(), payload.projectId);
-      return { success: true, text: extracted.display || text, actions: extracted.actions, droppedActions: extracted.dropped, context: context.summary };
-    } catch (error) {
-      return { success: false, error: error?.message || "AI 请求失败" };
-    }
-  });
-  ipcMain.handle("projectAi:applyAction", (_event, projectId, action, generation) => {
-    githubNotes.assertWritable(generation);
-    return projectAi.applyAction(zenTaskStore, projectId, action);
-  });
-  ipcMain.handle("projectAi:undoAction", (_event, projectId, undo, generation) => {
-    githubNotes.assertWritable(generation);
-    return projectAi.undoAction(zenTaskStore, projectId, undo);
-  });
-  ipcMain.handle("projectAi:plan", async (_event, payload = {}) => {
-    try {
-      const request = projectAi.buildPlanRequest(zenTaskStore.load(), payload.projectId, { notes: payload.notes });
-      const text = await aiService.chat({ requestId: payload.requestId, model: payload.model, systemPrompt: request.systemPrompt,
-        messages: request.messages, temperature: 0.4, maxTokens: 4000 });
-      return { success: true, plan: projectAi.parsePlan(text, zenTaskStore.load(), payload.projectId) };
-    } catch (error) {
-      return { success: false, error: error?.message || "AI 拆解计划失败" };
-    }
-  });
-  ipcMain.handle("projectAi:applyPlan", (_event, projectId, plan, generation) => {
-    githubNotes.assertWritable(generation);
-    return projectAi.applyPlan(zenTaskStore, projectId, plan);
-  });
-  ipcMain.handle("projectAi:saveNote", (_event, input = {}, generation) => {
-    githubNotes.assertWritable(generation);
-    const state = zenTaskStore.load();
-    const project = input.projectId ? state.projects.find((entry) => (entry.Id ?? entry.id) === input.projectId) : null;
-    const note = workspaceStore.createAiNote({ title: input.title, body: input.body, kind: input.kind === "digest" ? "digest" : "insight", project: project ? project.Name ?? project.name : "" });
-    refreshQuickNotes();
-    if (!project || project.ArchivedAt) return { path: note.path, linked: false, state };
-    const linked = [...new Set([...(project.LinkedNotes || []), note.path])];
-    return { path: note.path, linked: true, state: zenTaskStore.updateProject(input.projectId, { linkedNotes: linked }) };
-  });
-  ipcMain.handle("projectAi:cancel", (_event, requestId) => aiService.cancel(requestId) || personaService.cancel(requestId));
-  ipcMain.handle("projectAi:extractNoteTasks", async (_event, payload = {}) => {
-    try {
-      return { success: true, ...await projectAi.extractNoteTasks(aiService, zenTaskStore.load(), payload) };
-    } catch (error) {
-      return { success: false, error: error?.message || "AI 提取失败" };
-    }
-  });
-  ipcMain.handle("projectAi:personaReview", async (event, payload = {}) => {
-    const requestId = payload.requestId;
-    try {
-      if (!githubNotes.trusted(event)) throw new Error("此操作只能从 DM 主窗口发起。");
-      const state = zenTaskStore.load();
-      const project = state.projects.find((entry) => (entry.Id ?? entry.id) === payload.projectId);
-      if (!project) throw new Error("项目不存在，可能已被删除或笔记库已切换。");
-      const context = projectAi.buildProjectContext(state, payload.projectId, { include: { tasks: true, milestones: true, updates: true, notes: false }, maxChars: 9000, withIds: false });
-      const result = await personaService.review({ id: payload.personaId, subject: `项目：${project.Name ?? project.name}`.slice(0, 200),
-        material: context.text, focus: String(payload.focus || "").slice(0, 500), requestId }, (chunk) => {
-        if (!event.sender.isDestroyed()) event.sender.send("ai:chunk", { requestId, chunk });
-      });
-      return { success: true, ...result };
-    } catch (error) {
-      return { success: false, error: error?.message || "人物审阅失败" };
-    }
-  });
-  ipcMain.handle("projectAi:brief:get", () => projectChatStore.getBrief(workspaceStore.root, localDayKey()));
-  ipcMain.handle("projectAi:brief", async (event, payload = {}) => {
-    const requestId = payload.requestId;
-    const root = workspaceStore.root;
-    try {
-      const request = projectAi.buildBriefRequest(zenTaskStore.load());
-      const text = await aiService.chat({ requestId, model: payload.model, systemPrompt: request.systemPrompt, messages: request.messages, temperature: 0.4, maxTokens: 1200 }, (chunk) => {
-        if (!event.sender.isDestroyed()) event.sender.send("ai:chunk", { requestId, chunk });
-      });
-      const brief = { date: localDayKey(), text: text.trim(), generatedAt: new Date().toISOString() };
-      if (root === workspaceStore.root) projectChatStore.setBrief(root, brief);
-      const headline = projectAi.briefHeadline(brief.text);
-      const petNotified = Boolean(headline && desktopPet?.announce?.(`今日简报：${headline}`, { section: "projects" }));
-      return { success: true, brief, counts: request.counts, petNotified };
-    } catch (error) {
-      return { success: false, error: error?.message || "生成简报失败" };
-    }
-  });
-  ipcMain.handle("projectAi:draftUpdate", async (_event, payload = {}) => {
-    try {
-      const request = projectAi.buildWeeklyDraftRequest(zenTaskStore.load(), payload.projectId, { notes: payload.notes });
-      const text = await aiService.chat({ requestId: payload.requestId, model: payload.model, systemPrompt: request.systemPrompt,
-        messages: request.messages, temperature: 0.3, maxTokens: 1500 });
-      return { success: true, draft: projectAi.parseWeeklyDraft(text), counts: request.counts };
-    } catch (error) {
-      return { success: false, error: error?.message || "AI 起草失败" };
-    }
+  registerProjectAiIpc({
+    ipcMain, trusted: githubNotes.trusted, getGeneration: () => githubNotes.generation,
+    assertWritable: (generation) => githubNotes.assertWritable(generation), aiService, personaService,
+    getWorkspace: () => workspaceStore, getZenStore: () => zenTaskStore, getChatStore: () => projectChatStore,
+    getNoteChatStore: () => noteChatStore, listNotes, refreshQuickNotes: () => refreshQuickNotes(), getDesktopPet: () => desktopPet,
   });
   ipcMain.handle("zentask:load", () => zenTaskStore.load());
   for (const method of ["addTask", "addTasksBatch", "updateTask", "toggleTask", "deleteTask", "addProject", "updateProject", "deleteMilestone", "deleteProject"]) {
@@ -1096,6 +1015,7 @@ app.whenReady().then(() => {
 
 app.on("before-quit", (event) => quitController?.beforeQuit(event));
 app.on("will-quit", () => {
+  void robotVoice?.stop();
   reminderService?.stop();
   desktopPet?.dispose();
   desktopIntegration?.dispose();

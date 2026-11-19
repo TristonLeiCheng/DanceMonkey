@@ -21,6 +21,52 @@
 .workspace-root .note-details-rail button:hover, .workspace-root .note-details-rail button[aria-expanded="true"] { color: var(--ws-accent); background: var(--ws-accent-bg); }
 .note-details-panel { width: 292px; flex: 0 0 292px; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--ws-line); color: var(--ws-text); background: var(--ws-bg); font: 12px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; }
 .note-details-panel[hidden] { display: none; }
+.note-details-panel.note-details-ai { width: 350px; flex-basis: 350px; }
+.note-details-ai .note-details-content { display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow: hidden; }
+.nai-context { padding: 10px; border: 1px solid var(--ws-line); border-radius: 8px; overflow-wrap: anywhere; }
+.nai-context strong { font-size: 12px; }
+.nai-heading, .nai-composer-tools { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.nai-messages { flex: 1; min-height: 90px; overflow: auto; overscroll-behavior: contain; }
+.nai-message { padding: 10px 0; border-bottom: 1px solid var(--ws-line); overflow-wrap: anywhere; user-select: text; }
+.nai-message > strong { font-size: 11px; color: var(--ws-muted); }
+.nai-message.user { padding: 10px; background: var(--ws-accent-bg); border-radius: 8px; }
+.nai-message.user .nai-markdown { white-space: pre-wrap; }
+.nai-markdown { line-height: 1.7; }
+.note-details-panel .nai-markdown p { color: var(--ws-text); font-size: 12px; }
+.nai-markdown pre { white-space: pre-wrap; background: var(--ws-panel); padding: 8px; border-radius: 5px; }
+.nai-markdown :is(ul, ol) { padding-left: 22px; }
+.nai-markdown :is(h1, h2, h3) { font-size: 14px; margin: 12px 0 6px; display: block; }
+.nai-markdown img { max-width: 100%; }
+.nai-sources, .nai-references { display: flex; flex-wrap: wrap; gap: 5px; }
+.nai-sources { margin: 8px 0; }
+.nai-sources button, .nai-references button { font-size: 10px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.nai-composer { position: relative; display: grid; gap: 8px; }
+.nai-composer textarea { width: 100%; min-height: 80px; max-height: 180px; resize: vertical; box-sizing: border-box; padding: 10px; border: 1px solid var(--ws-line); border-radius: 8px; background: var(--ws-panel); color: var(--ws-text); font: inherit; }
+.nai-picker { position: absolute; bottom: 100%; left: 0; right: 0; max-height: 220px; overflow: auto; background: var(--ws-bg); border: 1px solid var(--ws-line); box-shadow: 0 5px 20px #0003; border-radius: 8px; z-index: 3; }
+.nai-picker button { display: grid; text-align: left; gap: 3px; width: 100%; border: 0; padding: 10px; white-space: normal; overflow-wrap: anywhere; }
+.nai-picker small { color: var(--ws-muted); }
+.nai-picker button:hover, .nai-picker button:focus { background: var(--ws-accent-bg); }
+.nai-status { color: var(--ws-muted); font-size: 11px; overflow-wrap: anywhere; }
+.nai-status:empty, .nai-references:empty { display: none; }
+.nai-empty { color: var(--ws-muted); padding: 12px 0; }
+.nai-empty button { margin-top: 12px; }
+.nai-preview { width: min(780px, calc(100vw - 48px)); max-height: calc(100vh - 48px); box-sizing: border-box; overflow: auto; border: 1px solid var(--ws-line, #747b8b66); border-radius: 14px; padding: 24px; background: var(--ws-bg, #f7f8fa); color: var(--ws-text, #202633); font: 13px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.nai-preview::backdrop { background: #0b102066; }
+.nai-preview h2 { font-size: 18px; margin: 0 0 6px; }
+.nai-preview label { display: grid; gap: 6px; margin: 12px 0; }
+.nai-preview :is(textarea, select, button) { font: inherit; border: 1px solid var(--ws-line, #9ca3b066); border-radius: 6px; padding: 8px; background: var(--ws-panel, white); color: inherit; }
+.nai-preview textarea { min-height: 120px; max-height: 240px; resize: vertical; }
+.nai-preview footer { display: flex; justify-content: flex-end; gap: 10px; }
+.nai-preview [type="submit"] { background: var(--ws-accent, #3d5ae8); color: var(--ws-bg, #fff); }
+.nai-preview button { cursor: pointer; }
+.nai-preview button:disabled { opacity: .45; cursor: default; }
+.nai-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.nai-diff h3 { font-size: 12px; margin: 0; }
+.nai-diff section { min-width: 0; padding: 10px; border-radius: 6px; background: #dc55551c; border: 1px solid #dc555544; }
+.nai-diff section + section { background: #45a96c1c; border-color: #45a96c44; }
+.nai-diff pre { margin: 6px 0 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.6 ui-monospace, monospace; }
+.nai-preview [role="alert"] { color: #a22323; }
+@media (max-width: 1000px) { .note-details-panel.note-details-ai { width: min(350px, calc(100% - 44px)); } }
 .note-details-panel > header { display: flex; align-items: center; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--ws-line); }
 .note-details-panel h2 { flex: 1; margin: 0; font-size: 13px; font-weight: 600; }
 .note-details-panel button { border: 1px solid var(--ws-line); border-radius: 5px; color: var(--ws-text); background: var(--ws-panel); padding: 5px 8px; cursor: pointer; font: inherit; }

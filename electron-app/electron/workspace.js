@@ -6,6 +6,7 @@ const notesHome = require("../src/notes-home");
 const noteAppearance = require("../src/note-appearance");
 const quickNoteTypes = require('../src/quick-note-types');
 const { inspectWorkspace } = require('./note-inspector');
+const { cleanSources, withLinks } = require('../src/note-references');
 
 function noteMetadata(target, stat) {
   const fallback = { createdAt: stat.birthtimeMs > 0 ? stat.birthtimeMs : null, createdAtSource: "filesystem" };
@@ -32,6 +33,7 @@ function noteMetadata(target, stat) {
 
 const QUICK_NOTE_MARKER = /^<!-- lumen-quick-note:([^\s>]+) -->\r?\n?/i;
 const QUICK_NOTE_MARKERS = /^(?:<!-- lumen-quick-note:[^\s>]+ -->\r?\n?)+/i;
+const QUICK_NOTE_TYPE_MARKER = /^<!-- dm-quick-note-type:(quick|meeting|idea) -->\r?\n?/i;
 
 function writeAtomic(target, content) {
   const temporary = path.join(path.dirname(target), `.dm-write-${crypto.randomUUID()}.tmp`);
@@ -44,7 +46,7 @@ function writeAtomic(target, content) {
   }
 }
 
-function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
+function createWorkspace(notesRootPath, { initializeQuickNotes = true, noteHistory } = {}) {
   fs.mkdirSync(path.resolve(notesRootPath), { recursive: true });
   const root = fs.realpathSync(path.resolve(notesRootPath));
 
@@ -57,6 +59,15 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
 
   function quickNotesRootDir() {
     return path.join(root, quickNotesFolder());
+  }
+
+  function initializedPkb() {
+    return createPkb(root).status().initialized;
+  }
+
+  function quickNoteRoots() {
+    const base = quickNotesFolder();
+    return initializedPkb() ? [...new Set([base, "00_Inbox/quick-notes", "Journal/Stickies", "Stickies"])] : [base];
   }
 
   function ensureRoot() {
@@ -145,9 +156,26 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
     const values = readAppearances(true);
     const from = toRelative(source), to = toRelative(target);
     const changed = Object.keys(values).some(key => key === from || key.startsWith(`${from}/`));
-    fs.renameSync(source, target);
-    try { if (changed) writeAppearances(remapAppearances(values, from, to)); }
-    catch (error) { fs.renameSync(target, source); throw error; }
+    const migration = noteHistory?.prepareRelocation(root, from, to);
+    let moved = false;
+    try {
+      fs.renameSync(source, target); moved = true;
+      if (changed) writeAppearances(remapAppearances(values, from, to));
+      migration?.commit();
+    } catch (error) {
+      try {
+        if (moved) fs.renameSync(target, source);
+        if (changed) writeAppearances(values);
+        migration?.rollback();
+      } catch (rollbackError) { throw new Error(`笔记移动未完成，恢复记录已保留：${error.message}；${rollbackError.message}`); }
+      throw error;
+    }
+  }
+
+  function trackHistory(relativePath) {
+    // A bookkeeping failure must not turn a successful Markdown save into an
+    // apparent failed save. Opening the AI sidebar also refreshes identities.
+    try { noteHistory?.track(root, relativePath); } catch (error) { console.warn('笔记 AI 文件标识更新失败：', error.message); }
   }
 
   function readTree(directory = root, appearances = readAppearances()) {
@@ -185,15 +213,20 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
   }
 
   function isQuickNote(absolutePath) {
-    const relative = path.relative(quickNotesRootDir(), absolutePath);
-    return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+    return quickNoteRoots().some(folder => {
+      const relative = path.relative(resolveSafe(folder), absolutePath);
+      return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+    });
   }
 
   function parseQuickNote(raw, fallbackId = null) {
     const match = String(raw).match(QUICK_NOTE_MARKER);
+    const withoutId = String(raw).replace(QUICK_NOTE_MARKERS, "");
+    const type = match && withoutId.match(QUICK_NOTE_TYPE_MARKER);
     return {
       id: match?.[1] || fallbackId || crypto.randomUUID(),
-      body: String(raw).replace(QUICK_NOTE_MARKERS, ""),
+      noteType: type?.[1]?.toLowerCase(),
+      body: type ? withoutId.replace(QUICK_NOTE_TYPE_MARKER, "") : withoutId,
     };
   }
 
@@ -205,8 +238,8 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
       .slice(0, 24);
   }
 
-  function quickNoteRaw(id, body) {
-    return `<!-- lumen-quick-note:${id} -->\n${String(body)}`;
+  function quickNoteRaw(id, body, type) {
+    return `<!-- lumen-quick-note:${id} -->\n${type ? `<!-- dm-quick-note-type:${type} -->\n` : ""}${String(body)}`;
   }
 
   function readQuickNote(absolutePath) {
@@ -216,9 +249,10 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
 
   function listQuickNotes() {
     ensureRoot();
-    const base = quickNotesFolder();
-    const locations = [{ folder: base, type: quickNoteTypes.get('quick'), legacy: true },
-      ...quickNoteTypes.types.map(type => ({ folder: `${base}/${type.folder}`, type }))];
+    const locations = quickNoteRoots().flatMap(base => [
+      { folder: base, type: quickNoteTypes.get('quick'), legacy: true },
+      ...quickNoteTypes.types.map(type => ({ folder: `${base}/${type.folder}`, type }))
+    ]).filter((location, index, all) => all.findIndex(item => item.folder === location.folder) === index);
     return locations.flatMap(({ folder, type, legacy }) => {
       const directory = resolveSafe(folder);
       if (!fs.existsSync(directory) || !fs.statSync(directory).isDirectory()) return [];
@@ -234,7 +268,7 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
           id: parsed.id,
           filePath: toRelative(absolute),
           notebookId: "inbox",
-          noteType: category.id,
+          noteType: parsed.noteType || category.id,
           title,
           body: parsed.body,
           createdAt: stat.birthtimeMs || stat.mtimeMs,
@@ -250,15 +284,20 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
       if (note.noteType !== undefined && !quickNoteTypes.types.some(type => type.id === note.noteType)) throw new Error('无效的快速笔记类型');
     }
     ensureRoot();
-    const existing = new Map(listQuickNotes().map((note) => [note.id, note]));
+    const listed = listQuickNotes();
+    const existing = new Map(listed.map((note) => [note.id, note]));
+    if (existing.size !== listed.length) throw new Error('快速笔记存在重复 ID，请先检查重复文件，未修改笔记。');
     const synced = [];
 
     for (const note of notes) {
       const current = existing.get(note.id);
       const type = quickNoteTypes.get(note.noteType || current?.noteType);
       const changed = !current || note.title !== current.title || note.body !== current.body || type.id !== current.noteType;
-      // Legacy files stay put until edited; new/edited notes use their type folder.
-      const parent = current && !changed ? toRelative(path.dirname(resolveSafe(current.filePath))) : `${quickNotesFolder()}/${type.folder}`;
+      // Existing PKB notes keep their directory: moving them on an ordinary
+      // keystroke would break links from other Markdown files.
+      const flat = initializedPkb();
+      const parent = current && (flat || !changed) ? toRelative(path.dirname(resolveSafe(current.filePath)))
+        : flat ? quickNotesFolder() : `${quickNotesFolder()}/${type.folder}`;
       fs.mkdirSync(resolveSafe(parent), { recursive: true });
       let absolute;
       if (current) {
@@ -277,14 +316,16 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
       // New notes must persist the renderer's ID. A path-derived ID also needs
       // pinning on rename, otherwise the next keystroke looks like a new note.
       // Leave existing plain Markdown untouched when its path stays the same.
-      const wantedContent = !current || current.filePath !== toRelative(absolute) || QUICK_NOTE_MARKER.test(existingRaw)
-        ? quickNoteRaw(note.id, note.body)
+      const wantedContent = !current || current.filePath !== toRelative(absolute) || QUICK_NOTE_MARKER.test(existingRaw) || (flat && changed)
+        ? quickNoteRaw(note.id, note.body, flat ? type.id : current ? readQuickNote(absolute).noteType : undefined)
         : String(note.body);
       const currentContent = fs.existsSync(absolute)
           ? existingRaw
         : null;
       if (currentContent !== wantedContent) {
+        noteHistory?.beforeWrite({ root, list: () => readTree() }, toRelative(absolute));
         writeAtomic(absolute, wantedContent);
+        trackHistory(toRelative(absolute));
       }
       const stat = fs.statSync(absolute);
       synced.push({
@@ -318,23 +359,28 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
     write(relativePath, content) {
       const target = resolveSafe(relativePath);
       if (!target.toLowerCase().endsWith(".md")) throw new Error("仅支持 Markdown 文件");
+      if (!fs.existsSync(target)) noteHistory?.reconcile({ root, list: () => readTree() });
+      noteHistory?.beforeWrite({ root, list: () => readTree() }, toRelative(target));
       if (isQuickNote(target)) {
         const existing = fs.existsSync(target)
           ? readQuickNote(target)
           : { id: quickNoteId(target) };
         const raw = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
-        writeAtomic(target, QUICK_NOTE_MARKER.test(raw) ? quickNoteRaw(existing.id, content) : String(content));
+        writeAtomic(target, QUICK_NOTE_MARKER.test(raw) ? quickNoteRaw(existing.id, content, existing.noteType) : String(content));
       } else {
         writeAtomic(target, String(content));
       }
+      trackHistory(toRelative(target));
       return { path: toRelative(target), updatedAt: fs.statSync(target).mtimeMs };
     },
     createFile(parentRelative, name) {
+      noteHistory?.reconcile({ root, list: () => readTree() });
       const target = uniquePath(parentRelative, name, "file");
       writeAtomic(target, `# ${path.parse(target).name}\n\n`);
       return toRelative(target);
     },
     createNote({ type, title } = {}) {
+      noteHistory?.reconcile({ root, list: () => readTree() });
       const kind = notesHome.kind(type);
       getPkbPaths(root); // Refuse a corrupt manifest instead of silently changing routing.
       const pkb = createPkb(root);
@@ -350,15 +396,18 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
       return { path: toRelative(target) };
     },
     // AI output goes to the PKB output folders when initialized, otherwise to a plain top-level folder.
-    createAiNote({ title, body, kind = "insight", source = "DM 项目 AI 助手", project = "" } = {}) {
+    createAiNote({ title, body, sources, kind = "insight", source = "DM 项目 AI 助手", project = "" } = {}) {
       const cleanTitle = String(title || "").replace(/[\r\n\x00-\x1f]+/g, " ").trim().slice(0, 80) || "AI 输出";
-      const parent = createPkb(root).status().initialized ? `90_AI/91_Outputs/${kind === "digest" ? "digests" : "insights"}` : "AI 输出";
+      const parent = initializedPkb() ? `90_AI/91_Outputs/${kind === "digest" ? "digests" : "insights"}` : "AI 输出";
       fs.mkdirSync(resolveSafe(parent), { recursive: true });
       const target = uniquePath(parent, cleanTitle, "file");
       const now = new Date();
       const front = ["---", `id: ${JSON.stringify(crypto.randomUUID())}`, `type: ${JSON.stringify("ai-output")}`, `title: ${JSON.stringify(cleanTitle)}`,
         `created: ${JSON.stringify(now.toISOString())}`, `source: ${JSON.stringify(String(source))}`, ...(project ? [`project: ${JSON.stringify(String(project))}`] : []), "---"];
-      const content = [...front, "", `# ${cleanTitle}`, "", "> 由 AI 根据项目数据生成，可能不准确，请核对后使用。", "", String(body || "").trim(), ""].join("\n");
+      const references = cleanSources(sources);
+      const linkedBody = withLinks(String(body || '').trim(), references, toRelative(target));
+      const bibliography = references.length ? ['\n## 引用笔记', ...references.map(item => `- [${item.id}] ${withLinks(`[${item.id}]`, references, toRelative(target))}`)] : [];
+      const content = [...front, "", `# ${cleanTitle}`, "", "> 由 AI 根据项目数据生成，可能不准确，请核对后使用。", "", linkedBody, ...bibliography, ""].join("\n");
       fs.writeFileSync(target, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
       return { path: toRelative(target) };
     },
@@ -386,9 +435,17 @@ function createWorkspace(notesRootPath, { initializeQuickNotes = true } = {}) {
       return appearance;
     },
     rename(relativePath, newName) {
+      noteHistory?.reconcile({ root, list: () => readTree() });
       const source = resolveSafe(relativePath);
+      if (source === root) throw new Error('不能移动或重命名笔记库根目录');
       const type = fs.statSync(source).isDirectory() ? "folder" : "file";
-      const target = uniquePath(toRelative(path.dirname(source)), newName, type);
+      const parent = typeof newName === 'object' && newName !== null ? newName.parent : toRelative(path.dirname(source));
+      const name = typeof newName === 'object' && newName !== null ? newName.name : newName;
+      if (typeof parent !== 'string' || !fs.statSync(resolveSafe(parent)).isDirectory()) throw new Error('请选择有效的目标文件夹');
+      const folder = resolveSafe(parent);
+      if (type === 'folder' && (folder === source || folder.startsWith(source + path.sep))) throw new Error('不能把文件夹移入自身或子文件夹');
+      if (folder === path.dirname(source) && safeName(name, type) === path.basename(source)) return toRelative(source);
+      const target = uniquePath(parent, name, type);
       renameWithAppearance(source, target);
       return toRelative(target);
     },

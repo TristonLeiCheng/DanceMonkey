@@ -282,7 +282,7 @@ try {
   assert.equal(await evaluate(`!document.querySelector('[data-app-update-slot="settings"]').textContent.match(/安装目录|更新目录|GitHub|URL|UNC/)`), true);
   await evaluate(`document.querySelector('[data-settings-tab="shortcuts"]').click()`);
   // Settings tabs retain the same DOM drafts, support keyboard navigation and save hidden fields.
-  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-settings-tab]'), tab => tab.dataset.settingsTab)`), ['appearance', 'shortcuts', 'pet', 'sync', 'network', 'about']);
+  assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-settings-tab]'), tab => tab.dataset.settingsTab)`), ['appearance', 'shortcuts', 'pet', 'sync', 'robot-voice', 'network', 'about']);
   assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('[data-settings-panel]')).filter(panel => getComputedStyle(panel).display !== 'none').map(panel => panel.dataset.settingsPanel)`), ['shortcuts']);
   await evaluate(`(() => {
     window.__settingsDraft = document.querySelector('[name="globalChatHotkey"]');

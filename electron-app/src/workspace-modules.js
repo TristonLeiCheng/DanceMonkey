@@ -63,6 +63,7 @@
       { id: "shortcuts", label: "快捷键", description: "设置唤出面板与截图的全局快捷键。" },
       { id: "pet", label: "桌面宠物", description: "选择宠物外形，调整互动、任务提醒与唤醒行为。" },
       { id: "sync", label: "笔记同步", description: "连接 GitHub，配置笔记、任务与项目的多设备同步。" },
+      ...(api.robotVoice ? [{ id: "robot-voice", label: "机器人语音", description: "连接小智设备，切换内网本地语音和 MGA。" }] : []),
       { id: "network", label: "网络连接", description: "配置 DM 的直连、公司系统默认或手动代理，支持 Mac 和 Windows。" },
       { id: "about", label: "关于与更新", description: "查看当前版本，检查并安装应用更新。" },
     ];
@@ -618,6 +619,11 @@
             </div>
           </section>
 
+          ${api.robotVoice ? `<section class="ws-settings-card" ${panel("robot-voice")}>
+            <h2>小智 · 机器人语音</h2>
+            <p class="ws-settings-desc">用小智的麦克风和扬声器对话。通过 Wi-Fi 连到这台电脑，语音服务和笔记由 Dance Monkey 处理。</p>
+            <div class="ws-settings-actions"><button type="button" data-module-action="robot-voice-open">打开机器人语音</button></div>
+          </section>` : ""}
           <section class="ws-settings-card ws-network-panel" ${panel("network")}>
             <h2>网络连接</h2>
             <p class="ws-settings-desc">选择适合当前网络的连接方式。应用默认用于笔记同步、Outlook 和更新；AI 可单独选择，人物分身和截图分析与 AI 使用相同方式。</p>
@@ -836,6 +842,10 @@
     async function handleAction(action, id, setSection) {
       if (await githubUI?.handleAction(action, id)) return true;
       if (await projectManager.handleAction(action, id)) return true;
+      if (action === "robot-voice-open") {
+        await api.robotVoice?.open();
+        return true;
+      }
       if (action === "settings-reload") {
         settingsError = "";
         settingsMessage = "";

@@ -18,7 +18,8 @@ const expectedCatalog = writePetCatalog(root);
 const activePets = Object.keys(expectedCatalog.animals).filter(id => !expectedCatalog.animals[id].retired);
 assert.equal(activePets.length, 24);
 assert.equal(expectedCatalog.animals['operator-rabbit'].retired, true);
-const directories = ['electron', 'src', 'assets', 'vendor'];
+const directories = ['electron', 'src', 'assets', 'vendor', 'robot-voice'];
+const baselineTag = 'v3.16.3';
 function walk(folder) {
   return fs.readdirSync(path.join(root, folder), { withFileTypes: true }).flatMap(entry => {
     const file = `${folder}/${entry.name}`;
@@ -27,8 +28,8 @@ function walk(folder) {
 }
 const files = [...directories.flatMap(walk), 'index.html', 'pet.html', 'package.json'];
 // The previous release is an explicit feature baseline, beyond the current branch.
-const baseline = execFileSync('git', ['ls-tree', '-r', '--name-only', 'v3.12.0', ...directories.map(dir => `electron-app/${dir}`), 'electron-app/index.html', 'electron-app/pet.html'], { cwd: path.dirname(root), encoding: 'utf8' }).trim().split('\n');
-for (const file of baseline) assert.ok(files.includes(file.slice('electron-app/'.length)), `3.12.0 runtime file lost: ${file}`);
+const baseline = execFileSync('git', ['ls-tree', '-r', '--name-only', baselineTag, ...directories.map(dir => `electron-app/${dir}`), 'electron-app/index.html', 'electron-app/pet.html'], { cwd: path.dirname(root), encoding: 'utf8' }).trim().split('\n');
+for (const file of baseline) assert.ok(files.includes(file.slice('electron-app/'.length)), `${baselineTag} runtime file lost: ${file}`);
 
 if (!process.argv.includes('--prepare-only')) {
   for (const arch of arches) execFileSync('npm', ['run', `package:mac:${arch}`], { cwd: root, stdio: 'inherit' });
@@ -52,8 +53,8 @@ for (const platform of [...arches.map(arch => `darwin-${arch}`), 'win32-x64']) {
   const kind = execFileSync('file', [executable], { encoding: 'utf8' });
   assert.ok(kind.includes(mac ? (platform.endsWith('arm64') ? 'arm64' : 'x86_64') : 'PE32+'));
   if (mac) execFileSync('codesign', ['--verify', '--deep', '--strict', path.join(folder, 'DanceMonkey.app')]);
-  report.push({ platform, version, runtimeFiles: files.length, pets: activePets.length, baseline: 'v3.12.0', result: 'verified' });
-  console.log(`Verified ${platform}: ${files.length} runtime files, 24 pets and 3.12.0 baseline`);
+  report.push({ platform, version, runtimeFiles: files.length, pets: activePets.length, baseline: baselineTag, result: 'verified' });
+  console.log(`Verified ${platform}: ${files.length} runtime files, 24 pets and ${baselineTag} baseline`);
 }
 
 const make = path.join(root, 'out/make'), output = path.join(root, 'out/releases', `v${version}`);
@@ -73,5 +74,5 @@ const assets = packages.map(([source, name]) => {
   return { name, size: fs.statSync(target).size, sha256: hash(fs.readFileSync(target)) };
 });
 fs.writeFileSync(path.join(output, 'SHA256SUMS.txt'), assets.map(a => `${a.sha256}  ${a.name}`).join('\n') + '\n');
-fs.writeFileSync(path.join(output, 'package-verification.json'), JSON.stringify({ version, baseline: 'v3.12.0', platforms: report, assets }, null, 2) + '\n');
+fs.writeFileSync(path.join(output, 'package-verification.json'), JSON.stringify({ version, baseline: baselineTag, platforms: report, assets }, null, 2) + '\n');
 console.log(`Prepared ${output}`);

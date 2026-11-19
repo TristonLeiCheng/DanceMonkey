@@ -92,7 +92,8 @@ async function start() {
       inspect: text => api.note.inspect(text), save, openNote: path => api.note.openLinked(path), onDraft: () => {
         refreshStatus(); clearTimeout(saveTimer);
         if (!paused && !frozen && details?.hasDraft()) saveTimer = setTimeout(saveQuietly, 650);
-      } });
+      }, ai: { api, getSavedText: () => saved, getSelection: () => editor.selection(), applyEdit: edit => editor.applyEdit(edit),
+        canEdit: () => !paused && !frozen && !closing && !loading && mode !== 'preview' } });
     imageImport = noteImages.attachImageImport(root.querySelector('.note-editor'), {
       canImport: () => !paused && !frozen && !closing && mode !== 'preview',
       getSelection: event => {

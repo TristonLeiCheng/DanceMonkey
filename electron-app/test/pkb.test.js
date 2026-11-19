@@ -171,16 +171,16 @@ test("status() fails closed when the manifest schemaVersion is unsupported", (t)
   assert.equal(pkb.status().initialized, false);
 });
 
-test("initialize() preserves an existing non-empty legacy Stickies folder by routing quick notes there", (t) => {
+test("initialize() routes new notes to PKB while preserving legacy Stickies", (t) => {
   const root = tempRoot(t);
   fs.mkdirSync(path.join(root, "Journal", "Stickies"), { recursive: true });
   fs.writeFileSync(path.join(root, "Journal", "Stickies", "old-note.md"), "<!-- lumen-quick-note:abc -->\nhello");
 
   const pkb = createPkb(root);
   const result = pkb.initialize();
-  assert.equal(result.paths.quickNotes, "Journal/Stickies");
+  assert.equal(result.paths.quickNotes, "00_Inbox/quick-notes");
   assert.deepEqual(getPkbPaths(root), {
-    quickNotes: "Journal/Stickies",
+    quickNotes: "00_Inbox/quick-notes",
     screenshots: "00_Inbox/attachments",
     captures: "00_Inbox/captures",
   });
@@ -326,12 +326,31 @@ test("getPkbPaths() uses the frozen manifest paths and does not re-derive from c
   fs.writeFileSync(path.join(root, "Journal", "Stickies", "old.md"), "hi");
   const pkb = createPkb(root);
   pkb.initialize();
+  const manifestPath = path.join(root, '_System', 'pkb.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.paths.quickNotes = 'Journal/Stickies';
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
   assert.equal(getPkbPaths(root).quickNotes, "Journal/Stickies");
 
   // Even if the legacy folder is emptied after the fact, the manifest's
   // frozen path keeps winning (no silent re-routing).
   fs.rmSync(path.join(root, "Journal", "Stickies", "old.md"));
   assert.equal(getPkbPaths(root).quickNotes, "Journal/Stickies");
+});
+
+test("reinitializing a legacy PKB does not recreate a second quick-note folder", (t) => {
+  const root = tempRoot(t);
+  const pkb = createPkb(root);
+  pkb.initialize();
+  const manifestPath = path.join(root, '_System', 'pkb.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.paths.quickNotes = 'Journal/Stickies';
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  fs.rmdirSync(path.join(root, '00_Inbox/quick-notes'));
+  assert.equal(pkb.preview().directories.includes('00_Inbox/quick-notes'), false);
+  pkb.initialize();
+  assert.equal(fs.existsSync(path.join(root, '00_Inbox/quick-notes')), false);
+  assert.equal(getPkbPaths(root).quickNotes, 'Journal/Stickies');
 });
 
 test("protected directories list used by sync policy matches the sensitive categories", () => {

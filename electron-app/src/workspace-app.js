@@ -331,7 +331,10 @@
         },
         rename: async (oldPath, name) => {
           const item = entries.find((entry) => entry.path === oldPath);
-          const parent = oldPath.includes("/") ? oldPath.slice(0, oldPath.lastIndexOf("/")) : "";
+          const parent = typeof name === 'object' ? name.parent : oldPath.includes("/") ? oldPath.slice(0, oldPath.lastIndexOf("/")) : "";
+          name = typeof name === 'object' ? name.name : name;
+          if (item.type === 'folder' && (parent === oldPath || parent.startsWith(oldPath + '/'))) throw new Error('不能把文件夹移入自身或子文件夹');
+          if (parent === (oldPath.includes('/') ? oldPath.slice(0, oldPath.lastIndexOf('/')) : '') && name === item.name) return oldPath;
           const newPath = unique(parent, name, item.type);
           entries.forEach((entry) => {
             if (entry.path === oldPath || entry.path.startsWith(`${oldPath}/`)) {
@@ -987,6 +990,20 @@
           root.querySelector('.ws-count').textContent = `${text.length} 字符`;
         },
         inspect: text => api.workspace.inspect(path, text, origin), save: saveActive, openNote: openFile,
+        ai: { api, getText: () => markdownEditor ? markdownEditor.text() : editor ? editor.value : content,
+          getSavedText: () => savedContent,
+          getSelection: () => markdownEditor ? markdownEditor.selection() : { from: editor?.selectionStart || 0, to: editor?.selectionEnd || 0 },
+          canEdit: () => !syncPaused && !vaultSwitching && !root.dataset.quitting && activePath === path && vaultRoot === origin && viewMode !== 'preview',
+          applyEdit: change => {
+            if (markdownEditor) markdownEditor.applyEdit(change);
+            else if (editor) {
+              if (editor.value !== change.base) throw new Error('笔记已变化，请重新预览。');
+              editor.focus(); editor.setSelectionRange(change.from, change.to);
+              if (!document.execCommand('insertText', false, change.insert)) {
+                editor.setRangeText(change.insert, change.from, change.to, 'end'); editor.dispatchEvent(new Event('input'));
+              }
+            }
+          } },
         onDraft: () => {
           const status = root.querySelector('.ws-save-state');
           if (status) status.textContent = noteDetails?.hasDraft() ? '元数据待保存' : content === savedContent ? '已保存' : '待保存';
@@ -1165,7 +1182,7 @@
       if (!activePath || content === savedContent) return;
       const target = activePath;
       const snapshot = content;
-      await api.workspace.write(target, snapshot);
+      await api.workspace.write(target, snapshot, savedContent);
       if (activePath === target) savedContent = snapshot;
       const status = root.querySelector(".ws-save-state");
       if (status) status.textContent = content === savedContent ? "已保存" : "保存中…";
@@ -1552,12 +1569,13 @@
   }
 
   function openDialog(kind, target = "", targetType = "", parent = selectedFolder()) {
+    if (kind === 'rename') parent = target.includes('/') ? target.slice(0, target.lastIndexOf('/')) : '';
     dialog = { kind, target, targetType, parent };
     const isDelete = kind === "delete";
     const labels = {
       file: "新建 Markdown 笔记",
       folder: "新建文件夹",
-      rename: "重命名",
+      rename: "重命名或移动",
       delete: "确认删除",
     };
     root.insertAdjacentHTML(
@@ -1565,7 +1583,7 @@
       `<div class="ws-dialog-backdrop">
         <div class="ws-dialog" role="dialog" aria-modal="true" aria-label="${labels[kind]}">
           <strong>${labels[kind]}</strong>
-          ${["file", "folder"].includes(kind) ? `<label class="ws-create-location">创建位置<select class="ws-parent-select" aria-label="创建位置"><option value="">根目录</option>${flatten(tree, "folder").map((folder) => `<option value="${attr(folder.path)}" ${folder.path === parent ? "selected" : ""}>${esc(folder.path)}</option>`).join("")}</select></label>` : ""}
+          ${["file", "folder", "rename"].includes(kind) ? `<label class="ws-create-location">${kind === 'rename' ? '目标文件夹' : '创建位置'}<select class="ws-parent-select" aria-label="${kind === 'rename' ? '目标文件夹' : '创建位置'}"><option value="">根目录</option>${flatten(tree, "folder").filter(folder => kind !== 'rename' || targetType !== 'folder' || (folder.path !== target && !folder.path.startsWith(target + '/'))).map((folder) => `<option value="${attr(folder.path)}" ${folder.path === parent ? "selected" : ""}>${esc(folder.path)}</option>`).join("")}</select></label>` : ""}
           ${
             isDelete
               ? `<div>将删除「${esc(target.split("/").pop())}」${targetType === "folder" ? "及其全部子项" : ""}，此操作不可恢复。</div>`
@@ -1619,7 +1637,7 @@
       let nextPath = null;
       if (current.kind === "file") nextPath = await api.workspace.createFile(parent, value);
       if (current.kind === "folder") nextPath = await api.workspace.createFolder(parent, value);
-      if (current.kind === "rename") nextPath = await api.workspace.rename(current.target, value);
+      if (current.kind === "rename") nextPath = await api.workspace.rename(current.target, { name: value, parent });
       if (current.kind === "delete") await api.workspace.remove(current.target);
       if (syncPaused || vaultSwitching || origin !== vaultRoot) return;
 
@@ -1728,13 +1746,19 @@
     catch { event.preventDefault(); event.returnValue = ''; return; }
     if (activePath && content !== savedContent) {
       // Electron IPC 无法阻塞 beforeunload，日常编辑已由 650ms 自动保存覆盖。
-      void api.workspace.write(activePath, content);
+      void api.workspace.write(activePath, content, savedContent).catch(() => {});
     }
   });
 
   // 快速便签中新建、编辑或改名后，完整笔记即时同步对应文件
   api.onWorkspaceChanged?.((change = {}) => {
     if (syncPaused || vaultSwitching) return;
+    if (change.tasks) {
+      if (modulesInstance && modulesReady) void modulesInstance.reloadSyncedTasks().then(() => {
+        if (["tasks", "projects"].includes(section)) renderShell();
+      }).catch(() => {});
+      return;
+    }
     const origin = vaultRoot;
     void (async () => {
       for (const item of change.renames || []) {

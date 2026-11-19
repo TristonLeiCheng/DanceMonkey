@@ -236,6 +236,7 @@ function registerGitHubSync({ app, ipcMain, safeStorage, shell, clipboard, dialo
       });
     },
     assertWritable: (generation) => coordinator.assertWritable(generation),
+    get generation() { return coordinator.generation; },
     get editorBusy() { return coordinator.busy; },
     get busy() { return operationBusy || coordinator.busy; },
   };

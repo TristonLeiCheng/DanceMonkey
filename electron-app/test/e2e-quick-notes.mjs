@@ -4,6 +4,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "dm-quick-notes-e2e-"));
 const cwd = path.resolve(import.meta.dirname, "..");
@@ -12,6 +13,8 @@ const appArgs = process.env.DM_E2E_EXECUTABLE ? ['--no-proxy-server', '--use-moc
 const children = [];
 const firstVault = path.join(root, "documents", "NoteVault");
 fs.mkdirSync(firstVault, { recursive: true });
+const pkbMode = process.env.DM_E2E_PKB === '1';
+if (pkbMode) createRequire(import.meta.url)('../electron/pkb').createPkb(firstVault).initialize();
 const configDirectory = path.join(root, "app-data", "DanceMonkey");
 fs.mkdirSync(configDirectory, { recursive: true });
 fs.writeFileSync(path.join(configDirectory, "config.json"), JSON.stringify({
@@ -134,7 +137,7 @@ try {
     for(const character of text) await send('Input.insertText',{text:character});
   };
   const findSaved = async id => (await snapshot()).notes.find(note=>note.id===id);
-  const assertFolder = note => assert.equal(path.basename(path.dirname(note.filePath)), ({quick:'随手记',meeting:'会议要点',idea:'临时想法'})[note.noteType]);
+  const assertFolder = note => assert.equal(path.basename(path.dirname(note.filePath)), pkbMode ? 'quick-notes' : ({quick:'随手记',meeting:'会议要点',idea:'临时想法'})[note.noteType]);
 
   // Type switches create one draft per empty type, then always reopen its latest note.
   await selectType('quick');
@@ -170,8 +173,8 @@ try {
   assert.equal(state.notes.length,3);
   for(const note of state.notes) {
     assertFolder(note);
-    assert.equal(fs.readFileSync(path.join(firstVault,note.filePath),'utf8'),`<!-- lumen-quick-note:${note.id} -->\n${note.body}`);
-    assert.equal(fs.readdirSync(path.dirname(path.join(firstVault,note.filePath))).filter(name=>name.endsWith('.md')).length,1);
+    assert.equal(fs.readFileSync(path.join(firstVault,note.filePath),'utf8'),`<!-- lumen-quick-note:${note.id} -->\n${pkbMode ? `<!-- dm-quick-note-type:${note.noteType} -->\n` : ''}${note.body}`);
+    assert.equal(fs.readdirSync(path.dirname(path.join(firstVault,note.filePath))).filter(name=>name.endsWith('.md')).length,pkbMode ? 3 : 1);
   }
 
   // Plus creates a new note only in the current category. Same-day filenames stay distinct.
@@ -232,7 +235,7 @@ try {
   assert.equal(electron.code,0,electron.output);
   assert.ok(fs.readFileSync(path.join(firstVault,savedMeeting.filePath),'utf8').endsWith(tail));
   assert.deepEqual(runtimeErrors,[]);
-  console.log('Quick-note E2E passed: three fixed type tabs, separate folders, date titles, placeholders, no duplicate drafts on switching, renamed titles, same-type new notes, search, reload, compact layout and quit flush.');
+  console.log(`Quick-note E2E passed (${pkbMode ? 'PKB single folder' : 'legacy type folders'}): type tabs, saving, search, reload and quit flush.`);
 } finally {
   try { socket?.close(); } catch {}
   for (const record of children.reverse()) await stop(record);

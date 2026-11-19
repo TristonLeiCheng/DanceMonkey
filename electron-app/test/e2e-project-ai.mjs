@@ -115,7 +115,9 @@ try {
     response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
     const chunk = (content) => response.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
     const last = payload.messages?.at(-1)?.content || "";
-    const content = system.includes("项目周报助手") ? "```json\n" + JSON.stringify(draft) + "\n```"
+    const content = last.includes('[STOP_REFS]') ? '引用的排期约束 [N1]。'.repeat(80)
+      : last.includes('[NOTE_REFS]') ? '参考排期要求周五交付 [N1]。'
+      : system.includes("项目周报助手") ? "```json\n" + JSON.stringify(draft) + "\n```"
       : system.includes("今日简报") ? briefAnswer
       : system.includes("项目组合助理") ? portfolioAnswer
       : system.includes("项目规划助手") ? JSON.stringify(planAnswer)
@@ -136,6 +138,12 @@ try {
   const vault = path.join(root, "documents", "NoteVault");
   const configDirectory = path.join(root, "app-data", "DanceMonkey");
   fs.mkdirSync(path.join(vault, "Journal"), { recursive: true });
+  fs.mkdirSync(path.join(vault, '项目参考'), { recursive: true });
+  fs.mkdirSync(path.join(vault, '其他参考'), { recursive: true });
+  fs.mkdirSync(path.join(vault, '70_Finance'), { recursive: true });
+  fs.writeFileSync(path.join(vault, '项目参考/排期.md'), '# 排期\n客户要求周五交付。');
+  fs.writeFileSync(path.join(vault, '其他参考/排期.md'), '# 另一个排期\n方案 B 下周验收。');
+  fs.writeFileSync(path.join(vault, '70_Finance/预算.md'), '不得发送的敏感预算正文');
   fs.mkdirSync(configDirectory, { recursive: true });
   const now = new Date();
   const day = (offset) => model.localDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset));
@@ -191,7 +199,11 @@ try {
   assert.match(await evaluate('document.querySelector(".pm-ai-context").textContent'), /任务 · 2.*笔记标题 · 2/s);
   await screenshot(workspace, "1-ai-empty");
   await click(".pm-ai-prompt[data-id='1']");
-  await waitFor(() => evaluate('Boolean(document.querySelector(".pm-ai-message.streaming"))'), { process: electron });
+  await waitFor(async () => {
+    const error = await evaluate('document.querySelector(".pm-ai .module-error")?.textContent');
+    if (error) throw new Error(error);
+    return evaluate('Boolean(document.querySelector(".pm-ai-message.streaming"))');
+  }, { process: electron });
   await waitFor(() => evaluate('Boolean(document.querySelector("[data-module-action=pm-ai-send]")) && document.querySelectorAll(".pm-ai-message.assistant").length === 1'), { process: electron });
   const system = requests[0].messages[0].content;
   assert.match(system, /<project>/);
@@ -258,6 +270,11 @@ try {
   const storedCards = Object.values(JSON.parse(fs.readFileSync(path.join(root, "user-data", "project-ai-chats.json"), "utf8")).chats)[0].messages[1].actions;
   assert.deepEqual(storedCards.map((action) => action.state), ["applied", "undone"]);
   assert.match(requests.at(-1).messages[0].content, /ID t1/, "task IDs are in the context so actions can reference them");
+  await evaluate(`window.lumen.zenTask.updateTask(${JSON.stringify(createdTask.Id)}, {notes: '人工补充：已联系客户，请保留'})`);
+  const manuallyEdited = tasksFile().find((task) => task.Id === createdTask.Id);
+  await click("[data-module-action=pm-ai-undo][data-id='1:0']");
+  await waitFor(() => evaluate('document.querySelector(".pm-ai-action.state-applied")?.textContent.includes("无法安全撤销")'), { process: electron });
+  assert.deepEqual(tasksFile().find((task) => task.Id === createdTask.Id), manuallyEdited, "undo must not delete a manually edited AI-created task");
   await click("#pm-tab-tasks");
   await waitFor(() => evaluate('document.querySelector(".pm-task-list")?.textContent.includes("联系法务负责人")'), { process: electron });
 
@@ -391,7 +408,137 @@ try {
     assert.deepEqual(overflow, [], `${theme} narrow layout overflows: ${JSON.stringify(overflow)}`);
     await screenshot(workspace, `4-narrow-${theme}`);
   }
-  console.log(`Project AI E2E passed: project-scoped context, protected note filtering, streaming Markdown, per-project history, follow-up turns, weekly draft review and save, action cards apply/undo, daily brief, portfolio chat, notes saved and linked, plan breakdown, AI note tasks with protected-folder refusal, persona review, narrow layouts (${requests.length} local API requests).`);
+  const historyFile = path.join(root, "user-data", "project-ai-chats.json");
+  const intactHistory = fs.readFileSync(historyFile, "utf8");
+  const damagedHistory = intactHistory.slice(0, -20);
+  const requestCount = requests.length;
+  fs.writeFileSync(historyFile, damagedHistory);
+  await click("[data-module-action=pm-ai-clear]");
+  await waitFor(() => evaluate('document.querySelector(".pm-ai .module-error")?.textContent.includes("原文件已保留")'), { process: electron });
+  assert.equal(fs.readFileSync(historyFile, "utf8"), damagedHistory, "failed clear keeps the damaged file byte-for-byte");
+  assert.ok(await evaluate('document.querySelectorAll(".pm-ai-message").length > 0'), "failed clear keeps the visible history");
+  await send("Page.reload");
+  await waitFor(() => evaluate('Boolean(document.querySelector("[data-module-action=pm-open][data-id=p1]"))'), { process: electron });
+  await click("[data-module-action=pm-open][data-id=p1]");
+  await click("#pm-tab-ai");
+  await waitFor(() => evaluate('Boolean(document.querySelector("[data-module-action=pm-ai-reload]"))'), { process: electron });
+  assert.equal(await evaluate('document.querySelector("[data-module-action=pm-ai-send]").disabled'), true);
+  assert.equal(await evaluate('document.querySelector("[data-module-action=pm-ai-clear]").disabled'), true);
+  assert.equal(fs.readFileSync(historyFile, "utf8"), damagedHistory);
+  assert.equal(requests.length, requestCount, "unreadable history does not start a fresh model conversation");
+  fs.writeFileSync(historyFile, intactHistory);
+  await click("[data-module-action=pm-ai-reload]");
+  await waitFor(() => evaluate('document.querySelectorAll(".pm-ai-message").length > 0 && !document.querySelector("[data-module-action=pm-ai-reload]")'), { process: electron });
+  assert.equal(fs.readFileSync(historyFile, "utf8"), intactHistory, "retry only reloads the recovered file");
+  await evaluate(`(()=>{const input=document.querySelector('.pm-ai-input'); input.value='恢复后继续讨论'; input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await click("[data-module-action=pm-ai-send]");
+  await waitFor(() => requests.length === requestCount + 1 && evaluate('Boolean(document.querySelector("[data-module-action=pm-ai-send]"))'), { process: electron });
+  assert.ok(requests.at(-1).messages.some((message) => message.role === "assistant" && message.content.includes("先解除阻塞")), "recovered follow-up carries the previous discussion");
+  const recoveredHistory = JSON.parse(fs.readFileSync(historyFile, "utf8"));
+  const originalHistory = JSON.parse(intactHistory);
+  assert.deepEqual(recoveredHistory.briefs, originalHistory.briefs);
+  assert.deepEqual(Object.entries(recoveredHistory.chats).find(([key]) => key.endsWith("\n__portfolio__")), Object.entries(originalHistory.chats).find(([key]) => key.endsWith("\n__portfolio__")), "project follow-up preserves the portfolio conversation");
+  async function selectReference(notePath) {
+    await click('[data-module-action=pm-ai-mention]');
+    await evaluate(`(()=>{const input=document.querySelector('.pm-ai-input'); input.value='[NOTE_REFS] 请结合 @排期'; input.setSelectionRange(input.value.length,input.value.length); input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+    await waitFor(() => evaluate(`[...document.querySelectorAll('.pm-ai-note-picker button small')].some(node=>node.textContent===${JSON.stringify(notePath)})`), { process: electron });
+    assert.match(await evaluate('document.querySelector(".pm-ai-note-picker").textContent'), /项目参考\/排期.md/);
+    assert.match(await evaluate('document.querySelector(".pm-ai-note-picker").textContent'), /其他参考\/排期.md/);
+    assert.doesNotMatch(await evaluate('document.querySelector(".pm-ai-note-picker").textContent'), /预算/);
+    await evaluate(`[...document.querySelectorAll('.pm-ai-note-picker button')].find(button=>button.querySelector('small')?.textContent===${JSON.stringify(notePath)}).click()`);
+    assert.match(await evaluate('document.querySelector(".pm-ai-references").textContent'), new RegExp(notePath));
+    assert.match(await evaluate('document.querySelector(".pm-ai-note-tools").textContent'), /已选 1\/8/);
+  }
+  async function sendReferenceQuestion() {
+    const count = requests.length;
+    await click('[data-module-action=pm-ai-send]');
+    await waitFor(() => requests.length === count + 1 && evaluate('Boolean(document.querySelector("[data-module-action=pm-ai-send]"))'), { process: electron });
+    return requests.at(-1);
+  }
+  await selectReference('项目参考/排期.md');
+  const referenced = await sendReferenceQuestion();
+  const noteContext = JSON.parse(referenced.messages.at(-1).content);
+  assert.deepEqual(noteContext.sources.map(source => source.path), ['项目参考/排期.md']);
+  assert.equal(noteContext.sources[0].text, '# 排期\n客户要求周五交付。');
+  assert.doesNotMatch(JSON.stringify(referenced), /方案 B 下周验收/);
+  assert.match(await evaluate('[...document.querySelectorAll(".pm-ai-note-sources")].at(-1).textContent'), /\[N1\].*项目参考\/排期.md/s);
+  await evaluate('[...document.querySelectorAll("[data-module-action=pm-ai-save-note]")].at(-1).click()');
+  await waitFor(() => notesIn('AI 输出').some(name => fs.readFileSync(path.join(vault, 'AI 输出', name), 'utf8').includes('../项目参考/排期.md')), { process: electron });
+  const output = notesIn('AI 输出').map(name => fs.readFileSync(path.join(vault, 'AI 输出', name), 'utf8')).find(body => body.includes('../项目参考/排期.md'));
+  assert.match(output, /周五交付 \[排期\]\(<\.\.\/项目参考\/排期.md>\)/);
+  assert.match(output, /## 引用笔记/);
+  await send('Page.reload');
+  await waitFor(() => evaluate('Boolean(document.querySelector("[data-module-action=pm-open][data-id=p1]"))'), { process: electron });
+  await click('[data-module-action=pm-open][data-id=p1]'); await click('#pm-tab-ai');
+  await waitFor(() => evaluate('document.querySelector(".pm-ai-references")?.textContent.includes("项目参考/排期.md")'), { process: electron });
+  assert.match(await evaluate('[...document.querySelectorAll(".pm-ai-note-sources")].at(-1).textContent'), /项目参考\/排期.md/);
+  await click('[data-module-action=pm-ai-remove-reference][data-id="0"]');
+  await selectReference('其他参考/排期.md');
+  const changedReference = await sendReferenceQuestion();
+  assert.equal(JSON.parse(changedReference.messages.at(-1).content).sources[0].path, '其他参考/排期.md');
+  assert.ok(changedReference.messages.some(message => message.role === 'assistant' && message.content.includes('[排期](<项目参考/排期.md>)')), 'old N1 keeps its original note when the next turn uses a different N1');
+  const protectedCount = requests.length;
+  const refusal = await evaluate('window.lumen.projectAi.chat({projectId:"p1",requestId:"pm-ai-private-test",references:["70_Finance/预算.md"],messages:[{role:"user",content:"读预算"}]})');
+  assert.equal(refusal.success, false); assert.match(refusal.error, /受保护/); assert.equal(requests.length, protectedCount);
+  await evaluate(`(()=>{const input=document.querySelector('.pm-ai-input');input.value='[STOP_REFS] 继续分析';input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await click('[data-module-action=pm-ai-send]');
+  await waitFor(() => evaluate('document.querySelector("[data-pm-ai-stream]")?.textContent.includes("排期约束")'), { process: electron });
+  const lockedMove = await evaluate(`window.lumen.workspace.rename('其他参考/排期.md', '生成中不能移动').then(()=>'',error=>error.message)`);
+  assert.match(lockedMove, /先停止生成/);
+  await click('[data-module-action=pm-ai-stop]');
+  await waitFor(() => evaluate('document.querySelector(".pm-ai-status")?.textContent.includes("已停止")'), { process: electron });
+  assert.match(await evaluate('[...document.querySelectorAll(".pm-ai-note-sources")].at(-1).textContent'), /其他参考\/排期.md/);
+  const finalChat = Object.entries(JSON.parse(fs.readFileSync(historyFile, 'utf8')).chats).find(([key]) => key.endsWith('\np1'))[1].messages;
+  assert.equal(finalChat.at(-1).sources[0].path, '其他参考/排期.md');
+  await screenshot(workspace, '14-note-references');
+  assert.equal(await evaluate(`window.lumen.workspace.rename('其他参考/排期.md', '新排期')`), '其他参考/新排期.md');
+  await evaluate(`window.lumen.workspace.createFolder('', '归档')`);
+  assert.equal(await evaluate(`window.lumen.workspace.rename('其他参考/新排期.md', {name:'新排期',parent:'归档'})`), '归档/新排期.md');
+  await evaluate(`window.lumen.workspace.rename('归档', '年度归档')`);
+  await evaluate(`window.lumen.workspace.write('其他参考/排期.md', '旧位置新建的另一篇笔记')`);
+  await click('[data-module-action=pm-back]');
+  await click('[data-module-action=pm-open][data-id=p1]');
+  await click('#pm-tab-ai');
+  await waitFor(() => evaluate('document.querySelector(".pm-ai-references")?.textContent.includes("年度归档/新排期.md")'), { process: electron });
+  assert.match(await evaluate('[...document.querySelectorAll(".pm-ai-note-sources")].at(-1).textContent'), /年度归档\/新排期.md/);
+  await evaluate('[...document.querySelectorAll("[data-module-action=pm-ai-source]")].at(-1).click()');
+  const editorText = 'document.querySelector(".ws-editor")?.value ?? document.querySelector(".ws-live-editor .cm-content")?.textContent ?? ""';
+  await waitFor(async () => (await evaluate(editorText)).includes('方案 B 下周验收'), { process: electron });
+  assert.doesNotMatch(await evaluate(editorText), /旧位置新建/);
+  // Stop the real app, move the folder in the filesystem, then launch it with
+  // the same app data and verify that persisted sources open the original file.
+  await stop(electron);
+  fs.renameSync(path.join(vault, '年度归档'), path.join(vault, '系统移动'));
+  const restarted = start('Electron restarted', path.join(cwd, 'node_modules/.bin/electron'), [root], {
+    DM_E2E_ROOT: root, DM_E2E_PORT: String(debugPort), DM_E2E_SERVER_PORT: String(serverPort),
+    HTTP_PROXY: '', HTTPS_PROXY: '', http_proxy: '', https_proxy: '', ALL_PROXY: '', all_proxy: '',
+  });
+  const nextTarget = await waitFor(async () => (await targets())[0], { process: restarted });
+  const nextOverlay = await connect(nextTarget.webSocketDebuggerUrl);
+  await waitFor(() => nextOverlay.evaluate('Boolean(window.lumen)'), { process: restarted });
+  await nextOverlay.evaluate('window.lumen.openWorkspace("projects")');
+  const nextWorkspaceTarget = await waitFor(async () => (await targets()).find(item => item.url.includes('#workspace')), { process: restarted });
+  const nextWorkspace = await connect(nextWorkspaceTarget.webSocketDebuggerUrl);
+  const ev = nextWorkspace.evaluate;
+  await waitFor(() => ev('Boolean(document.querySelector("[data-module-action=pm-open][data-id=p1]"))'), { process: restarted });
+  await ev('document.querySelector("[data-module-action=pm-open][data-id=p1]").click()');
+  await ev('document.querySelector("#pm-tab-ai").click()');
+  await waitFor(() => ev('document.querySelector(".pm-ai-references")?.textContent.includes("系统移动/新排期.md")'), { process: restarted });
+  assert.match(await ev('[...document.querySelectorAll(".pm-ai-note-sources")].at(-1).textContent'), /系统移动\/新排期.md/);
+  const restoredProjectChat = await ev('window.lumen.projectAi.history("p1")');
+  assert.equal(restoredProjectChat.at(-1).content, finalChat.at(-1).content);
+  assert.equal(restoredProjectChat.at(-1).sources[0].path, '系统移动/新排期.md');
+  const beforeFollowup = requests.length;
+  await ev(`(()=>{const input=document.querySelector('.pm-ai-input');input.value='[NOTE_REFS] 移动后继续讨论';input.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[data-module-action=pm-ai-send]').click();})()`);
+  await waitFor(() => requests.length === beforeFollowup + 1 && ev('Boolean(document.querySelector("[data-module-action=pm-ai-send]"))'), { process: restarted });
+  assert.equal(JSON.parse(requests.at(-1).messages.at(-1).content).sources[0].path, '系统移动/新排期.md');
+  assert.ok(requests.at(-1).messages.some(message => message.role === 'assistant' && message.content.includes('系统移动/新排期.md')));
+  await screenshot(nextWorkspace, '15-relocated-project-history');
+  await ev('[...document.querySelectorAll("[data-module-action=pm-ai-source]")].at(-1).click()');
+  await waitFor(async () => (await ev(editorText)).includes('方案 B 下周验收'), { process: restarted });
+  assert.equal(fs.readFileSync(path.join(vault, '其他参考/排期.md'), 'utf8'), '旧位置新建的另一篇笔记');
+  await screenshot(nextWorkspace, '16-relocated-project-source');
+  console.log(`Project AI E2E passed: explicit @ references, preserved sources, rename/move/folder relocation, old-path reuse, real restart after external move, opening historical sources and follow-up context; existing project AI and data-protection flows (${requests.length} local API requests).`);
   for (const file of screenshots) console.log(`Screenshot: ${file}`);
 } finally {
   for (const socket of sockets) { try { socket.close(); } catch {} }

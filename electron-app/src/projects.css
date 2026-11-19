@@ -289,3 +289,17 @@
   .pm-ai-composer { flex-direction: column; align-items: stretch; }
   .pm-draft-bar { flex-direction: column; align-items: stretch; }
 }
+.pm-ai-references { display: flex; flex-wrap: wrap; gap: 6px; }
+.pm-ai-reference { display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 7px 9px; border: 1px solid var(--ws-line); border-radius: 9px; }
+.pm-ai-reference span { min-width: 0; overflow-wrap: anywhere; }
+.pm-ai-reference small, .pm-ai-note-sources small { display: block; opacity: .7; font-size: 11px; overflow-wrap: anywhere; }
+.pm-ai-note-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.pm-ai-note-picker { max-height: 210px; overflow: auto; border: 1px solid var(--ws-line); border-radius: 9px; margin-bottom: 8px; }
+.pm-ai-note-picker[hidden] { display: none; }
+.pm-ai-note-picker button { display: block; width: 100%; padding: 9px 12px; text-align: left; color: inherit; background: transparent; border: 0; cursor: pointer; overflow-wrap: anywhere; }
+.pm-ai-note-picker button:hover, .pm-ai-note-picker button:focus-visible { background: rgba(128,128,128,.15); }
+.pm-ai-note-picker small { display: block; opacity: .7; }
+.pm-ai-note-picker p { padding: 8px 12px; }
+.pm-ai-note-sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pm-ai-note-sources button { max-width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.pm-ai-sent-references { margin-top: 6px; font-size: 11px; opacity: .7; overflow-wrap: anywhere; }

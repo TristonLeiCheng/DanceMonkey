@@ -1,7 +1,7 @@
 {
   "name": "dance-monkey",
   "productName": "DanceMonkey",
-  "version": "3.16.3",
+  "version": "3.17.0",
   "private": true,
   "description": "DM (DanceMonkey) 桌面磨砂玻璃笔记与待办",
   "main": "electron/main.js",
@@ -10,6 +10,7 @@
     "test:e2e": "node test/e2e-ui.mjs",
     "test:e2e:reminders": "node test/e2e-reminders.mjs",
     "test:e2e:ai": "node test/e2e-ai.mjs",
+    "test:e2e:robot-voice": "node test/e2e-robot-voice.mjs",
     "test:e2e:personas": "node test/e2e-personas.mjs",
     "test:e2e:outlook": "node test/e2e-outlook.mjs",
     "test:e2e:screenshot": "node test/e2e-screenshot.mjs",
@@ -30,7 +31,9 @@
     "test:e2e:update:mac": "electron test/e2e-mac-update.cjs",
     "build:editor": "esbuild src/note-document.mjs --bundle --format=iife --target=chrome120 --minify --outfile=src/note-document.bundle.js",
     "test:e2e:notes": "node test/e2e-note-editor.mjs",
-    "test:e2e:project-ai": "node test/e2e-project-ai.mjs"
+    "test:e2e:note-ai": "node test/e2e-note-ai.mjs",
+    "test:e2e:project-ai": "node test/e2e-project-ai.mjs",
+    "verify:project-ai": "electron tools/verify-project-ai.cjs"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.10.2",
@@ -50,7 +53,9 @@
     "htmlparser2": "^10.1.0",
     "isomorphic-git": "^1.44.3",
     "marked": "^18.0.13",
+    "opusscript": "^0.1.1",
     "undici": "^7.29.1",
+    "ws": "^8.22.1",
     "yaml": "^2.9.1"
   }
 }

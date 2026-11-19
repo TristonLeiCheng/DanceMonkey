@@ -82,7 +82,7 @@ contextBridge.exposeInMainWorld("lumen", {
     inspect: (path, content, root) => ipcRenderer.invoke('workspace:inspect', path, content, root),
     list: () => ipcRenderer.invoke("workspace:list"),
     read: (path) => ipcRenderer.invoke("workspace:read", path),
-    write: (path, content) => writeNotes("workspace:write", path, content),
+    write: (path, content, expected) => writeNotes("workspace:write", path, expected === undefined ? content : { text: content, expected }),
     createFile: (parent, name) => writeNotes("workspace:createFile", parent, name),
     createNote: (input) => writeNotes("workspace:createNote", input),
     createFolder: (parent, name) => writeNotes("workspace:createFolder", parent, name),
@@ -90,6 +90,7 @@ contextBridge.exposeInMainWorld("lumen", {
     rename: (path, name) => writeNotes("workspace:rename", path, name),
     remove: (path) => writeNotes("workspace:remove", path),
   },
+  robotVoice: { open: () => ipcRenderer.invoke("robotVoice:open") },
   ai: {
     getSettings: () => ipcRenderer.invoke("ai:settings:get"),
     saveSettings: (settings) => ipcRenderer.invoke("ai:settings:save", settings),
@@ -101,10 +102,25 @@ contextBridge.exposeInMainWorld("lumen", {
       return () => ipcRenderer.removeListener("ai:chunk", listener);
     },
   },
+  noteAi: {
+    history: payload => ipcRenderer.invoke('noteAi:history', payload),
+    clear: payload => ipcRenderer.invoke('noteAi:clear', payload),
+    validate: payload => ipcRenderer.invoke('noteAi:validate', payload),
+    list: payload => ipcRenderer.invoke('noteAi:list', payload),
+    chat: payload => ipcRenderer.invoke('noteAi:chat', payload),
+    cancel: requestId => ipcRenderer.invoke('noteAi:cancel', requestId),
+    onChunk: callback => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('noteAi:chunk', listener);
+      return () => ipcRenderer.removeListener('noteAi:chunk', listener);
+    },
+  },
   projectAi: {
+    resolveReferences: (references, projectId) => notesReady.then(() => ipcRenderer.invoke('projectAi:resolveReferences', { references, projectId, generation: notesGeneration })),
+    listNotes: query => notesReady.then(() => ipcRenderer.invoke('projectAi:listNotes', { query, generation: notesGeneration })),
     history: (projectId) => ipcRenderer.invoke("projectAi:history:get", projectId),
     saveHistory: (projectId, messages) => ipcRenderer.invoke("projectAi:history:set", projectId, messages),
-    chat: (payload) => ipcRenderer.invoke("projectAi:chat", payload),
+    chat: (payload) => notesReady.then(() => ipcRenderer.invoke("projectAi:chat", { ...payload, generation: notesGeneration })),
     draftUpdate: (payload) => ipcRenderer.invoke("projectAi:draftUpdate", payload),
     applyAction: (projectId, action) => writeNotes("projectAi:applyAction", projectId, action),
     undoAction: (projectId, undo) => writeNotes("projectAi:undoAction", projectId, undo),

@@ -13,6 +13,7 @@ const packagerConfig = {
   extendInfo: {
     CFBundleDocumentTypes: [{ CFBundleTypeName: "Markdown document", CFBundleTypeRole: "Editor", LSHandlerRank: "Owner", CFBundleTypeExtensions: ["md"], LSItemContentTypes: ["public.markdown", "net.daringfireball.markdown"] }],
     UTImportedTypeDeclarations: [{ UTTypeIdentifier: "net.daringfireball.markdown", UTTypeDescription: "Markdown document", UTTypeConformsTo: ["public.plain-text"], UTTypeTagSpecification: { "public.filename-extension": ["md"], "public.mime-type": "text/markdown" } }],
+    NSLocalNetworkUsageDescription: "连接你选择的内网语音服务，为小智机器人转写、回答和合成语音。",
     NSAppleEventsUsageDescription: "开启宠物交互模式后读取 Finder 桌面图标的位置，用于靠近、跳跃和携带图标动画。",
     NSDesktopFolderUsageDescription: "在宠物交互模式中按 E 抱起图标时，获取所选桌面项目的系统图标用于携带动画。",
   },

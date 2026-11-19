@@ -6,7 +6,7 @@ const { createZenTaskStore } = require('./zentask');
 
 // Each document owns its workspace and disk snapshot. Switching the main vault
 // must never redirect an already open document's reads or writes.
-function createNoteWindows({ BrowserWindow, ipcMain, dialog, getWorkspace, rendererUrl, icon,
+function createNoteWindows({ BrowserWindow, ipcMain, dialog, getWorkspace, rendererUrl, icon, noteHistory,
   assertWritable, isBusy, canClose, changed, trusted = () => true, timeoutMs = 15000, extractTasks = null, cancelAi = () => false }) {
   const records = new Map();
   const windows = () => [...records.values()].map(record => record.win);
@@ -66,7 +66,7 @@ function createNoteWindows({ BrowserWindow, ipcMain, dialog, getWorkspace, rende
   function openLocal(file) {
     const current = getWorkspace(), relative = path.relative(current.root, file);
     const contained = relative && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
-    return open(contained ? current : createWorkspace(path.dirname(file), { initializeQuickNotes: false }), contained ? relative : path.basename(file));
+    return open(contained ? current : createWorkspace(path.dirname(file), { initializeQuickNotes: false, noteHistory }), contained ? relative : path.basename(file));
   }
   ipcMain.handle('note:import-images', (event, images, notePath, expectedRoot, generation) => {
     assertWritable(generation);
@@ -192,6 +192,11 @@ function createNoteWindows({ BrowserWindow, ipcMain, dialog, getWorkspace, rende
       record.win.close();
     }
   });
-  return { windows, assertAvailable, openLocal };
+  function contextFor(event) {
+    const record = [...records.values()].find(item => item.win.webContents === event.sender);
+    if (record) { recordFor(event); return { workspace: record.workspace, path: record.path }; }
+    return { workspace: getWorkspace() };
+  }
+  return { windows, assertAvailable, openLocal, contextFor };
 }
 module.exports = { createNoteWindows };

@@ -35,10 +35,14 @@
 
   function create({ api, esc, attr, rerender, renderMarkdown, getState, onResult, onWeeklyDraft, openNote, onNoteSaved }) {
     const { value: field, list, done } = window.DMZenModel;
+    const noteReferences = window.DMNoteReferences;
     const markdown = renderMarkdown || ((text) => esc(text).replaceAll("\n", "<br>"));
     const chats = new Map();
     const loading = new Set();
     const loadingPromises = new Map();
+    const loadErrors = new Map();
+    const references = new Map();
+    let referencePicker, streamedSources = [];
     const drafts = new Map();
     const applying = new Set();
     const include = { tasks: true, milestones: true, updates: true, notes: true };
@@ -66,16 +70,19 @@
 
     // Shared per project, so a click made while history is loading waits for it instead of racing it.
     function load(projectId) {
-      if (!available() || chats.has(projectId)) return Promise.resolve();
+      if (!available() || chats.has(projectId) || loadErrors.has(projectId)) return Promise.resolve();
       if (loadingPromises.has(projectId)) return loadingPromises.get(projectId);
       const startedIn = generation;
       loading.add(projectId);
       const promise = (async () => {
         try {
           const messages = await api.projectAi.history(projectId);
-          if (startedIn === generation && !chats.has(projectId)) chats.set(projectId, Array.isArray(messages) ? messages : []);
+          if (startedIn === generation && !chats.has(projectId)) {
+            chats.set(projectId, Array.isArray(messages) ? messages : []);
+            if (!references.has(projectId)) references.set(projectId, noteReferences.cleanReferences([...messages].reverse().find(message => Array.isArray(message.references))?.references));
+          }
         } catch (cause) {
-          if (startedIn === generation && !chats.has(projectId)) { chats.set(projectId, []); error = cleanError(cause, "读取对话失败"); }
+          if (startedIn === generation && !chats.has(projectId)) loadErrors.set(projectId, cleanError(cause, "读取对话失败"));
         } finally {
           loading.delete(projectId);
           loadingPromises.delete(projectId);
@@ -87,9 +94,57 @@
     }
 
     async function save(projectId, messages) {
+      const previous = chats.get(projectId);
+      const startedIn = generation;
       chats.set(projectId, messages);
-      const stored = await api.projectAi.saveHistory(projectId, messages);
-      if (chats.get(projectId) === messages) chats.set(projectId, stored);
+      try {
+        const stored = await api.projectAi.saveHistory(projectId, messages);
+        if (startedIn === generation && chats.get(projectId) === messages) chats.set(projectId, stored);
+      } catch (cause) {
+        if (startedIn === generation && chats.get(projectId) === messages) {
+          if (previous) chats.set(projectId, previous); else chats.delete(projectId);
+        }
+        throw cause;
+      }
+    }
+
+    async function refreshSources(projectId) {
+      if (!api.projectAi?.resolveReferences || busyProject) return;
+      const startedIn = generation;
+      await load(projectId);
+      const messages = chats.get(projectId), selected = references.get(projectId) || [];
+      if (!messages || startedIn !== generation) return;
+      const items = [...selected, ...messages.flatMap(message => [...(message.references || []), ...(message.sources || [])])];
+      if (!items.length) return;
+      const key = item => JSON.stringify([item.path, item.title, item.moveVersion]);
+      try {
+        const resolved = await api.projectAi.resolveReferences(items, projectId);
+        if (startedIn !== generation) return;
+        const mapped = new Map(items.map((item, index) => [key(item), resolved[index]]));
+        const update = item => {
+          const next = mapped.get(key(item));
+          return next ? { ...item, path: next.path, title: next.title, moveVersion: next.moveVersion } : item;
+        };
+        if (chats.get(projectId) === messages) chats.set(projectId, messages.map(message => ({ ...message,
+          ...(message.references ? { references: message.references.map(update) } : {}),
+          ...(message.sources ? { sources: message.sources.map(update) } : {}) })));
+        if (references.get(projectId) === selected) references.set(projectId, selected.map(update));
+        rerender();
+      } catch (cause) { if (startedIn === generation) { error = cleanError(cause, '更新引用路径失败，原对话已保留'); rerender(); } }
+    }
+
+    function renderHistoryError(projectId) {
+      const message = loadErrors.get(projectId);
+      return message ? `<div class="module-error" role="alert">${esc(message)} <button type="button" class="pm-button" data-module-action="pm-ai-reload" ${busyProject ? "disabled" : ""}>重新读取对话</button></div>` : "";
+    }
+
+    function renderReferences(projectId) {
+      if (!api.projectAi?.listNotes) return '';
+      const selected = references.get(projectId) || [];
+      const disabled = busyProject || !chats.has(projectId) ? 'disabled' : '';
+      return `<div class="pm-ai-references" aria-label="已选参考笔记">${selected.map((item, index) => `<div class="pm-ai-reference"><span><strong>@ ${esc(item.title)}</strong><small>${esc(item.path)}</small></span><button type="button" class="pm-button" data-module-action="pm-ai-remove-reference" data-id="${index}" aria-label="移除引用 ${attr(item.title)}" ${disabled}>×</button></div>`).join('')}</div>
+        <div class="pm-ai-note-tools"><button type="button" class="pm-button" data-module-action="pm-ai-mention" ${disabled}>@ 引用笔记</button><small class="pm-muted">问答引用 · 已选 ${selected.length}/8 篇 · 发送已保存的正文</small></div>
+        <div class="pm-ai-note-picker" role="listbox" aria-label="选择引用笔记" hidden></div>`;
     }
 
     function sourceCount(key, project) {
@@ -149,6 +204,8 @@
             ? message.streaming && !message.content ? '<span class="pm-ai-thinking">正在阅读项目资料…</span>' : markdown(message.content)
             : esc(message.content).replaceAll("\n", "<br>")}</div>
           ${assistant && !message.streaming ? renderActions(message, index, readOnly) : ""}
+          ${assistant && message.sources?.length ? `<div class="pm-ai-note-sources" aria-label="回答来源">${message.sources.map(source => `<button type="button" class="pm-button" data-module-action="pm-ai-source" data-id="${index}:${attr(source.id)}" title="${attr(source.path)}">[${esc(source.id)}] ${esc(source.title)}<small>${esc(source.path)}</small></button>`).join('')}</div>` : ''}
+          ${!assistant && message.references?.length ? `<div class="pm-ai-sent-references">引用正文：${message.references.map(item => `${esc(item.title)}（${esc(item.path)}）`).join('、')}</div>` : ''}
           ${assistant && message.citations?.length ? `<details class="pm-ai-citations"><summary>引用的人物资料 · ${message.citations.length}</summary>${message.citations.map((citation) => `<p><strong>[${esc(citation.id)}] ${esc(citation.title)}</strong><br>${esc(citation.excerpt)}</p>`).join("")}</details>` : ""}
           ${assistant && !message.streaming ? `<div class="pm-ai-actions"><button type="button" class="pm-ai-link" data-module-action="pm-ai-copy" data-id="${index}">复制</button>${saveControl(message.savedNote, saving.has(`${scopeKey}:${index}`), "pm-ai-save-note", index)}</div>` : ""}
         </article>`;
@@ -175,14 +232,16 @@
         <div class="pm-panel-heading"><div><h2>项目 AI 助手</h2><p class="pm-muted">${readOnly ? "项目已归档，AI 只做分析，不提出修改。" : "根据本项目的实时数据回答。修改建议会列成操作卡片，确认后才会执行。"}</p></div>
           <div class="pm-actions">${api.projectAi.personaReview && api.personas?.list ? `<button type="button" class="pm-button" data-module-action="pm-ai-review-open" ${busyProject ? "disabled" : ""}>人物分身审阅</button>` : ""}<button type="button" class="pm-button" data-module-action="pm-ai-clear" ${busyProject || !messages.length ? "disabled" : ""}>新对话</button></div></div>
         ${renderReviewPicker(projectId)}
+        ${renderHistoryError(projectId)}
         <div class="pm-ai-context" role="group" aria-label="发送给 AI 的项目资料"><span class="pm-muted">每次提问会发送：</span><span class="pm-ai-chip is-fixed">项目概况</span>${chips}</div>
-        <p class="pm-muted pm-ai-privacy">只发送项目字段、任务信息和笔记标题，不读取笔记正文；内容会提交到你在 AI 设置中配置的服务。${contextNote ? ` ${esc(contextNote)}。` : ""}</p>
+        <p class="pm-muted pm-ai-privacy">发送项目字段、任务信息和关联笔记标题；只有用 @ 选中的笔记才发送正文（已保存版本）。内容会提交到你配置的 AI 服务。${contextNote ? ` ${esc(contextNote)}。` : ""}</p>
         ${loading.has(projectId) && !chats.has(projectId) ? '<div class="pm-empty compact">正在读取对话…</div>' : ""}
         ${empty ? `<div class="pm-ai-prompts">${prompts.map(([label], index) => `<button type="button" class="pm-ai-prompt" data-module-action="pm-ai-prompt" data-id="${index}" ${busyProject || !chats.has(projectId) ? "disabled" : ""}>${esc(label)}</button>`).join("")}${!readOnly ? `<button type="button" class="pm-ai-prompt" data-module-action="pm-weekly-draft" ${busyProject ? "disabled" : ""}>起草本周进展</button>` : ""}</div>` : `<div class="pm-ai-messages" role="log" aria-label="项目对话" tabindex="0">${renderMessages(projectId, readOnly)}</div>`}
         ${error ? `<div class="module-error" role="alert">${esc(error)}</div>` : ""}
+        ${renderReferences(projectId)}
         <div class="pm-ai-composer">
           <label class="visually-hidden" for="pm-ai-input">向项目助手提问</label>
-          <textarea id="pm-ai-input" class="pm-ai-input" rows="2" placeholder="${otherBusy ? "AI 正在处理其他请求…" : readOnly ? "问问这个项目的历史情况…" : "问问这个项目，或让 AI 调整任务，例如：把逾期任务重新排期"}" ${busyProject ? "disabled" : ""}>${esc(draft)}</textarea>
+          <textarea id="pm-ai-input" class="pm-ai-input" rows="2" placeholder="${otherBusy ? "AI 正在处理其他请求…" : readOnly ? "问问这个项目的历史情况… 输入 @ 引用笔记" : "问问这个项目… 输入 @ 引用笔记正文"}" ${busyProject ? "disabled" : ""}>${esc(draft)}</textarea>
           <button type="button" class="module-primary pm-ai-send" data-module-action="${mine ? "pm-ai-stop" : "pm-ai-send"}" ${otherBusy || (!mine && (!draft.trim() || !chats.has(projectId))) ? "disabled" : ""}>${mine ? "停止" : "发送"}</button>
         </div>
         <small class="pm-muted pm-ai-status" role="status">${mine ? (streamingText ? "正在回复" : "正在思考") : esc(notice) || "Enter 发送 · Shift + Enter 换行"}</small>
@@ -196,7 +255,7 @@
       try {
         const stored = await api.projectAi.getBrief();
         if (startedIn === generation) brief = stored || null;
-      } catch {}
+      } catch (cause) { if (startedIn === generation) briefError = cleanError(cause, "读取简报失败"); }
       finally {
         briefLoading = false;
         if (startedIn === generation) { briefLoaded = true; rerender(); }
@@ -229,12 +288,14 @@
       return `<section class="pm-panel pm-ai pm-portfolio">
         <div class="pm-panel-heading"><div><h2>问问所有项目</h2><p class="pm-muted">根据所有进行中项目的摘要和重点任务回答，只做分析，不修改数据。${esc(contextNote)}</p></div>
           <button type="button" class="pm-button" data-module-action="pm-ai-clear" ${busyProject || !messages.length ? "disabled" : ""}>新对话</button></div>
+        ${renderHistoryError(PORTFOLIO)}
         ${empty ? `<div class="pm-ai-prompts">${PORTFOLIO_PROMPTS.map(([label], index) => `<button type="button" class="pm-ai-prompt" data-module-action="pm-ai-prompt" data-id="${index}" ${busyProject || !chats.has(PORTFOLIO) ? "disabled" : ""}>${esc(label)}</button>`).join("")}</div>`
           : `<div class="pm-ai-messages" role="log" aria-label="项目组合对话" tabindex="0">${renderMessages(PORTFOLIO, true)}</div>`}
         ${error ? `<div class="module-error" role="alert">${esc(error)}</div>` : ""}
+        ${renderReferences(PORTFOLIO)}
         <div class="pm-ai-composer">
           <label class="visually-hidden" for="pm-ai-input">向项目组合助手提问</label>
-          <textarea id="pm-ai-input" class="pm-ai-input" rows="2" placeholder="${otherBusy ? "AI 正在处理其他请求…" : "例如：哪些项目的截止日期最紧？"}" ${busyProject ? "disabled" : ""}>${esc(draft)}</textarea>
+          <textarea id="pm-ai-input" class="pm-ai-input" rows="2" placeholder="${otherBusy ? "AI 正在处理其他请求…" : "问问所有项目… 输入 @ 引用笔记正文"}" ${busyProject ? "disabled" : ""}>${esc(draft)}</textarea>
           <button type="button" class="module-primary pm-ai-send" data-module-action="${mine ? "pm-ai-stop" : "pm-ai-send"}" ${otherBusy || (!mine && (!draft.trim() || !chats.has(PORTFOLIO))) ? "disabled" : ""}>${mine ? "停止" : "发送"}</button>
         </div>
         <small class="pm-muted pm-ai-status" role="status">${mine ? (streamingText ? "正在回复" : "正在思考") : esc(notice) || "Enter 发送 · Shift + Enter 换行"}</small>
@@ -252,6 +313,8 @@
     }
 
     function beginRequest(owner) {
+      referencePicker?.hide();
+      streamedSources = [];
       busyProject = owner;
       requestId = `pm-ai-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       streamingText = "";
@@ -260,6 +323,8 @@
       unsubscribe?.();
       unsubscribe = api.ai?.onChunk?.((payload) => {
         if (payload?.requestId !== own) return;
+        if (payload.sources) streamedSources = noteReferences.cleanSources(payload.sources);
+        if (typeof payload.chunk !== 'string') return;
         streamingText += payload.chunk;
         updateStreamingDom();
       });
@@ -276,11 +341,11 @@
     }
 
     // One user turn: save the question, stream the reply, then append the reply to the latest history.
-    async function runTurn(projectId, question, { request, toReply, failure = "回复未完成，请重试。", restoreDraft = true }) {
+    async function runTurn(projectId, question, { request, toReply, failure = "回复未完成，请重试。", restoreDraft = true, selectedNotes }) {
       // Starting before the stored history has loaded would overwrite it with this single turn.
       if (!question || busyProject || !available() || !chats.has(projectId)) return;
       const startedIn = generation;
-      const history = [...(chats.get(projectId) || []), { role: "user", content: question }];
+      const history = [...(chats.get(projectId) || []), { role: "user", content: question, ...(selectedNotes ? { references: selectedNotes } : {}) }];
       const own = beginRequest(projectId);
       error = "";
       notice = "";
@@ -312,16 +377,19 @@
     }
 
     function send(projectId, text) {
+      const selectedNotes = (references.get(projectId) || []).map(item => ({ ...item }));
       return runTurn(projectId, String(text || "").trim(), {
+        selectedNotes,
         request: async (own, history) => {
           const result = await api.projectAi.chat(projectId === PORTFOLIO
-            ? { requestId: own, projectId, scope: "portfolio", messages: history }
-            : { requestId: own, projectId, include: { ...include }, messages: history });
+            ? { requestId: own, projectId, scope: "portfolio", messages: history, references: selectedNotes.map(item => item.path), referenceItems: selectedNotes }
+            : { requestId: own, projectId, include: { ...include }, messages: history, references: selectedNotes.map(item => item.path), referenceItems: selectedNotes });
           if (result?.context) lastContext = { projectId, ...result.context };
           return result;
         },
         toReply: (result) => {
           const reply = { role: "assistant", content: result ? result.text || visibleText(streamingText) : visibleText(streamingText) };
+          reply.sources = noteReferences.cleanSources(result?.sources || streamedSources);
           if (result?.actions?.length) reply.actions = result.actions;
           if (result?.droppedActions) reply.droppedActions = result.droppedActions;
           return reply;
@@ -462,9 +530,28 @@
       const projectId = project ? field(project, "Id") : PORTFOLIO;
       const prompts = project ? PROMPTS : PORTFOLIO_PROMPTS;
       const [messageIndex, actionIndex] = String(id).split(":").map(Number);
+      if (action === 'pm-ai-mention') referencePicker?.trigger();
+      if (action === 'pm-ai-remove-reference' && !busyProject) {
+        references.set(projectId, (references.get(projectId) || []).filter((_item, index) => index !== Number(id)));
+        rerender();
+      }
+      if (action === 'pm-ai-source') {
+        const source = chats.get(projectId)?.[messageIndex]?.sources?.find(item => item.id === String(id).split(':')[1]);
+        const startedIn = generation;
+        if (source) try {
+          const resolved = api.projectAi.resolveReferences ? (await api.projectAi.resolveReferences([source], projectId))[0] : source;
+          if (startedIn !== generation) return true;
+          await openNote?.(resolved.path);
+        } catch (cause) { if (startedIn === generation) { error = cleanError(cause, '打开来源笔记失败'); rerender(); } }
+      }
+      if (action === "pm-ai-reload" && !busyProject) {
+        loadErrors.delete(projectId);
+        await load(projectId);
+      }
       if (action === "pm-ai-send") { const text = document.querySelector(".pm-ai-input")?.value ?? drafts.get(projectId); await load(projectId); void send(projectId, text); }
       if (action === "pm-ai-prompt" && prompts[Number(id)]) { await load(projectId); void send(projectId, prompts[Number(id)][1]); }
       if (action === "pm-ai-save-note") {
+        await refreshSources(projectId);
         const index = Number(id);
         const message = chats.get(projectId)?.[index];
         const key = `${projectId}:${index}`;
@@ -473,7 +560,7 @@
           saving.add(key);
           rerender();
           try {
-            const savedPath = await saveNote({ projectId: project ? projectId : "", title: noteTitle(projectId, project, index), body: message.content, kind: "insight" });
+            const savedPath = await saveNote({ projectId: project ? projectId : "", title: noteTitle(projectId, project, index), body: message.content, sources: message.sources, kind: "insight" });
             if (startedIn === generation) {
               const messages = (chats.get(projectId) || []).map((entry, position) => position === index ? { ...entry, savedNote: savedPath } : entry);
               await save(projectId, messages);
@@ -484,15 +571,16 @@
       }
       if (action === "pm-ai-stop" && busyProject === projectId) stop();
       if (action === "pm-ai-toggle" && Object.hasOwn(include, id) && !busyProject) { include[id] = !include[id]; rerender(); }
-      if (action === "pm-ai-clear" && !busyProject) {
-        try { await save(projectId, []); error = ""; notice = "已开始新对话"; }
+      if (action === "pm-ai-clear" && !busyProject && chats.has(projectId)) {
+        try { await save(projectId, []); references.delete(projectId); error = ""; notice = "已开始新对话"; }
         catch (cause) { error = cleanError(cause, "清空对话失败"); }
         rerender();
       }
       if (action === "pm-ai-copy") {
+        await refreshSources(projectId);
         const message = (chats.get(projectId) || [])[Number(id)];
         if (message) {
-          try { await navigator.clipboard.writeText(message.content); notice = "已复制回复原文"; }
+          try { await navigator.clipboard.writeText(noteReferences.withLinks(message.content, message.sources || [])); notice = "已复制回复及来源"; }
           catch { error = "复制失败，请手动选择文本。"; }
           rerender();
         }
@@ -539,6 +627,7 @@
     }
 
     function bind(scope, project) {
+      referencePicker?.destroy(); referencePicker = null;
       const projectId = project ? field(project, "Id") : PORTFOLIO;
       const box = scope.querySelector(".pm-ai-messages");
       if (box) {
@@ -550,24 +639,37 @@
       });
       const input = scope.querySelector(".pm-ai-input");
       if (!input) return;
+      const pickerBox = scope.querySelector('.pm-ai-note-picker');
+      if (pickerBox && api.projectAi?.listNotes) referencePicker = noteReferences.createPicker({ input, box: pickerBox,
+        search: query => api.projectAi.listNotes(query), selected: () => references.get(projectId) || [],
+        disabled: () => Boolean(busyProject) || !chats.has(projectId),
+        onDraft: value => { drafts.set(projectId, value); }, onError: message => { error = message; rerender(); },
+        onChoose: (item, value, cursor) => {
+          references.set(projectId, [...(references.get(projectId) || []), item]); drafts.set(projectId, value); rerender();
+          const next = document.querySelector('.pm-ai-input'); next?.focus(); next?.setSelectionRange(cursor, cursor);
+        } });
       input.oninput = () => {
         drafts.set(projectId, input.value);
+        void referencePicker?.update();
         const button = scope.querySelector('[data-module-action="pm-ai-send"]');
         if (button) button.disabled = !input.value.trim() || Boolean(busyProject) || !chats.has(projectId);
       };
       input.onkeydown = (event) => {
         if (event.isComposing || event.keyCode === 229) return;
+        if (referencePicker?.handleKey(event)) return;
         if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(projectId, input.value); }
       };
     }
 
     // Vault switches invalidate every cached conversation and abandon any in-flight reply.
     function reset() {
+      referencePicker?.destroy(); referencePicker = null; references.clear(); streamedSources = [];
       stop();
       generation += 1;
       chats.clear();
       loading.clear();
       loadingPromises.clear();
+      loadErrors.clear();
       drafts.clear();
       applying.clear();
       busyProject = "";
@@ -588,7 +690,7 @@
       unsubscribe = null;
     }
 
-    return { render, renderBrief, renderPortfolio, handleAction, bind, reset, stop, isBusy: () => Boolean(busyProject) };
+    return { render, renderBrief, renderPortfolio, handleAction, bind, reset, stop, refreshSources, isBusy: () => Boolean(busyProject) };
   }
 
   window.DMProjectAIPanel = { create, visibleText };

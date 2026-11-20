@@ -19,7 +19,7 @@ const activePets = Object.keys(expectedCatalog.animals).filter(id => !expectedCa
 assert.equal(activePets.length, 24);
 assert.equal(expectedCatalog.animals['operator-rabbit'].retired, true);
 const directories = ['electron', 'src', 'assets', 'vendor', 'robot-voice'];
-const baselineTag = 'v3.16.3';
+const baselineTag = 'v3.17.0';
 function walk(folder) {
   return fs.readdirSync(path.join(root, folder), { withFileTypes: true }).flatMap(entry => {
     const file = `${folder}/${entry.name}`;
